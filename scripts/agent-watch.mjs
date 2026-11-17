@@ -18,7 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, allPages, askPlan } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -276,19 +276,19 @@ function checkAndPush(n, s, why) {
 // so the PR and the finished-run comment read from the same text
 const prBody = (n, s) => (agentFile(s, 'pr-body.md') || `Closes #${n}`) + '\n\n' + (s.proofs || []).join('\n\n');
 // Posts what's pushed but not yet on the PR: the description, and each new proof as a comment.
-// It's resumable: a crash between push and post is caught up on the next step or /agent retry.
+// s.posted counts the proofs already on the PR, so a step doesn't read the whole PR and every
+// comment again just to find out there's nothing new.
 // (gh api, not gh pr edit: gh pr edit fails on this repo with a classic-projects error.)
 function publish(n, s) {
   if (!s.pr || !(s.proofs || []).length) return;
-  const prBodyNow = ghJson('api', `repos/${REPO}/pulls/${s.pr}`).body || '';
-  const posted = issueComments(s.pr).filter((c) => c.user.login === OWNER).map((c) => c.body);
-  const plan = publishPlan(s.proofs, prBodyNow, posted);
-  if (plan.updateBody) {
-    writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
-    write(`update PR #${s.pr}'s description`, () => gh('api', '-X', 'PATCH', `repos/${REPO}/pulls/${s.pr}`, '-F', `body=@${join(HOME, `${n}-pr-body.md`)}`, '--jq', '.number'));
-  }
-  for (const p of plan.comment) comment(s.pr, p);   // a PR is an issue, so this is the same call as ticket comments
-  if (plan.updateBody || plan.comment.length) event(n, `published on PR #${s.pr}: ${plan.updateBody ? 'description' : ''}${plan.updateBody && plan.comment.length ? ' and ' : ''}${plan.comment.length ? `${plan.comment.length} proof comment${plan.comment.length > 1 ? 's' : ''}` : ''}`);
+  const done = s.posted || 0;
+  if (done >= s.proofs.length) return;
+  const fresh = s.proofs.slice(Math.max(done, 1));
+  s.posted = s.proofs.length; save(n, s);
+  writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
+  write(`update PR #${s.pr}'s description`, () => gh('api', '-X', 'PATCH', `repos/${REPO}/pulls/${s.pr}`, '-F', `body=@${join(HOME, `${n}-pr-body.md`)}`, '--jq', '.number'));
+  for (const p of fresh) comment(s.pr, p);   // a PR is an issue, so this is the same call as ticket comments
+  event(n, `published on PR #${s.pr}: description${fresh.length ? ` and ${fresh.length} proof comment${fresh.length > 1 ? 's' : ''}` : ''}`);
 }
 
 // The review, from Qodo and the owner only, written to .agent/review.md for the agent to read.
