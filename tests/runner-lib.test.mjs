@@ -99,15 +99,14 @@ test('a retry has its own limit, separate from instructions', () => {
 // allPages. gh's own list commands stop at 30 and a REST list at its page size. #66
 test('every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66)', () => {
   const src = readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
-  const bad = [];
-  src.split('\n').forEach((line, i) => {
-    const at = `agent-watch.mjs:${i + 1} ${line.trim().slice(0, 100)}`;
-    if (/\bgh(Json)?\('(issue|pr|label|project)',\s*'(list|item-list)'/.test(line) && !/'--limit'/.test(line)) bad.push(at);
-    for (const m of line.matchAll(/ghJson\('api',\s*`repos\/\$\{REPO\}\/([^`]*)`/g)) {
-      const path = m[1].split('?')[0];
-      const isList = /\/(comments|events|blocked_by)$/.test(path) || /^(issues|pulls)$/.test(path);
-      if (isList && !/page=\$\{page\}/.test(m[1])) bad.push(at);
-    }
-  });
-  assert.deepEqual(bad, []);
+  assert.deepEqual(lib.unpagedReads?.(src), []);
+});
+test('a list read with a page number but no allPages is still one page (Qodo on #67)', () => {
+  const reads = (line) => lib.unpagedReads?.(line).length;
+  assert.equal(reads("const c = ghJson('api', `repos/${REPO}/issues/${n}/comments?per_page=100&page=${page}`);"), 1);
+  assert.equal(reads("const c = ghJson('api', `repos/${REPO}/pulls/${s.pr}/comments?per_page=100`);"), 1);
+  assert.equal(reads("const r = ghJson('issue', 'list', '-R', REPO, '--json', 'number');"), 1);
+  assert.equal(reads("const c = allPages((page) => ghJson('api', `repos/${REPO}/issues/${n}/comments?per_page=100&page=${page}`));"), 0);
+  assert.equal(reads("const r = ghJson('issue', 'list', '-R', REPO, '--limit', '1', '--json', 'number');"), 0);
+  assert.equal(reads("const t = ghJson('api', `repos/${REPO}/issues/${n}`);"), 0);   // one ticket, not a list
 });
