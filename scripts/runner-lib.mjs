@@ -129,3 +129,22 @@ export function askPlan({ asked, commentRounds, retryRounds, limits }) {
   if (kind === 'retry' && retryRounds >= limits.retryRounds) return { ...r, stop: `The /agent retry limit (${limits.retryRounds}) is used up.` };
   return kind === 'instruction' ? { ...r, commentRounds: commentRounds + 1 } : { ...r, retryRounds: retryRounds + 1 };
 }
+
+// Rule 7: the GitHub list reads in the runner's source that stop at one page. A REST list (comments,
+// events, blocked_by, /issues, /pulls) must be the callback of allPages((page) => …), not just have a
+// page number in its URL. gh's own list commands stop at 30, so they need an explicit --limit.
+// Returns "line N: code" for each.
+export function unpagedReads(src) {
+  const bad = [];
+  src.split('\n').forEach((line, i) => {
+    const at = `line ${i + 1}: ${line.trim().slice(0, 100)}`;
+    if (/\bgh(Json)?\('(issue|pr|label|project)',\s*'(list|item-list)'/.test(line) && !/'--limit'/.test(line)) bad.push(at);
+    for (const m of line.matchAll(/ghJson\('api',\s*`repos\/\$\{REPO\}\/([^`]*)`/g)) {
+      const path = m[1].split('?')[0];
+      const isList = /\/(comments|events|blocked_by)$/.test(path) || /^(issues|pulls)$/.test(path);
+      const paged = /allPages\(\(page\)\s*=>\s*$/.test(line.slice(0, m.index)) && /page=\$\{page\}/.test(m[1]);
+      if (isList && !paged) bad.push(at);
+    }
+  });
+  return [...new Set(bad)];
+}

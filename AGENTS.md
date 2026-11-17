@@ -102,7 +102,7 @@ Builders follow these rules. Reviewers flag any change that breaks one, even if 
 - **Where:** `scripts/agent-watch.mjs` and `scripts/runner-lib.mjs`: every read of tickets, PRs, comments, events and labels, and everything the runner saves about them. Rule 3 covers the same idea in `web/`.
 - **Why:** this was the most common cause in Qodo's reviews of the runner: 8 of its 26 findings, across 4 PRs. I wrote the rule from #48, #51 and #53, then checked it against #60, which it hadn't seen. It predicted 3 of #60's 6 findings. The rest belong to other causes.
 - **Breaks it:** reading only the first 100 comments or events (#48). Changing the local PR description and not the PR (#51). Moving `lastAsk` past an instruction that hasn't been carried out (#53). Saving a proof as posted when it was only rehearsed (#60).
-- **Checked by:** `tests/runner-lib.test.mjs` (`allPages` reads past 100, `publishPlan` works out what to post from the PR itself, `askPlan` marks a comment read). In review: any GitHub read that stops at one page, any decision made from a saved note that GitHub could contradict and anything marked done before GitHub shows it.
+- **Checked by:** `tests/runner-lib.test.mjs` (`allPages` reads past 100, every list read in `agent-watch.mjs` goes through `allPages` or an explicit `--limit`, `publishPlan` works out what to post from the PR itself, `askPlan` marks a comment read). In review: any GitHub read that stops at one page, any decision made from a saved note that GitHub could contradict and anything marked done before GitHub shows it.
 
 ## Known gaps
 These are known. Don't flag them as new findings. Do flag any change that makes them worse.

@@ -1,6 +1,7 @@
 // Unit tests for the factory runner's helpers (scripts/runner-lib.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as lib from '../scripts/runner-lib.mjs';   // a namespace: a helper that doesn't exist yet fails on an assertion, not the import
 
 const diff = (...lines) => ['+++ b/tests/x.mjs', ...lines.map((l) => '+' + l)].join('\n');
@@ -92,4 +93,20 @@ test('every page is read, so a list past 100 is complete', () => {
 test('a retry has its own limit, separate from instructions', () => {
   assert.equal(lib.roundKind?.({ retry: true }), 'retry');
   assert.equal(lib.roundKind?.({ retry: false, text: 'x' }), 'instruction');
+});
+
+// Rule 7 (the Fresh Read Rule): a list read from GitHub stops at one page unless it's read with
+// allPages. gh's own list commands stop at 30 and a REST list at its page size. #66
+test('every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66)', () => {
+  const src = readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
+  assert.deepEqual(lib.unpagedReads?.(src), []);
+});
+test('a list read with a page number but no allPages is still one page (Qodo on #67)', () => {
+  const reads = (line) => lib.unpagedReads?.(line).length;
+  assert.equal(reads("const c = ghJson('api', `repos/${REPO}/issues/${n}/comments?per_page=100&page=${page}`);"), 1);
+  assert.equal(reads("const c = ghJson('api', `repos/${REPO}/pulls/${s.pr}/comments?per_page=100`);"), 1);
+  assert.equal(reads("const r = ghJson('issue', 'list', '-R', REPO, '--json', 'number');"), 1);
+  assert.equal(reads("const c = allPages((page) => ghJson('api', `repos/${REPO}/issues/${n}/comments?per_page=100&page=${page}`));"), 0);
+  assert.equal(reads("const r = ghJson('issue', 'list', '-R', REPO, '--limit', '1', '--json', 'number');"), 0);
+  assert.equal(reads("const t = ghJson('api', `repos/${REPO}/issues/${n}`);"), 0);   // one ticket, not a list
 });
