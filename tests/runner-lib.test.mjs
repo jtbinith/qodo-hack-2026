@@ -1,6 +1,7 @@
 // Unit tests for the factory runner's helpers (scripts/runner-lib.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as lib from '../scripts/runner-lib.mjs';   // a namespace: a helper that doesn't exist yet fails on an assertion, not the import
 
 const diff = (...lines) => ['+++ b/tests/x.mjs', ...lines.map((l) => '+' + l)].join('\n');
@@ -92,4 +93,21 @@ test('every page is read, so a list past 100 is complete', () => {
 test('a retry has its own limit, separate from instructions', () => {
   assert.equal(lib.roundKind?.({ retry: true }), 'retry');
   assert.equal(lib.roundKind?.({ retry: false, text: 'x' }), 'instruction');
+});
+
+// Rule 7 (the Fresh Read Rule): a list read from GitHub stops at one page unless it's read with
+// allPages. gh's own list commands stop at 30 and a REST list at its page size. #66
+test('every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66)', () => {
+  const src = readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
+  const bad = [];
+  src.split('\n').forEach((line, i) => {
+    const at = `agent-watch.mjs:${i + 1} ${line.trim().slice(0, 100)}`;
+    if (/\bgh(Json)?\('(issue|pr|label|project)',\s*'(list|item-list)'/.test(line) && !/'--limit'/.test(line)) bad.push(at);
+    for (const m of line.matchAll(/ghJson\('api',\s*`repos\/\$\{REPO\}\/([^`]*)`/g)) {
+      const path = m[1].split('?')[0];
+      const isList = /\/(comments|events|blocked_by)$/.test(path) || /^(issues|pulls)$/.test(path);
+      if (isList && !/page=\$\{page\}/.test(m[1])) bad.push(at);
+    }
+  });
+  assert.deepEqual(bad, []);
 });
