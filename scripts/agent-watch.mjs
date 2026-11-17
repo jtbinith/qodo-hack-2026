@@ -72,6 +72,8 @@ const issue = (n) => ghJson('api', `repos/${REPO}/issues/${n}`);
 // every page: anyone can comment on a public repo, and a long run collects many events
 const issueComments = (n) => allPages((page) => ghJson('api', `repos/${REPO}/issues/${n}/comments?per_page=100&page=${page}`));
 const issueEvents = (n) => allPages((page) => ghJson('api', `repos/${REPO}/issues/${n}/events?per_page=100&page=${page}`));
+// open tickets with a label, oldest first, every page (/issues also returns PRs, so they're left out)
+const openTickets = (label) => allPages((page) => ghJson('api', `repos/${REPO}/issues?state=open&labels=${encodeURIComponent(label)}&sort=created&direction=asc&per_page=100&page=${page}`)).filter((x) => !x.pull_request);
 function labelledByOwner(n) {
   const latest = issueEvents(n).filter((e) => (e.event === 'labeled' || e.event === 'unlabeled') && e.label?.name === L.ready).at(-1);
   return latest?.event === 'labeled' && latest.actor.login === OWNER;
@@ -293,7 +295,7 @@ function publish(n, s) {
 
 // The review, from Qodo and the owner only, written to .agent/review.md for the agent to read.
 function writeReview(s, q, asks) {
-  const inline = ghJson('api', `repos/${REPO}/pulls/${s.pr}/comments?per_page=100`).filter((c) => c.user.login === QODO)
+  const inline = allPages((page) => ghJson('api', `repos/${REPO}/pulls/${s.pr}/comments?per_page=100&page=${page}`)).filter((c) => c.user.login === QODO)
     .map((c) => `### ${c.path}:${c.line ?? c.original_line ?? ''}\n${c.body}`);
   putAgentFile(s, 'review.md', `# Review of PR #${s.pr} at ${s.head.slice(0, 7)}\n\n` +
     (q ? `## Qodo's open findings\n${q.open.map((t) => `- ${t}`).join('\n') || 'none'}\n\n## Qodo's review comment\n${q.body}\n\n## Qodo's inline comments\n${inline.join('\n\n') || 'none'}\n\n` : '') +
@@ -366,7 +368,7 @@ try {
   const LABELS_OK = join(HOME, 'labels-ok');
   const labelSet = Object.keys(LABEL_INFO).sort().join('|');   // re-checked whenever the set of labels changes
   if (!existsSync(LABELS_OK) || readFileSync(LABELS_OK, 'utf8') !== labelSet) { ensureLabels(); writeFileSync(LABELS_OK, labelSet); }
-  const working = ghJson('issue', 'list', '-R', REPO, '--state', 'open', '--label', L.working, '--json', 'number');
+  const working = ghJson('issue', 'list', '-R', REPO, '--state', 'open', '--label', L.working, '--limit', '1', '--json', 'number');   // only one runs at a time
   if (working.length) {
     const n = working[0].number, s = load(n); current = { n, s };
     if (!s || s.phase !== 'review') throw new Stop(`Found #${n} labelled ${L.working} with no run in progress (phase: ${s?.phase ?? 'none'}). A run probably crashed.`);
@@ -375,7 +377,7 @@ try {
   }
 
   // a finished or stopped run whose PR is still open: an /agent comment from the owner starts another round
-  const finished = [L.done, L.help].flatMap((l) => ghJson('issue', 'list', '-R', REPO, '--state', 'open', '--label', l, '--json', 'number'));
+  const finished = [L.done, L.help].flatMap(openTickets);
   for (const { number: n } of finished) {
     const s = load(n);
     if (!s?.pr || ghJson('pr', 'view', String(s.pr), '-R', REPO, '--json', 'state').state !== 'OPEN' || !ownerAsks(s).length) continue;
@@ -388,14 +390,14 @@ try {
     process.exit(0);
   }
 
-  const ready = ghJson('issue', 'list', '-R', REPO, '--state', 'open', '--label', L.ready, '--json', 'number,title').sort((a, b) => a.number - b.number);
+  const ready = openTickets(L.ready).sort((a, b) => a.number - b.number);
   for (const { number: n, title } of ready) {
     if (Date.now() - (skipped()[n] || 0) < 3600000) continue;
     if (!labelledByOwner(n)) { event(n, `ignored: ${L.ready} wasn't added by ${OWNER}`); continue; }
-    const openPrs = ghJson('pr', 'list', '-R', REPO, '--state', 'open', '--json', 'number');
+    const openPrs = ghJson('pr', 'list', '-R', REPO, '--state', 'open', '--limit', '1', '--json', 'number');   // only needs to know if one is open
     if (openPrs.length) { event(n, `waiting: PR #${openPrs[0].number} is still open`); break; }
     const t = issue(n);
-    const blockers = ghJson('api', `repos/${REPO}/issues/${n}/dependencies/blocked_by`).filter((b) => b.state === 'open');
+    const blockers = allPages((page) => ghJson('api', `repos/${REPO}/issues/${n}/dependencies/blocked_by?per_page=100&page=${page}`)).filter((b) => b.state === 'open');
     const refusal = t.user.login !== OWNER ? new Refuse(L.notOwner, `#${n} was written by ${t.user.login}, not ${OWNER}. The factory only works the owner's tickets.`)
       : blockers.length ? new Refuse(L.blocked, `#${n} is blocked by ${blockers.map((b) => '#' + b.number).join(', ')}, which ${blockers.length > 1 ? 'are' : 'is'} still open. Nothing was started.`) : null;
     if (refusal) { refuse(n, t, refusal); continue; }   // the next ticket can still start this tick
