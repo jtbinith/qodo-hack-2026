@@ -1,0 +1,16 @@
+✔ live counters are never pushed out, so other devices asking cannot reset a limit (Qodo on #87) (181.830226ms)
+✔ one device holds at most askRecordsPerDevice counters; only its own new files are refused (Qodo on #87) (0.403186ms)
+✔ when every counter is live a new one is refused, and it is allowed once one goes stale (Qodo on #87) (1.016701ms)
+✔ undo gives back a whole-file send that sent nothing (Qodo on #87) (0.121449ms)
+✔ undo gives back a piece ask that sent nothing (Qodo on #87) (0.042571ms)
+✔ undo for a counter that is gone does nothing (Qodo on #87) (0.027694ms)
+✔ a send that gives up before any piece left says it sent 0 pieces (Qodo on #87) (0.679969ms)
+✔ a send that stalls after some pieces says how many it sent (Qodo on #87) (0.871899ms)
+ℹ tests 80
+ℹ suites 0
+ℹ pass 80
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 274.734493

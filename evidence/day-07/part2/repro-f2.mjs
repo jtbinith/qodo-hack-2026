@@ -16,7 +16,10 @@ console.log(`t=0 s    B asks for big-photo 20 times: sent ${sendsOfBig()}`);
 t = 5000; let filled = 0;
 for (let d = 0; d < 4; d++) for (let f = 0; f < 500; f++) if (whole('X' + d, 'thumb:' + f)) filled++;
 console.log(`t=5 s    ${filled} other whole asks allowed (4 ids x 500 thumbnails), counters kept: ${lim.size}`);
-console.log(`t=5 s    B asks for big-photo 20 times again: sent ${sendsOfBig()}   <- limit reset, well inside B's 60 s window`);
+{ const n = sendsOfBig(); console.log(`t=5 s    B asks for big-photo 20 times again: sent ${n}   ${n ? '<- limit reset, well inside B\'s 60 s window' : '(limit held)'}`); }
+// with more ids: enough live pairs to fill the whole table
+t = 6000; let more = 0; for (let d = 4; d < 44; d++) for (let f = 0; f < 500; f++) if (whole('X' + d, 'thumb:' + f)) more++;
+{ const n = sendsOfBig(); console.log(`t=6 s    ${more} more from 40 further ids, counters kept: ${lim.size}; B asks again: sent ${n}   ${n ? '<- limit reset' : '(limit held)'}`); }
 let total = 3 + 0; t = 5000;
 // keep cycling for the rest of the minute: each cycle the thumbnail keys can each be asked again
 // (3 per minute each), pushing B's newest counter out again
@@ -24,7 +27,7 @@ let cycles = 0;
 for (t = 6000; t < 60000 && cycles < 2; t += 1000) {
   let again = 0; for (let d = 0; d < 4; d++) for (let f = 0; f < 500; f++) if (whole('X' + d, 'thumb:' + f)) again++;
   if (again < LIMITS.askRecords) break;
-  cycles++; console.log(`t=${t / 1000} s    ${again} more thumbnail asks; B asks again: sent ${sendsOfBig()}`);
+  cycles++; { const n = sendsOfBig(); console.log(`t=${t / 1000} s    ${again} more thumbnail asks; B asks again: sent ${n}   ${n ? '<- limit reset' : '(limit held)'}`); }
 }
 // control: the same room without the 2000 other counters
 t = 0; const lim2 = askLimiter(() => t); let n2 = 0;

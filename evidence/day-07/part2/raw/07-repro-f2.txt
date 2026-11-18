@@ -2,6 +2,7 @@ LIMITS.wholeSends 3 per 60 s, LIMITS.askRecords 2000
 t=0 s    B asks for big-photo 20 times: sent 3
 t=5 s    2000 other whole asks allowed (4 ids x 500 thumbnails), counters kept: 2000
 t=5 s    B asks for big-photo 20 times again: sent 3   <- limit reset, well inside B's 60 s window
-t=6 s    2000 more thumbnail asks; B asks again: sent 3
-t=7 s    2000 more thumbnail asks; B asks again: sent 3
+t=6 s    20000 more from 40 further ids, counters kept: 2000; B asks again: sent 3   <- limit reset
+t=6 s    2000 more thumbnail asks; B asks again: sent 3   <- limit reset
+t=7 s    2000 more thumbnail asks; B asks again: sent 3   <- limit reset
 control  without the other counters, B gets 3 sends of big-photo in the same minute

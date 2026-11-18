@@ -26,6 +26,7 @@ function run(recoverAt, limited) {
       if (t >= recoverAt) return { got: t + DELAY, refused, allowedFails };
       if (t + SEND_TIMEOUT >= recoverAt) return { got: recoverAt + DELAY, refused, allowedFails };  // held frames flush when the key lands
       allowedFails++;                   // timed out: counted, nothing sent
+      if (limited && lim.undo) lim.undo('receiver', 'p', kind);   // after the fix: given back (index.html .catch)
     }
     // receiver side: the 1.5 s loop (index.html:231-240), nothing has arrived so missing = null
     if (t % 1500 === 0 && t > 0) {

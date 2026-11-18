@@ -1,0 +1,6 @@
+ tests/asks.test.mjs  | 46 ++++++++++++++++++++++++++++++++++++++++++++++
+ tests/peers.test.mjs | 19 +++++++++++++++++++
+ web/check.js         | 32 +++++++++++++++++++++++---------
+ web/index.html       |  5 +++--
+ web/peers.js         | 15 +++++++++++----
+ 5 files changed, 102 insertions(+), 15 deletions(-)
