@@ -4,6 +4,8 @@ I read all 40 open issues in `jtbinith/qodo-hack-2026` in full with Qodo `get-is
 
 **[V]** means verified in the code or ticket text; **[A]** means an assumption or inference. The verdicts are: **Fine** (fine as written), **Closer look** (needs a closer look), **Stale / done** (stale or already done) and **Overlaps** (overlaps another ticket).
 
+**Checked 18 Nov:** the open list read here (`17-list-issues-open.json`) has 39 issues, not 40, and the table has 38 rows. #32 (F10 · One person joins their own two devices) has no row. It comes up later as #68's open question 4 (its 3 s tap window against the 2 s `WINDOW`).
+
 | # | Ticket | Verdict | Reason (citation) |
 |---|---|---|---|
 | 84 | E5 · Reliability at scale (epic) | Fine | An epic. Its children #78, #79 and #80 match its scope. [V] |

@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## What this is
-A website for sharing photos between any devices in the same room: phones, tablets and laptops. Devices join a room, push orbs to join their screens into one shared space and drag photos across. Files go device to device over WebRTC. When the network blocks that, they go through the room server (Supabase Realtime) end-to-end encrypted.
+A website for sharing photos between any devices in the same room: phones, tablets and laptops. Devices join a room, push orbs to join their screens into one shared space (join strips are planned to replace the orbs: C15, #68) and drag photos across. Files go device to device over WebRTC. When the network blocks that, they go through the room server (Supabase Realtime) end-to-end encrypted.
 
 Every device in a room is a stranger: anyone with the room code can send anything. The code is written for that.
 

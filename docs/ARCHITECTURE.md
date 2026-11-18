@@ -29,7 +29,7 @@ flowchart LR
 | Component | File | Responsibility |
 |---|---|---|
 | Shared space | `web/index.html` | Prints, dragging, saving, requesting and receiving files |
-| Room | `web/net.js` | Presence, the shared clock, screen joins (orb pushes today, join tabs and the mini-map planned: C15, C16) and unique names (planned: S19) |
+| Room | `web/net.js` | Presence, the shared clock, screen joins (orb pushes today, join strips and the mini-map planned: C15, C16) and unique names (planned: S19) |
 | Layout | `web/layout.js` | Where each screen sits in the shared space |
 | Links | `web/peers.js` | Direct WebRTC links. The encrypted relay when those fail |
 | Encryption | `web/seal.js` | ECDH P-256 key exchange, HKDF, AES-256-GCM |
