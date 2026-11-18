@@ -26,7 +26,10 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - The two screens line up where the taps were: the point tapped on A's strip meets the point tapped on B's.
 - Given a laptop and two phones, when the laptop taps its right strip **once for each phone**, at the point facing that phone, and each phone taps its left strip at the same moment, then both phones join, stacked down that edge.
 - When a set of joins would leave screens overlapping (for example, both phones tapped the middle of their edge), the time keeper doesn't keep them and every device involved shows "Couldn't tell who to join. Try again".
-- When only one device taps, or its tap is rejected (for example, sent just as the phone rotated), then after the 2 s window it shows "No match. Tap again together". The device that tapped starts its own timer, so this works even when the time keeper drops the tap without a `nomatch`.
+- When only one device taps, or its tap is rejected (for example, sent just as the phone rotated), then it shows "No match. Tap again together".
+  - If the time keeper sends a `nomatch`, it shows straight away.
+  - The device that tapped also starts its own timer, so this works even when the time keeper drops the tap without a `nomatch`. That timer has to outlast the time keeper's latest decision, not just the 2 s window: a second tap just inside the window is paired up to 900 ms later (`resolve` runs up to 900 ms after the latest push, `web/net.js:100`), so `joined` can come about 2.9 s after the first tap, plus network delay. The timer is a named limit covering `WINDOW` + that 900 ms + a network margin (for example 4 s). It's cancelled when `joined` or `nomatch` arrives.
+  - A `joined` always wins: if it arrives after "No match" has been shown, it replaces it with "Joined with…".
 - When taps can't be paired (for example, three at once), then every device involved shows "Couldn't tell who to join. Try again" (the `retry` result).
 
 ### Edge cases
@@ -48,6 +51,8 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - Two phones on a laptop edge: two laptop taps join both. One laptop tap gives "try again" on all three. Both phones tapped mid-edge gives "try again", not overlapping screens.
 - A `joined`, `retry` or `nomatch` sent by a device that isn't the time keeper is ignored.
 - A lone tap shows the no-match message after the window.
+- A second tap 1.9 s after the first shows "Joined" on both devices, and never "No match" first. Run on the real `net.js`, `joined` fires at 2.80 s (`evidence/day-07/timing-check.mjs`).
+- A tap the time keeper drops without a reply (for example, its position is off the screen) shows "No match" once the device's own limit runs out.
 - Unit tests for `layout.js` cover the strip positions, including two phones stacked on one edge (`docs/TESTING.md:53`, `:69`).
 
 <details>
@@ -76,6 +81,7 @@ Labels: `type: feature`, `area: sharing`
 | An inset strip maps linearly onto the whole edge; keyboard joins at the centre unless the arrow keys move a marker | Decided after review. The inset keeps taps clear of edge gestures, the mapping keeps every position reachable and in range, and keyboard users can still choose a position. | [V] `PRD.md:206` (inset, keyboard, spoken label), `net.js:88-90` (accepted range) |
 | "How to test" added; the test clicks the strip | Today's join tests call `net.push` directly and skip the UI. Rule 5 requires the two-browser test for joining changes. `layout.js` has no unit tests. | [V] `two-browser.mjs:52-55`, `TESTING.md:53,69`, AGENTS.md Rule 5 |
 | Second pass with the brief's prompt (`q5`): stacking needs a laptop tap per phone, overlapping joins are refused, the tapping device times out by itself, results only from the time keeper | A fresh read of the revised ticket found that one laptop tap gives `retry`, mid-edge phone taps keep both joins and overlap, a rejected tap gets no reply, and `joined`/`retry`/`nomatch` are accepted from anyone | [V] `net.js:93,134-136`, `layout.js:57-58,125,131-174`; local run in `q5-brief-prompt.md` |
+| The tapping device's "No match" timer outlasts the time keeper's latest decision, and `joined` always wins (Qodo on #86, finding `24cbc11a`) | A 2 s timer fired before a valid join: run on the real `net.js` and `matchPushes`, a second tap at 1.9 s gives `joined` at 2.80 s, because `resolve` waits up to 900 ms after the latest push | [V] `net.js:10,92-121`, `layout.js:133`; `evidence/day-07/02-finding-2.md`, `raw/23-timing-check.txt` |
 
 ### Decided after review
 - **After the second pass (`q5-brief-prompt.md`):** the laptop taps once per phone; joins that would overlap are refused with "try again"; the tapping device times out by itself; join results are accepted only from the time keeper. [V] all four by reading `net.js:93,134-136` and `layout.js:57-58,125`, and by running `matchPushes`/`addJoins` with the test's screen sizes.

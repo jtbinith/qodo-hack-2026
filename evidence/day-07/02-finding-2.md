@@ -77,3 +77,13 @@ The finding is valid, in scope (it's the revised #68 text in this PR) and worth 
 | F | **Resolver write.** None proposed: after a push, the next review should re-attribute finding 2 by itself. | No |
 
 **Not changed:** finding 1 (already `implemented`).
+
+## Applied (after your choice: A+B and C)
+- **A and B, at `05-revised-tickets.md:29-32`:**
+  - "No match" shows straight away on a `nomatch`.
+  - Otherwise it shows only after a named limit covering `WINDOW` + the 900 ms settle wait + a network margin (for example 4 s). The limit is cancelled by `joined` or `nomatch`.
+  - A late `joined` always replaces "No match".
+- **C, in "How to test":** a second tap at 1.9 s shows "Joined", never "No match". A silently dropped tap shows "No match" when the limit runs out.
+- **Change table:** a new row cites this finding, `24cbc11a`.
+- **Upper bound checked [V]:** I added a 1.99 s case to `timing-check.mjs`, the latest tap that can still pair. `joined` fires at **2.89 s** (`raw/25-timing-check-with-1.99s.txt`), which matches the ticket's "about 2.9 s after the first tap, plus network delay".
+- **Not applied:** D (the note on the 900 ms and 400 ms constants), E (GitHub issue #68 still carries the old line) and F (no Resolver write).

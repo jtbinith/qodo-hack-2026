@@ -45,4 +45,5 @@ async function run(label, secondTapAt) {
 console.log(`node ${process.version}, web/net.js and web/layout.js from this checkout`);
 await run('second tap at 1.9 s', 1900);
 await run('second tap at 0.5 s', 500);
+await run('second tap at 1.99 s (latest that can pair)', 1990);
 await run('lone tap', null);
