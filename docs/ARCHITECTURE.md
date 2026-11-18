@@ -74,7 +74,7 @@ Every message from another device is checked in `web/check.js` (or `net.js` for 
 | presence | name, screen size, join time. Planned: signing public key (S2) | Any device | `validPeerMeta`. Planned: `validName` (S19) |
 | `ping` | clock request | Any device | `validPing`. Only the time keeper answers |
 | `pong` | clock reply | Should be the time keeper only (S1.4) | `validPong` |
-| `push` | an orb push: edge, position, time. Planned: replaced by a join tap (edge, time) when C15 ships | Devices in the room | `validPush` in `net.js` |
+| `push` | an orb push: edge, position, time. Planned: replaced by a join tap (edge, along, time) when C15 ships; same message and `validPush` | Devices in the room | `validPush` in `net.js` |
 | `arrange` (planned, C16) | a mini-map request: "put me below Sam" | Devices in the room. Only the device named can accept | `validArrange` (to write) |
 | `arrange-ok` · `arrange-no` (planned, C16) | the answer to a mini-map request | Only the device that was asked | `validArrangeReply` (to write) |
 | `layout` | how screens are joined | The time keeper only | `isValidJoins` and the sender is the time keeper |
