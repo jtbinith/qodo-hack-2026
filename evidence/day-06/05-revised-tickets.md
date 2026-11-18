@@ -24,8 +24,9 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 ### Acceptance (Given / When / Then)
 - Given two devices in a room, when each taps the join strip on facing edges within 2 s, then both show "Joined with <name>, on your right" (naming the other device and the side) and behave as one space.
 - The two screens line up where the taps were: the point tapped on A's strip meets the point tapped on B's.
-- Given a laptop and two phones, when each phone taps the laptop's right strip at a different height together with the laptop, then both phones join, stacked down that edge, with no overlap.
-- When only one device taps, then after the 2 s window it shows "No match. Tap again together" (the `nomatch` result).
+- Given a laptop and two phones, when the laptop taps its right strip **once for each phone**, at the point facing that phone, and each phone taps its left strip at the same moment, then both phones join, stacked down that edge.
+- When a set of joins would leave screens overlapping (for example, both phones tapped the middle of their edge), the time keeper doesn't keep them and every device involved shows "Couldn't tell who to join. Try again".
+- When only one device taps, or its tap is rejected (for example, sent just as the phone rotated), then after the 2 s window it shows "No match. Tap again together". The device that tapped starts its own timer, so this works even when the time keeper drops the tap without a `nomatch`.
 - When taps can't be paired (for example, three at once), then every device involved shows "Couldn't tell who to join. Try again" (the `retry` result).
 
 ### Edge cases
@@ -33,6 +34,7 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - The strip sits inset from the bezel, so a tap never starts where the phone's own edge gestures do (see #83). A tap maps linearly onto the whole edge: the strip's start is `along = 0` and its end is `along = edge length`. So every position can be reached and stays inside the range `validPush` accepts.
 - By keyboard, the strip is focusable and has a spoken label ("Join on the right"). The arrow keys move a marker along it. Activating it joins at the marker, which starts at the centre of the edge.
 - `nomatch` is shown only on the device it names. `retry` is shown only on devices in its list.
+- `joined`, `retry` and `nomatch` are accepted only from the time keeper, as layouts are. Today any device in the room can send them (`web/net.js:134-136`), so without this check anyone with the room code could make "Joined with…" or "No match" appear.
 - No Undo in this ticket. Undo, and "settled", come with "Pending join and Undo".
 
 ### Must not break
@@ -43,6 +45,8 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - In the two-browser test, A and B **click the strips** (not `net.push`) at known points. Check that they join, and that the layout puts the two tapped points together.
 - Clicks at the two ends of a strip send `along = 0` and `along = edge length`. Keyboard activation with no arrow-key moves sends the centre.
 - Taps on non-facing strips, and taps 3 s apart, don't join.
+- Two phones on a laptop edge: two laptop taps join both. One laptop tap gives "try again" on all three. Both phones tapped mid-edge gives "try again", not overlapping screens.
+- A `joined`, `retry` or `nomatch` sent by a device that isn't the time keeper is ignored.
 - A lone tap shows the no-match message after the window.
 - Unit tests for `layout.js` cover the strip positions, including two phones stacked on one edge (`docs/TESTING.md:53`, `:69`).
 
@@ -71,8 +75,10 @@ Labels: `type: feature`, `area: sharing`
 | "Clicks the join tab" becomes "taps the join strip" | It matches PRD C15's "tap" and covers touch, mouse and keyboard. | [V] `PRD.md:206` |
 | An inset strip maps linearly onto the whole edge; keyboard joins at the centre unless the arrow keys move a marker | Decided after review. The inset keeps taps clear of edge gestures, the mapping keeps every position reachable and in range, and keyboard users can still choose a position. | [V] `PRD.md:206` (inset, keyboard, spoken label), `net.js:88-90` (accepted range) |
 | "How to test" added; the test clicks the strip | Today's join tests call `net.push` directly and skip the UI. Rule 5 requires the two-browser test for joining changes. `layout.js` has no unit tests. | [V] `two-browser.mjs:52-55`, `TESTING.md:53,69`, AGENTS.md Rule 5 |
+| Second pass with the brief's prompt (`q5`): stacking needs a laptop tap per phone, overlapping joins are refused, the tapping device times out by itself, results only from the time keeper | A fresh read of the revised ticket found that one laptop tap gives `retry`, mid-edge phone taps keep both joins and overlap, a rejected tap gets no reply, and `joined`/`retry`/`nomatch` are accepted from anyone | [V] `net.js:93,134-136`, `layout.js:57-58,125,131-174`; local run in `q5-brief-prompt.md` |
 
 ### Decided after review
+- **After the second pass (`q5-brief-prompt.md`):** the laptop taps once per phone; joins that would overlap are refused with "try again"; the tapping device times out by itself; join results are accepted only from the time keeper. [V] all four by reading `net.js:93,134-136` and `layout.js:57-58,125`, and by running `matchPushes`/`addJoins` with the test's screen sizes.
 - **Inset strip and the ends of an edge:** a tap on the inset strip maps **linearly onto the whole edge**. The strip's start is `along = 0` and its end is `along = edge length`. So every position along the edge can be reached, and it always passes `validPush` (`net.js:88-90`). [V] that `validPush` accepts exactly that range.
 - **Keyboard and screen readers:** activating the strip by keyboard joins at the **centre of the edge** by default. Before activating, the arrow keys move a marker along the strip to choose another position. This feeds #73 and #74.
 
@@ -81,6 +87,7 @@ Labels: `type: feature`, `area: sharing`
 2. **The orb.** Is it removed in this ticket, as the original summary says, or kept as a fallback until the real-device checks pass (#36, #83)?
 3. **Message wording.** Exact text for "joined", "no match" and "try again", and whether "on your right" is worked out from `edgeA` or `edgeB` for each device. [V] that the `joined` payload has both (`layout.js:138`).
 4. **#32 (F10) "tap both within 3 s".** Does F10 use the same strip and window, or a separate path? (`PRD.md:100`, flow 1b, conflicts with the 2 s `WINDOW` at `net.js:10`.) [V]
+5. **Snap instead of retry.** When joins would overlap, should a phone snap to the nearest free spot along the edge instead of everyone trying again?
 
 ---
 
