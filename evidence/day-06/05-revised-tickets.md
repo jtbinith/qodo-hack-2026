@@ -39,6 +39,17 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - `nomatch` is shown only on the device it names. `retry` is shown only on devices in its list.
 - `joined`, `retry` and `nomatch` are accepted only from the time keeper, as layouts are. Today any device in the room can send them (`web/net.js:134-136`), so without this check anyone with the room code could make "Joined with…" or "No match" appear.
 - No Undo in this ticket. Undo, and "settled", come with "Pending join and Undo".
+- **A `retry` goes to every device in the batch, not only the ones that clashed** (blind review 4). When any tap is contested, `matchPushes` returns no joins and puts every device in the batch on the `retry` list (`web/layout.js:169-171`). So a bystander tapping an unrelated edge in the same burst, or another pair joining at that moment, is also told to try again. [V] `retry {"devs":["L","A","B","C"]}` (`evidence/day-07/raw/26-blind-repro-on-real-web.txt`). Whether to narrow this is open question 7.
+- **Taps pair by edge and time only, not by position** (blind review 7). The pair check uses only edge and time (`web/layout.js:133`), and ties are broken by the time difference (`:148-149`). When stacking two phones, the laptop and each phone tap as a pair, one pair after the other. If all four taps land together, the phones can be swapped with no error. [V] `B@200 <-> L@200, A@200 <-> L@650` (`raw/26`, `swap.mjs`).
+- **Taps the time keeper drops with no reply** (blind review 8). This is what the device's own timer is for. A strip tap is always inside the edge, so it can't be dropped for its position. The real silent drops are:
+  - a third tap from one device evicts its oldest (`PER_DEV`, `web/net.js:95`);
+  - a full batch drops the tap (`MAX_BATCH`, `:96`);
+  - the time keeper changes mid-burst, and its pending taps are lost (`:93`);
+  - presence still has the old screen size just after a rotation (`:89,143`).
+
+  [V] for the first: 3 laptop taps give 2 `nomatch` (`raw/26`).
+- **The 2 s window uses each device's own synced clock** (blind review 9). The tap carries the sender's `s.now()` (`web/net.js:139`), which `matchPushes` compares (`layout.js:133`). Until a device's first clock reply, its offset is 0 (`net.js:23,66`), so it can be paired or refused wrongly. A tap more than 10 s off is dropped silently (`net.js:90`). Times in tests are ranges, not exact values.
+- **"Joined with…" shows only on the two devices the join names** (blind review 10). Every `joined` is broadcast to the whole room (`web/net.js:111`). A device shows it only when the join's `a` or `b` is this device, and works out "on your right" from its own edge (`edgeA` if it's `a`, `edgeB` if it's `b`).
 
 ### Must not break
 - `npm run test:browsers`, direct and relay: every check passes. The existing join steps still pass (`tests/two-browser.mjs:52-55,287-288`).
@@ -51,8 +62,8 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - Two phones on a laptop edge: two laptop taps join both. One laptop tap gives "try again" on all three. Both phones tapped mid-edge gives "try again", not overlapping screens.
 - A `joined`, `retry` or `nomatch` sent by a device that isn't the time keeper is ignored.
 - A lone tap shows the no-match message after the window.
-- A second tap 1.9 s after the first shows "Joined" on both devices, and never "No match" first. Run on the real `net.js`, `joined` fires at 2.80 s (`evidence/day-07/timing-check.mjs`).
-- A tap the time keeper drops without a reply (for example, its position is off the screen) shows "No match" once the device's own limit runs out.
+- A second tap 1.9 s after the first shows "Joined" on both devices, and never "No match" first. Run on the real `net.js`, `joined` fires at 2.80 s on the time keeper with no network delay (`evidence/day-07/timing-check.mjs`). On other devices, the test checks a range rather than an exact time.
+- A tap the time keeper drops without a reply (one of the silent drops in Edge cases, sent with `net.push` since a strip tap is always in range) shows "No match" once the device's own limit runs out.
 - Unit tests for `layout.js` cover the strip positions, including two phones stacked on one edge (`docs/TESTING.md:53`, `:69`).
 
 <details>
@@ -94,6 +105,17 @@ Labels: `type: feature`, `area: sharing`
 3. **Message wording.** Exact text for "joined", "no match" and "try again", and whether "on your right" is worked out from `edgeA` or `edgeB` for each device. [V] that the `joined` payload has both (`layout.js:138`).
 4. **#32 (F10) "tap both within 3 s".** Does F10 use the same strip and window, or a separate path? (`PRD.md:100`, flow 1b, conflicts with the 2 s `WINDOW` at `net.js:10`.) [V]
 5. **Snap instead of retry.** When joins would overlap, should a phone snap to the nearest free spot along the edge instead of everyone trying again?
+6. **How overlap is refused, and the "unchanged" summary** (blind review 5). Today overlapping joins are kept:
+   - `matchPushes` ranks the number of joins above overlaps (`web/layout.js:149`), and `addJoins` never drops fresh joins (`:57-59`).
+   - [V] Two phones tapped mid-edge, with the laptop tapping at 200 and 700, give two `joined` at 900 ms with the phones overlapping (`raw/26`).
+
+   Should an overlapping set refuse the whole batch (`retry`), or keep a smaller set that doesn't overlap? Either way `matchPushes` changes. With the time-keeper-only check, that's two changes, so the Summary's "goes through today's push pipeline unchanged" must be reworded once this is decided.
+7. **Narrow `retry` to the devices that clashed?** Today it goes to the whole batch, bystanders included (see Edge cases).
+8. **Screen sizes for the stacking tests** (blind review 6). Layout is in CSS px (`web/layout.js:1-3`), with 6 px of overlap allowed (`:22,31`).
+   - Two portrait phones (about 800 px each) can't both fit on a 900 px laptop edge, so with overlap refused they would always get "try again".
+   - Whether "mid-edge" overlaps depends on how far apart the laptop's two taps are, not only on where the phones tap.
+
+   Which sizes and laptop tap points do the stacking tests use (for example landscape phones, 400 px tall)?
 
 ---
 
