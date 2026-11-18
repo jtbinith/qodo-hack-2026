@@ -4,7 +4,8 @@
 // and camera details removed, still upright, unless "Keep details" is ticked (S6). Also checks a stranger's malformed messages are
 // ignored, that a send to a device that never answers gives up after 10 s without holding up
 // anyone else (S1.3), that a print dropped while a device's key was late is announced again
-// once the key comes (S1.3), that a thumbnail over 400 x 400 is never decoded (S14) and that a late guest can still download photos after their owner leaves.
+// once the key comes (S1.3), that a thumbnail over 400 x 400 is never decoded (S14), that a device asking again and again
+// for the same file gets it at most 3 times a minute (S1.5) and that a late guest can still download photos after their owner leaves.
 //
 //   node tests/two-browser.mjs           direct device-to-device path (WebRTC)
 //   node tests/two-browser.mjs --relay   force the end-to-end encrypted relay path
@@ -191,6 +192,30 @@ try {
   check(after.prints === before, 'malformed print ignored');
   check(after.got === 0, 'bad pieces for a real transfer were dropped');
   check(after.sent === 0, 'malformed requests caused no resend');
+  // a device that keeps asking for the same file can't make A send it again and again (S1.5):
+  // B sends A 20 wants for photo-0.jpg within a second, then 20 needs listing every piece of
+  // clip.mp4. A sends each file at most 3 times. A device that hasn't asked yet still gets it
+  const pidOf = (page, name) => page.evaluate((name) => [...window.__t.prints.values()].find((p) => p.name === name).pid, name);
+  const [askPid, needPid] = [await pidOf(A, 'photo-0.jpg'), await pidOf(A, 'clip.mp4')];
+  await A.evaluate(() => { const t = window.__t, real = t.peers.sendFile; t.sends = {}; t.realSendFile = real;
+    t.peers.sendFile = (to, fid, ...a) => { t.sends[to + ' ' + fid] = (t.sends[to + ' ' + fid] || 0) + 1; return real(to, fid, ...a); }; });
+  const flood = (msg) => B.evaluate(async ([a, msg]) => { for (let k = 0; k < 20; k++) { window.__t.peers.send(a, msg); await new Promise((r) => setTimeout(r, 40)); } }, [ids.a, msg]);
+  const sendsTo = (to, fid) => A.evaluate((key) => window.__t.sends[key] || 0, to + ' ' + fid);
+  await flood({ t: 'want', pid: askPid });
+  const clipPieces = Math.ceil(60000 / 24576);
+  await flood({ t: 'need', fid: needPid, missing: [...Array(clipPieces).keys()], cs: 24576 });
+  await new Promise((r) => setTimeout(r, 3000));
+  const wantSends = await sendsTo(ids.b, askPid), needSends = await sendsTo(ids.b, needPid);
+  check(wantSends === 3, `20 wants for one photo made A send it ${wantSends} times (at most 3)`);
+  check(needSends === 3, `20 needs listing every piece made A send the file ${needSends} times (at most 3)`);
+  await A.evaluate(() => { const t = window.__t; t.peers.sendFile = t.realSendFile; });
+  const D = await device(390, 700);
+  await until(D, (pid) => window.__t && window.__t.prints.has(pid), askPid, 45000);
+  await D.evaluate(([pid, a]) => { const t = window.__t; t.expect(pid, a, t.prints.get(pid).size); t.peers.send(a, { t: 'want', pid }); }, [askPid, ids.a]);
+  const dGot = await until(D, (pid) => window.__t.files.has(pid), askPid, 60000).then(() => true, () => false);
+  const dBytes = dGot && await D.evaluate(async (pid) => [...new Uint8Array(await window.__t.files.get(pid).arrayBuffer())], askPid);
+  check(dGot && sha(Buffer.from(dBytes)) === expected['photo-0.jpg'], 'a third device asked once and still got photo-0.jpg byte-identical');
+  await D.context().close();
   // thumbnails over 400 x 400 are never decoded: the print shows a plain card (S14). A sends
   // B a real 400 x 400 thumbnail (decoded), a real 401 x 400 one and a 1 KB "image bomb" whose
   // header claims 30000 x 30000, and a 400 x 400 one with 30000 bytes after its end marker, where

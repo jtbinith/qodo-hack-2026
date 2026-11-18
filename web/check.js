@@ -133,3 +133,7 @@ export function validSignal(env) {
   }
   return false;
 }
+
+// Resend requests (S1.5): not written yet.
+export const askKind = () => 'whole';
+export function askLimiter() { return { allow: () => true, forget() {}, get size() { return 0; } }; }
