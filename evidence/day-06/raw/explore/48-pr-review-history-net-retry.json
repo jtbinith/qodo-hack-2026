@@ -1,0 +1,2 @@
+{"error":{"code":"MT-UPSTREAM-DOWN","message":"context-retriever unreachable: ConnectError","tool":"pull-request-review-history","metadata":{"upstream_stage":"qar_to_platform","upstream_status":null,"upstream_code":null,"reset_at":null}}}
+  trace 9f78c30ed7fb940d9c01b7a96b6a3e41

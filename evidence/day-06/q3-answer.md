@@ -26,8 +26,10 @@ The five below are in issue-number order, not ranked. Which ones to take forward
 - [V] "Until the join has settled (accepted, or 10 s with no Undo)": joins are applied the moment the time keeper solves them (`net.js:108-111`), and there's no accept or Undo state. [A] That makes this ticket depend on #68 and #69.
 - [V] "Prints from before the join need a tap": a print stores no creation or join time (`index.html:136-138`). [A] So there's no way yet to tell which prints came before the join.
 - [V] Auto-fetching across a group runs into `LIMITS.incoming` = 20 for the whole room (`check.js:10`, `index.html:161,256`). Making that limit per device is #17, still open.
+  Checked 18 Nov: incoming is held on each receiving device (index.html:79,161). The 20-transfer cap is per receiving device, shared by every sender in the room, which is what #17 means by room-wide.
 - [A] Every device in the group would fetch from the same owner. On the relay that's one page-wide queue with 45 ms between sends (`web/peers.js:15,140-147`).
 - [V] The ticket's limit is 30 MB, but #71 refers to "the 20 MB limit from F11". The two tickets disagree.
+  Checked 18 Nov: #70's 30 MB is an example of a file that's too big, not a limit. #70 never states its 20 MB limit (PRD.md:222), so there's no contradiction, only a gap.
 
 ## #71 F12 · Share with everyone (and the same collision in #73 N4a · Send without dragging)
 **Why look closer:** both tickets send a photo to devices that never asked for it. Today a receiver keeps only the pieces it asked for, and only within its own group.
@@ -35,6 +37,7 @@ The five below are in issue-number order, not ranked. Which ones to take forward
 - [A] A tray (#71) or "Send to…" (#73) that pushes the file would be silently dropped. These tickets need a receiver-side trigger, which means a new message and a check for it (Rule 1). Otherwise the room loses that protection.
 - [V] "Joined or not": prints outside my group aren't visible (`index.html:85`), and `screenAt` only searches my group (`index.html:243-245`). So a device in another group can't fetch through the normal drop path.
 - [V] The 20 MB / 30 MB mismatch with #70 is noted above.
+  Checked 18 Nov: #70's 30 MB is an example of a file that's too big, not a limit. #70 never states its 20 MB limit (PRD.md:222), so there's no contradiction, only a gap.
 
 ## #78 C12 · Ask another holder and keep pieces when the link changes
 **Why look closer:** this ticket mixes pieces from different holders, but #79 says per-piece hashes are needed before that. Both changes also cut across how a transfer is tied to one sender.
