@@ -9,7 +9,7 @@ All three must hold:
 3. Qodo's re-review on the new head re-attributes it.
 
 ## Resolver writes
-- **`mark-implemented`:** used only if the re-review hasn't re-attributed the finding about 10 minutes after naming the new head, and only with the builder's OK.
+- **`mark-implemented`:** If Qodo hasn't marked a reproduced, tested fix as implemented within 10 minutes of reviewing the head, I mark it myself.
 - **`dismiss`:** the types are `intentional`, `false_positive` and `deferred`. Each needs its reason on the PR and the builder's OK.
 - **So far:** nothing has been dismissed or marked implemented.
 
