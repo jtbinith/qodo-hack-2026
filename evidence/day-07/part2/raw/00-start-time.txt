@@ -1,0 +1,1 @@
+2026-11-18T22:53:30Z  start, before reading any finding; policy: evidence/day-07/00-write-back-policy.md

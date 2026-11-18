@@ -1,0 +1,20 @@
+
+need delay 100 ms, first want delay 100 ms
+link recovers at | without the limit       | with #87 (8ddeaf8)
+    5 s          | photo at 5.1 s         | photo at 5.1 s  (asks refused: 0, counted sends that failed: 0)
+   12 s          | photo at 12.1 s        | photo at 12.1 s  (asks refused: 0, counted sends that failed: 1)
+   20 s          | photo at 20.1 s        | photo at 60.2 s  (asks refused: 17, counted sends that failed: 3)
+   30 s          | photo at 30.1 s        | photo at 60.2 s  (asks refused: 17, counted sends that failed: 3)
+   40 s          | photo at 40.1 s        | photo at 60.2 s  (asks refused: 17, counted sends that failed: 3)
+   50 s          | photo at 50.1 s        | photo at 60.2 s  (asks refused: 17, counted sends that failed: 3)
+   55 s          | photo at 55.1 s        | photo at 60.2 s  (asks refused: 17, counted sends that failed: 3)
+
+need delay 100 ms, first want delay 400 ms
+link recovers at | without the limit       | with #87 (8ddeaf8)
+    5 s          | photo at 5.1 s         | photo at 5.1 s  (asks refused: 0, counted sends that failed: 0)
+   12 s          | photo at 12.1 s        | photo at 12.1 s  (asks refused: 0, counted sends that failed: 1)
+   20 s          | photo at 20.1 s        | gave up at 63.0 s  (asks refused: 18, counted sends that failed: 3)
+   30 s          | photo at 30.1 s        | gave up at 63.0 s  (asks refused: 18, counted sends that failed: 3)
+   40 s          | photo at 40.1 s        | gave up at 63.0 s  (asks refused: 18, counted sends that failed: 3)
+   50 s          | photo at 50.1 s        | gave up at 63.0 s  (asks refused: 18, counted sends that failed: 3)
+   55 s          | photo at 55.1 s        | gave up at 63.0 s  (asks refused: 18, counted sends that failed: 3)
