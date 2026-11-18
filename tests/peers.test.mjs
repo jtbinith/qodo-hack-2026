@@ -201,3 +201,22 @@ test('one relay frame that fails to send doesn\'t block later frames', async () 
   await tick(100);
   assert.equal(await good, true, 'a later frame to another device was reported as dropped');
 });
+
+// Qodo on #87 (cbfbb88c): the caller can tell a send that moved nothing from one that stalled
+// halfway, so it gives back only the first.
+test('a send that gives up before any piece left says it sent 0 pieces (Qodo on #87)', async () => {
+  const { peers } = room();
+  const s = watch(peers.sendFile('c', 'f1', file(100)));
+  await settle(); await tick(TIMEOUT);
+  assert.equal(s.state, 'rejected');
+  assert.equal(s.error.sent, 0);
+});
+test('a send that stalls after some pieces says how many it sent (Qodo on #87)', async () => {
+  const { peers } = room();
+  const dc = direct(peers, 'c');
+  dc.send = function () { this.sent++; this.bufferedAmount = FULL; };   // the buffer fills after the first piece
+  const s = watch(peers.sendFile('c', 'f1', file(3 * PIECE)));
+  await settle(); await tick(TIMEOUT); await settle();
+  assert.equal(s.state, 'rejected');
+  assert.equal(s.error.sent, 1);
+});

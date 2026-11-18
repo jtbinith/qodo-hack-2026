@@ -106,3 +106,49 @@ test('stale counters are dropped before a live one is pushed out', () => {
   for (let k = 0; k < 10; k++) lim.allow('new' + k, 'f', 'whole');
   assert.equal(lim.allow('b', 'f', 'whole'), false, "b's live counter survived");
 });
+
+// Qodo on #87 (7e800d93): a full table must not push out a live counter, or other devices'
+// asks reset a device's limit.
+const fill = (lim, ids, files, kind = 'whole') => { let n = 0; for (let d = 0; d < ids; d++) for (let f = 0; f < files; f++) if (lim.allow('x' + d, 'f' + f, kind)) n++; return n; };
+test('live counters are never pushed out, so other devices asking cannot reset a limit (Qodo on #87)', () => {
+  const now = clock(), lim = askLimiter(now);
+  asks(lim, 'b', 'big', 'whole', 3);
+  now.at(5000);
+  fill(lim, 40, 100);   // 4000 live (device, file) pairs, twice what the table holds
+  assert.equal(lim.allow('b', 'big', 'whole'), false, "b's limit was reset inside its 60 s window");
+});
+test('one device holds at most askRecordsPerDevice counters; only its own new files are refused (Qodo on #87)', () => {
+  const now = clock(), lim = askLimiter(now);
+  assert.equal(fill(lim, 1, LIMITS.askRecordsPerDevice + 50), LIMITS.askRecordsPerDevice);
+  assert.equal(lim.allow('c', 'f0', 'whole'), true, 'another device');
+  assert.equal(lim.allow('x0', 'f0', 'whole'), true, 'a file it already has a counter for');
+});
+test('when every counter is live a new one is refused, and it is allowed once one goes stale (Qodo on #87)', () => {
+  const now = clock(), lim = askLimiter(now);
+  fill(lim, Math.ceil(LIMITS.askRecords / LIMITS.askRecordsPerDevice), LIMITS.askRecordsPerDevice);
+  assert.equal(lim.size, LIMITS.askRecords);
+  assert.equal(lim.allow('z', 'f', 'whole'), false, 'pushed out a live counter');
+  now.at(LIMITS.wholeWindow);
+  assert.equal(lim.allow('z', 'f', 'whole'), true, 'a stale counter made room');
+});
+
+// Qodo on #87 (cbfbb88c): a send that failed before any piece left must not use up the
+// receiver's allowance, or a link that recovers stays refused until the window ends.
+test('undo gives back a whole-file send that sent nothing (Qodo on #87)', () => {
+  const now = clock(), lim = askLimiter(now);
+  asks(lim, 'b', 'f', 'whole', 3);
+  lim.undo('b', 'f', 'whole');
+  assert.equal(lim.allow('b', 'f', 'whole'), true);
+  assert.equal(lim.allow('b', 'f', 'whole'), false);
+});
+test('undo gives back a piece ask that sent nothing (Qodo on #87)', () => {
+  const now = clock(), lim = askLimiter(now);
+  lim.allow('b', 'f', 'pieces');
+  lim.undo('b', 'f', 'pieces');
+  assert.equal(lim.allow('b', 'f', 'pieces'), true);
+});
+test('undo for a counter that is gone does nothing (Qodo on #87)', () => {
+  const now = clock(), lim = askLimiter(now);
+  lim.undo('b', 'f', 'whole');
+  assert.equal(lim.size, 0);
+});
