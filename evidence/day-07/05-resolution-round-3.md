@@ -27,3 +27,14 @@
 **Findings caused by our own fixes: 2.** That's unchanged, since round 3 added none.
 
 **What the clean review does and doesn't show [A]:** a clean Qodo review at `60458e6` means Qodo found nothing more. It doesn't mean the round-3 text is right: in round 2, Qodo couldn't see the flaws in our own fix until a reviewer read it directly. #68's open questions 6–8 (overlap refusal, narrowing `retry`, test screen sizes) are still open by design.
+
+## Review of the evidence-only push (`5fc4add`)
+This push isn't a fix round (`00-write-back-policy.md`). It added this file's round-3 record (`0372306`) and the policy line (`5fc4add`), with no changes to code or to #68.
+
+| | |
+|---|---|
+| Run | `2042976`, status `completed`, started 21:57:49Z, first seen completed at 21:58:50Z |
+| Commit | `5fc4add2095b21e0e152afdcc616059e0e9fd270`, which **equals the PR head** (`raw/34-pr-86-meta.json`) |
+| `review_complete` | **`false`**. The run doesn't claim it covered everything, so this isn't proof the PR is clean. |
+| Findings | **No new findings.** Still only `24cbc11a` and `69808cf1`, both `implemented` (`raw/32-findings-at-5fc4add.json`, `raw/33-findings-extended-at-5fc4add.json`). |
+| Unresolved | Nothing was raised, so nothing is recorded as unresolved. `review_complete: false` is noted for you; I didn't act on it. |

@@ -29,7 +29,7 @@ The full analysis is in `00-finding.md`. All references are at `b41eb40`, read w
 | `b1319f4` | `.claude/skills/qodo-review/SKILL.md`: `disable-model-invocation: true` (Claude Code). `.claude/skills/qodo-review/agents/openai.yaml`: `allow_implicit_invocation: false` (Codex). Patch record: `local-patches.md`. |
 | `cc26e6e` | `scripts/agent-watch.mjs` DENY: `Skill(qodo-review)`, `Skill(qodo-review-resolver)`, `Skill(qodo-codebase-wisdom)` and `Bash(qodo:*)`, with a one-line comment. |
 
-- **Effect:** the skill still runs when the user asks for it (`/qodo-review`, "run qodo review", `$qodo-review`), and neither agent starts it on its own.
+- **Effect:** neither agent starts the skill on its own. In Claude Code, only `/qodo-review` starts it: because of `disable-model-invocation: true`, asking in plain words ("run qodo review") likely no longer does. [A] Not checked. In Codex, `$qodo-review` starts it.
 - **Vendored files:** `local-patches.md` records the patch and its reason, plus a grep to re-check it after a skill update.
 - **Not changed, on purpose:** the other two Qodo skills, `qodo-codebase-wisdom` and `qodo-review-resolver`, still allow implicit invocation. Neither uploads local source.
 - **Tests:** `npm run test:unit` passed after each code change, 57/57 at `cc26e6e`. `node --check scripts/agent-watch.mjs` passed.
