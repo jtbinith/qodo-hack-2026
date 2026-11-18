@@ -1,7 +1,7 @@
 # Day 6: questions for Codebase Wisdom, written before asking
 
 Repo state when written: main at 96f0bbe. Asked one at a time in a fresh Claude Code session that loads the project's qodo-codebase-wisdom skill.
-An earlier investigation exists (01-findings.md). The agent doesn't see it, so it can be compared afterwards.
+Earlier notes made without the Toolbox are kept out of this evidence, so only what Wisdom found is here.
 
 ## Explore
 1. How does a photo get from the device that shared it to another device today, end to end? Which messages, which files, and what decides when a fetch starts?
