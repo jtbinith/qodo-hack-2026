@@ -14,6 +14,7 @@ export const LIMITS = {
   wholeWindow: 60 * 1000,        // ms
   pieceGap: 1000,                // ms between asks for a few pieces, per device per file (S1.5)
   askRecords: 2000,              // (device, file) counters kept at once
+  askRecordsPerDevice: 100,      // of those, at most this many for one device
 };
 
 const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
@@ -152,12 +153,17 @@ export function askKind(m, size) {
 
 // Counts the sends each device has asked for, per file. allow() is called once a request has
 // passed its checks and we hold the file; only allowed requests are counted, so a device that
-// keeps asking can't keep itself locked out. Counters go when their device leaves (forget) and
-// there are never more than LIMITS.askRecords: stale ones go first, then the oldest.
+// keeps asking can't keep itself locked out. Counters go when their device leaves (forget).
+// There are never more than LIMITS.askRecords, and never more than LIMITS.askRecordsPerDevice
+// for one device. A live counter is never pushed out to make room, or other devices asking
+// could reset a device's limit (Qodo on #87): stale ones go, and if none are stale the new
+// (device, file) is refused. undo() gives back a send that moved nothing (Qodo on #87).
 export function askLimiter(now = () => performance.now()) {
-  const recs = new Map();   // 'dev fid' -> { dev, whole: [times allowed], piece: time allowed }
+  const recs = new Map();   // 'dev fid' -> { dev, whole: [times allowed], piece, lastPiece }
+  const perDev = new Map(); // dev -> how many counters it has
   const recent = (r, t) => (r.whole = r.whole.filter((w) => t - w < LIMITS.wholeWindow));
   const live = (r, t) => recent(r, t).length > 0 || t - r.piece < LIMITS.pieceGap;
+  const drop = (k, r) => { recs.delete(k); const n = perDev.get(r.dev) - 1; if (n > 0) perDev.set(r.dev, n); else perDev.delete(r.dev); };
   function allow(dev, fid, kind) {
     const t = now(), key = dev + ' ' + fid;
     let r = recs.get(key);
@@ -165,14 +171,22 @@ export function askLimiter(now = () => performance.now()) {
       if (kind === 'whole' ? recent(r, t).length >= LIMITS.wholeSends : t - r.piece < LIMITS.pieceGap) return false;
       recs.delete(key);   // re-added below, as the newest
     } else {
-      if (recs.size >= LIMITS.askRecords) for (const [k, o] of recs) if (!live(o, t)) recs.delete(k);
-      while (recs.size >= LIMITS.askRecords) recs.delete(recs.keys().next().value);
-      r = { dev, whole: [], piece: -Infinity };
+      const full = () => recs.size >= LIMITS.askRecords || (perDev.get(dev) || 0) >= LIMITS.askRecordsPerDevice;
+      if (full()) for (const [k, o] of recs) if (!live(o, t)) drop(k, o);
+      if (full()) return false;   // every counter in the way is live: refuse, never push one out
+      r = { dev, whole: [], piece: -Infinity, lastPiece: -Infinity };
+      perDev.set(dev, (perDev.get(dev) || 0) + 1);
     }
-    if (kind === 'whole') r.whole.push(t); else r.piece = t;
+    if (kind === 'whole') r.whole.push(t); else { r.lastPiece = r.piece; r.piece = t; }
     recs.set(key, r);
     return true;
   }
-  const forget = (dev) => { for (const [k, r] of recs) if (r.dev === dev) recs.delete(k); };
-  return { allow, forget, get size() { return recs.size; } };
+  // The send allow() let through moved nothing (it gave up before any piece left): give it back.
+  function undo(dev, fid, kind) {
+    const r = recs.get(dev + ' ' + fid);
+    if (!r) return;
+    if (kind === 'whole') r.whole.pop(); else r.piece = r.lastPiece;
+  }
+  const forget = (dev) => { for (const [k, r] of recs) if (r.dev === dev) recs.delete(k); perDev.delete(dev); };
+  return { allow, undo, forget, get size() { return recs.size; } };
 }

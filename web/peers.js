@@ -186,14 +186,21 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
 
   // Stream a File/Blob in pieces without loading it all into memory. `only` resends
   // just the listed pieces (after the receiver reports gaps). Rejects with SendTimeout if the
-  // device stops answering; the rest of the file is not sent.
+  // device stops answering; the rest of the file is not sent. The error's `sent` says how many
+  // pieces left before it gave up, so a caller can tell a send that moved nothing (Qodo on #87).
   async function sendFile(peer, fid, file, only = null, cs = null) {
     const L = link(peer);
     cs = cs || (L.open ? DIRECT_CHUNK : RELAY_CHUNK);
     const n = Math.ceil(file.size / cs) || 1;
-    for (const i of only || [...Array(n).keys()]) {
-      const bytes = new Uint8Array(await file.slice(i * cs, (i + 1) * cs).arrayBuffer());
-      await sendFrame(peer, frame({ t: 'chunk', fid, i, n, cs }, bytes));
+    let sent = 0;
+    try {
+      for (const i of only || [...Array(n).keys()]) {
+        const bytes = new Uint8Array(await file.slice(i * cs, (i + 1) * cs).arrayBuffer());
+        if (await sendFrame(peer, frame({ t: 'chunk', fid, i, n, cs }, bytes))) sent++;
+      }
+    } catch (e) {
+      if (e && typeof e === 'object') e.sent = sent;
+      throw e;
     }
   }
 
