@@ -1,0 +1,2 @@
+{"issue":{"number":34,"title":"Q1 · Run the two-browser test on every PR","body":"### What and why\nMake it a required GitHub check so the Two-Browser rule is enforced, not trusted.","state":"open","author":{"login":"jtbinith","external_id":"145369582","is_bot":false,"is_self":false},"assignees":[],"labels":["type: chore","area: ci"],"comments_count":0,"created_at":"2026-11-12T00:06:03Z","updated_at":"2026-11-12T00:06:03Z","closed_at":null,"html_url":"https://github.com/jtbinith/qodo-hack-2026/issues/34"}}
+  trace a1d08c955493031ca77c9ca45529e34d

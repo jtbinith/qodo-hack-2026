@@ -1,0 +1,2 @@
+{"issue":{"number":22,"title":"N3 · Test malformed messages of every type","body":"### What and why\nThe two-browser test sends bad messages of 4 types. Cover all 14 so the Stranger rule is proven.","state":"open","author":{"login":"jtbinith","external_id":"145369582","is_bot":false,"is_self":false},"assignees":[],"labels":["type: chore","area: ci"],"comments_count":0,"created_at":"2026-11-12T00:05:46Z","updated_at":"2026-11-12T00:05:46Z","closed_at":null,"html_url":"https://github.com/jtbinith/qodo-hack-2026/issues/22"}}
+  trace 9047f840370cf99e263f070250c2ec83

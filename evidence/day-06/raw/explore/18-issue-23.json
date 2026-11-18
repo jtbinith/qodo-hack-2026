@@ -1,0 +1,2 @@
+{"issue":{"number":23,"title":"E2 · Private and safe","body":"### Goal\nNobody can pose as another device or learn where a photo was taken. PRD S2, S3, S6, S14.","state":"open","author":{"login":"jtbinith","external_id":"145369582","is_bot":false,"is_self":false},"assignees":[],"labels":["type: epic","area: trust"],"comments_count":0,"created_at":"2026-11-12T00:05:47Z","updated_at":"2026-11-12T00:05:47Z","closed_at":null,"html_url":"https://github.com/jtbinith/qodo-hack-2026/issues/23"}}
+  trace 42d5d6a27714eefaac4c0d3319262f84

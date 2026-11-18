@@ -1,0 +1,2 @@
+{"issue":{"number":15,"title":"E1 · One device can't take over the room","body":"### Goal\nA slow, broken or hostile device can't take over or stall a room. PRD S1, N3.","state":"open","author":{"login":"jtbinith","external_id":"145369582","is_bot":false,"is_self":false},"assignees":[],"labels":["type: epic","area: trust"],"comments_count":0,"created_at":"2026-11-12T00:05:36Z","updated_at":"2026-11-12T00:05:36Z","closed_at":null,"html_url":"https://github.com/jtbinith/qodo-hack-2026/issues/15"}}
+  trace 98919d8ff62d3c226a5d6409a9b0906b
