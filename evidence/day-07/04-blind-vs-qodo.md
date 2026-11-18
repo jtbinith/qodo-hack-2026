@@ -11,9 +11,9 @@ So they didn't review the same text, and the comparison below keeps that in mind
 |---|---|---|---|---|
 | `qodo-review` uploads code without consent (`69808cf1`) | Yes (Security) | No: outside its inputs | Fixed earlier; Qodo re-attributed it (`01-resolution.md`) | n/a (a skill, not #68) |
 | The "No match" timer fires before a valid join (2 s timer; `24cbc11a`) | **Yes**, on the original 2 s text | Yes, as part of #2 | [V] `joined` at 2.80 s (`raw/23`) | Fixed in A+B (`21b2dfe`) |
-| **Our fix's 4 s limit is too short:** busy rooms decide at up to about `WINDOW + DEADLINE` (blind 2) | No (it didn't see the fix) | **Yes** | [V] 4450 ms (`raw/26`) | Proposed fix pending your choice (`03-blind-repro.md`) |
-| **A `retry` sends no `nomatch`, so "No match" covers "Try again"; cancelling doesn't require a result naming this device** (blind 3) | No | **Yes** | [V] `retry@900`, no `nomatch` (`raw/26`) | Proposed fix pending your choice |
-| The time-keeper check can be forged until #24 (blind 1) | No | **Yes**, put first | [V] by reading `net.js:124,130` | Proposed wording pending your choice |
+| **Our fix's 4 s limit is too short:** busy rooms decide at up to about `WINDOW + DEADLINE` (blind 2) | No (it didn't see the fix) | **Yes** | [V] 4450 ms (`raw/26`) | Fix 2a: the limit covers `WINDOW + DEADLINE` + a margin |
+| **A `retry` sends no `nomatch`, so "No match" covers "Try again"; cancelling doesn't require a result naming this device** (blind 3) | No | **Yes** | [V] `retry@900`, no `nomatch` (`raw/26`) | Fix 3a: only results naming this device cancel its timer, and "Try again" is never overwritten |
+| The time-keeper check can be forged until #24 (blind 1) | No | **Yes**, put first | [V] by reading `net.js:124,130` | Fix 1a: an edge case says it isn't protection until #24, as #85 does |
 | A `retry` goes to the whole batch, bystanders included (blind 4) | No | Yes | [V] `retry {"devs":["L","A","B","C"]}` | Edge case + open question 7 |
 | "Pipeline unchanged", yet overlap refusal and the time-keeper check change it; how to refuse isn't defined (blind 5) | No | Yes | [V] overlapping `joined` ×2 at 900 ms | Open question 6 |
 | Stacking depends on CSS-px sizes the tests don't fix (blind 6) | No | Yes | [V] by reading `layout.js:1-3,22,31` | Open question 8 |
@@ -27,6 +27,8 @@ So they didn't review the same text, and the comparison below keeps that in mind
 - **Blind:** it put **#1 first**, the forgeable time-keeper check. Its reason: it's the ticket's only threat item (T-S7), and the planned test would pass while forged results still get through. Of its other findings, it rated #2 High and #3 Medium-high, both in our changed lines.
 
 ## What this round shows
-- **Findings caused by our own fixes: 2.** Blind 2 and blind 3 are both in the lines our A+B fix added for Qodo's `24cbc11a`. [A] Qodo would only have seen them after a push.
+- **Findings caused by our own fixes: 2** (the round count is in [`00-write-back-policy.md`](00-write-back-policy.md)):
+  - Qodo's timer finding `24cbc11a` came from our second-pass change `cdf98d0`.
+  - The blind review then showed the round-2 fix (A+B, `21b2dfe`) was wrong too. Blind 2 and blind 3 are both in the lines it added. [A] Qodo would only have seen them after a push.
 - Qodo found the timer bug on the pushed text. The blind reviewer, reading the fix itself, found that the fix was still wrong in two ways, plus 8 issues neither our earlier passes nor Qodo raised.
 - [A] Neither reviewer saw everything: Qodo read the skills and the PR as pushed, while the blind reviewer read only the ticket, the diff and the code.

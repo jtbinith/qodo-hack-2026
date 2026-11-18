@@ -28,8 +28,18 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - When a set of joins would leave screens overlapping (for example, both phones tapped the middle of their edge), the time keeper doesn't keep them and every device involved shows "Couldn't tell who to join. Try again".
 - When only one device taps, or its tap is rejected (for example, sent just as the phone rotated), then it shows "No match. Tap again together".
   - If the time keeper sends a `nomatch`, it shows straight away.
-  - The device that tapped also starts its own timer, so this works even when the time keeper drops the tap without a `nomatch`. That timer has to outlast the time keeper's latest decision, not just the 2 s window: a second tap just inside the window is paired up to 900 ms later (`resolve` runs up to 900 ms after the latest push, `web/net.js:100`), so `joined` can come about 2.9 s after the first tap, plus network delay. The timer is a named limit covering `WINDOW` + that 900 ms + a network margin (for example 4 s). It's cancelled when `joined` or `nomatch` arrives.
-  - A `joined` always wins: if it arrives after "No match" has been shown, it replaces it with "Joined with…".
+  - The device that tapped also starts its own timer, so this works even when the time keeper drops the tap without a `nomatch`. That timer has to outlast the time keeper's latest decision, not just the 2 s window.
+    - Each later tap in the room, from any device, can push the decision back. `resolve` waits up to 900 ms after the latest push but no longer than `DEADLINE` from the start of the burst (`web/net.js:98-101`), and re-queuing a lone tap restarts the burst (`:120`).
+    - So `joined` can come up to about `WINDOW` + `DEADLINE` = 4.5 s after the first tap in a busy room (about 2.9 s in a quiet one), plus network delay. [V] 4450 ms with the real code (`evidence/day-07/raw/26-blind-repro-on-real-web.txt`).
+    - The timer is a named limit derived from `WINDOW` and `DEADLINE`, plus a network margin (for example 5.5 s).
+  - The timer is cancelled only by a result that names this device:
+    - a `joined` whose `a` or `b` is this device;
+    - a `nomatch` whose `dev` is this device;
+    - a `retry` whose `devs` includes it.
+
+    Results are broadcast to the whole room (`web/net.js:111,113,118`), so another pair's `joined` doesn't count.
+  - "Couldn't tell who to join. Try again" stays until the next tap. It is never replaced by the device's own "No match": a `retry` sends no `nomatch` (`web/layout.js:170-171`).
+  - A `joined` that names this device always wins: if it arrives after "No match" or "Try again" has been shown, it replaces it with "Joined with…".
 - When taps can't be paired (for example, three at once), then every device involved shows "Couldn't tell who to join. Try again" (the `retry` result).
 
 ### Edge cases
@@ -38,6 +48,9 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - By keyboard, the strip is focusable and has a spoken label ("Join on the right"). The arrow keys move a marker along it. Activating it joins at the marker, which starts at the centre of the edge.
 - `nomatch` is shown only on the device it names. `retry` is shown only on devices in its list.
 - `joined`, `retry` and `nomatch` are accepted only from the time keeper, as layouts are. Today any device in the room can send them (`web/net.js:134-136`), so without this check anyone with the room code could make "Joined with…" or "No match" appear.
+  - **This check isn't real protection until #24 (signed room messages)**, as #85 already says for Undo. The layout check trusts `payload.from` (`web/net.js:124,130`), which the sender sets itself on a channel anyone with the room code can use (`:8,17`). So a device can still send `from: <timeKeeperId>`.
+  - `joined`, `retry` and `nomatch` carry no `from` today (`:111,113,118`), so they gain one for the check to work at all.
+  - The check stops honest mistakes and stale time keepers, not forgery. T-S7 stays open until #24.
 - No Undo in this ticket. Undo, and "settled", come with "Pending join and Undo".
 - **A `retry` goes to every device in the batch, not only the ones that clashed** (blind review 4). When any tap is contested, `matchPushes` returns no joins and puts every device in the batch on the `retry` list (`web/layout.js:169-171`). So a bystander tapping an unrelated edge in the same burst, or another pair joining at that moment, is also told to try again. [V] `retry {"devs":["L","A","B","C"]}` (`evidence/day-07/raw/26-blind-repro-on-real-web.txt`). Whether to narrow this is open question 7.
 - **Taps pair by edge and time only, not by position** (blind review 7). The pair check uses only edge and time (`web/layout.js:133`), and ties are broken by the time difference (`:148-149`). When stacking two phones, the laptop and each phone tap as a pair, one pair after the other. If all four taps land together, the phones can be swapped with no error. [V] `B@200 <-> L@200, A@200 <-> L@650` (`raw/26`, `swap.mjs`).
@@ -60,7 +73,9 @@ The tap goes through today's push pipeline unchanged: `net.push(edge, along)`, t
 - Clicks at the two ends of a strip send `along = 0` and `along = edge length`. Keyboard activation with no arrow-key moves sends the centre.
 - Taps on non-facing strips, and taps 3 s apart, don't join.
 - Two phones on a laptop edge: two laptop taps join both. One laptop tap gives "try again" on all three. Both phones tapped mid-edge gives "try again", not overlapping screens.
-- A `joined`, `retry` or `nomatch` sent by a device that isn't the time keeper is ignored.
+- A `joined`, `retry` or `nomatch` sent by a device that isn't the time keeper is ignored. This proves the rule, not protection against forgery: a forged `from` still passes until #24, and the PR says so.
+- In a busy room, a pair whose decision comes near 4.5 s (a third device keeps tapping, as in `evidence/day-07/blind/worst.mjs`) shows "Joined", never "No match" first.
+- After a `retry`, the devices in its list keep "Try again". Their own timers never replace it with "No match". Another pair's `joined` doesn't cancel this device's timer.
 - A lone tap shows the no-match message after the window.
 - A second tap 1.9 s after the first shows "Joined" on both devices, and never "No match" first. Run on the real `net.js`, `joined` fires at 2.80 s on the time keeper with no network delay (`evidence/day-07/timing-check.mjs`). On other devices, the test checks a range rather than an exact time.
 - A tap the time keeper drops without a reply (one of the silent drops in Edge cases, sent with `net.push` since a strip tap is always in range) shows "No match" once the device's own limit runs out.
@@ -93,6 +108,7 @@ Labels: `type: feature`, `area: sharing`
 | "How to test" added; the test clicks the strip | Today's join tests call `net.push` directly and skip the UI. Rule 5 requires the two-browser test for joining changes. `layout.js` has no unit tests. | [V] `two-browser.mjs:52-55`, `TESTING.md:53,69`, AGENTS.md Rule 5 |
 | Second pass with the brief's prompt (`q5`): stacking needs a laptop tap per phone, overlapping joins are refused, the tapping device times out by itself, results only from the time keeper | A fresh read of the revised ticket found that one laptop tap gives `retry`, mid-edge phone taps keep both joins and overlap, a rejected tap gets no reply, and `joined`/`retry`/`nomatch` are accepted from anyone | [V] `net.js:93,134-136`, `layout.js:57-58,125,131-174`; local run in `q5-brief-prompt.md` |
 | The tapping device's "No match" timer outlasts the time keeper's latest decision, and `joined` always wins (Qodo on #86, finding `24cbc11a`) | A 2 s timer fired before a valid join: run on the real `net.js` and `matchPushes`, a second tap at 1.9 s gives `joined` at 2.80 s, because `resolve` waits up to 900 ms after the latest push | [V] `net.js:10,92-121`, `layout.js:133`; `evidence/day-07/02-finding-2.md`, `raw/23-timing-check.txt` |
+| Blind review on the A+B fix: the limit covers `WINDOW` + `DEADLINE`; only results naming this device cancel its timer, and "Try again" isn't overwritten; the time-keeper check is no protection until #24 | Our 4 s limit was too short in a busy room (4450 ms), a `retry` sends no `nomatch`, and `from` can be forged | [V] `net.js:98-101,111-120,124,130`, `layout.js:170-171`; `evidence/day-07/03-blind-repro.md`, `raw/26` |
 
 ### Decided after review
 - **After the second pass (`q5-brief-prompt.md`):** the laptop taps once per phone; joins that would overlap are refused with "try again"; the tapping device times out by itself; join results are accepted only from the time keeper. [V] all four by reading `net.js:93,134-136` and `layout.js:57-58,125`, and by running `matchPushes`/`addJoins` with the test's screen sizes.

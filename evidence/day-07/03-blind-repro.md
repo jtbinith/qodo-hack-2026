@@ -66,3 +66,6 @@
 
 ## Blind 4–10
 Each is now in #68's Edge cases or Open questions in `evidence/day-06/05-revised-tickets.md`. See `04-blind-vs-qodo.md` for where each one went.
+
+## Chosen and applied
+You chose **2a, 3a and 1a**. All three are in `evidence/day-06/05-revised-tickets.md`, #68's acceptance, edge cases, How to test and change table.
