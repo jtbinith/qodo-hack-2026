@@ -95,7 +95,7 @@ Anything that crosses into a device from the room or the server is untrusted. Th
 |---|---|---|:---:|:---:|:---:|---|---|
 | T-D1 | Flood the room with devices | Open many connections | A1 | M | M | | S7 |
 | T-D2 | Exhaust the room's shared limits | Announce hundreds of prints or start many transfers | A1 | M | M | Room-wide limits | S1.2 |
-| T-D3 | Make devices resend large files | Request the same file repeatedly | A1 | M | M | | S1.5 |
+| T-D3 | Make devices resend large files | Request the same file repeatedly | A1 | M | M | Each device can make a holder send a file whole at most 3 times a minute, and ask for a few pieces at most once a second (S1.5) | |
 | T-D4 | Leave others waiting | Never send a key or stop mid-transfer | A1 | M | M | Transfers give up after a minute (C12). Sends give up after 10 s with no progress (S1.3) | |
 | T-D5 | Stop someone joining screens | Send forged clock replies | A1 | L | M | | S1.4 |
 | T-D6 | Exhaust the free quota | Use the key to send large numbers of messages | A4 | M | M | | S8 |
