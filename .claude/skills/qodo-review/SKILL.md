@@ -1,6 +1,7 @@
 ---
 name: qodo-review
 description: Review local changes with Qodo during substantive coding milestones and before a PR or completed-work handoff. Use light background checkpoints while coding, collect and assess findings with session context, and run a final review before handing off. Also use for "review my local diff", "pre-PR review", or "run qodo review". Use qodo-review-resolver for findings already posted on a PR.
+disable-model-invocation: true
 owner: Qodo
 metadata:
   vendor: qodo
