@@ -12,7 +12,8 @@ A skill update (`qodo agents update`, see `.claude/skills/qodo-review/references
 **Why:** `qodo review` uploads the local diff, untracked files and session context to Qodo (`SKILL.md:17,284-289`). The skill tells the agent to run "light background checkpoints while coding" (`SKILL.md:3,31,35`), and both adapters let the agent start it without being asked. So unpublished code could leave the machine without the user asking for a review. Qodo flagged this on PR #86 at `b41eb40` (`00-finding.md`).
 
 With this patch:
-- **Claude Code** and **Codex** still run the skill when the user asks for it (for example `/qodo-review`, "run qodo review" or `$qodo-review`).
+- **Claude Code** runs the skill only when the user types `/qodo-review`. Asking in plain words ("run qodo review on my changes") doesn't start it: the model picked `qodo-review-resolver` instead. A direct `Skill(qodo-review)` call is refused "due to disable-model-invocation". [V] by fresh `claude -p` runs, see `06-finding-1-check.md`.
+- **Codex** runs it when the user asks with `$qodo-review`. [A] Not checked: there's no Codex here.
 - Neither agent starts it on its own.
 
 ```diff
