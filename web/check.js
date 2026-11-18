@@ -10,6 +10,10 @@ export const LIMITS = {
   incoming: 20,                  // transfers arriving at once
   prints: 500,
   missingPerAsk: 300,
+  wholeSends: 3,                 // whole-file sends per device per file in any wholeWindow (S1.5)
+  wholeWindow: 60 * 1000,        // ms
+  pieceGap: 1000,                // ms between asks for a few pieces, per device per file (S1.5)
+  askRecords: 2000,              // (device, file) counters kept at once
 };
 
 const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
@@ -134,6 +138,41 @@ export function validSignal(env) {
   return false;
 }
 
-// Resend requests (S1.5): not written yet.
-export const askKind = () => 'whole';
-export function askLimiter() { return { allow: () => true, forget() {}, get size() { return 0; } }; }
+// Resend requests (S1.5). What a want or need for a file of `size` bytes asks us to send:
+// 'whole' for a want, a need with no list or a need covering more than half the pieces;
+// 'pieces' for a need listing half the pieces or fewer. null (drop it) if the list repeats a
+// piece or names one past the end: a real receiver never does. A list without a piece size is
+// counted at the biggest piece size, so it can't pass for a few pieces when it isn't.
+export function askKind(m, size) {
+  if (m.t === 'want' || m.missing === null) return 'whole';
+  const n = pieceCount(size, m.cs || Math.max(...LIMITS.chunkSizes));
+  if (new Set(m.missing).size !== m.missing.length || m.missing.some((i) => i >= n)) return null;
+  return m.missing.length > n / 2 ? 'whole' : 'pieces';
+}
+
+// Counts the sends each device has asked for, per file. allow() is called once a request has
+// passed its checks and we hold the file; only allowed requests are counted, so a device that
+// keeps asking can't keep itself locked out. Counters go when their device leaves (forget) and
+// there are never more than LIMITS.askRecords: stale ones go first, then the oldest.
+export function askLimiter(now = () => performance.now()) {
+  const recs = new Map();   // 'dev fid' -> { dev, whole: [times allowed], piece: time allowed }
+  const recent = (r, t) => (r.whole = r.whole.filter((w) => t - w < LIMITS.wholeWindow));
+  const live = (r, t) => recent(r, t).length > 0 || t - r.piece < LIMITS.pieceGap;
+  function allow(dev, fid, kind) {
+    const t = now(), key = dev + ' ' + fid;
+    let r = recs.get(key);
+    if (r) {
+      if (kind === 'whole' ? recent(r, t).length >= LIMITS.wholeSends : t - r.piece < LIMITS.pieceGap) return false;
+      recs.delete(key);   // re-added below, as the newest
+    } else {
+      if (recs.size >= LIMITS.askRecords) for (const [k, o] of recs) if (!live(o, t)) recs.delete(k);
+      while (recs.size >= LIMITS.askRecords) recs.delete(recs.keys().next().value);
+      r = { dev, whole: [], piece: -Infinity };
+    }
+    if (kind === 'whole') r.whole.push(t); else r.piece = t;
+    recs.set(key, r);
+    return true;
+  }
+  const forget = (dev) => { for (const [k, r] of recs) if (r.dev === dev) recs.delete(k); };
+  return { allow, forget, get size() { return recs.size; } };
+}
