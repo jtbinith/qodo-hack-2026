@@ -206,8 +206,9 @@ try {
   await flood({ t: 'need', fid: needPid, missing: [...Array(clipPieces).keys()], cs: 24576 });
   await new Promise((r) => setTimeout(r, 3000));
   const wantSends = await sendsTo(ids.b, askPid), needSends = await sendsTo(ids.b, needPid);
-  check(wantSends === 3, `20 wants for one photo made A send it ${wantSends} times (at most 3)`);
-  check(needSends === 3, `20 needs listing every piece made A send the file ${needSends} times (at most 3)`);
+  // at most, not exactly: B's own drags of these files in the last minute count too
+  check(wantSends <= 3, `20 wants for one photo made A send it ${wantSends} times (at most 3)`);
+  check(needSends <= 3, `20 needs listing every piece made A send the file ${needSends} times (at most 3)`);
   await A.evaluate(() => { const t = window.__t; t.peers.sendFile = t.realSendFile; });
   const D = await device(390, 700);
   await until(D, (pid) => window.__t && window.__t.prints.has(pid), askPid, 45000);
