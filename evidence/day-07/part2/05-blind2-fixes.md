@@ -37,11 +37,15 @@
 - **Reported without changes:** the wall-clock sweep test (`< 200 ms`) can be flaky on a slow machine, and the silent-device check fakes presence.
 
 ## Draft follow-up ticket (not filed; asking before any GitHub write)
-**S1.5 follow-ups: receiver re-asks, the room's device cap, and limits per device.**
+**S1.5 follow-ups: byte-exact refunds, receiver re-asks, the room's device cap, and limits per device.**
 1. **Receiver re-asks fit the resend budget (C12 × S1.5)** (first blind review 5). A receiver whose asks are refused under S1.5 backs off until the holder's window allows another, and doesn't give up while that window is still closed.
 2. **A room holds at most 20 devices, enforced (S7)** (both blind reviews). The resend table is sized for `LIMITS.devices` × `askRecordsPerDevice`, but nothing enforces `LIMITS.devices`. Device 21 is told the room is full, its presence is ignored, and its asks aren't counted. Links with #17, #21 and #24.
 3. **The full-table sweep doesn't refuse honest asks once counters are stale** (second blind review 3). Sweep when the oldest counter has gone stale, or per device, so a refused ask from one device can't hold the sweep back for everyone.
 4. **A total per device across files** (second blind review 4). Decide whether one device asking for every file should have a total budget per minute (for example in bytes) on top of the per-file one, and how that fits direct links.
+5. **Refunds give back the unsent bytes, not the share of pieces** (Qodo `feeaf5d4` on #87, Security, action_required).
+   - **The problem:** `refund` (`web/index.html:83`) gives back `(of − sent) / of` of a byte charge, but a file's last piece can be much shorter than the rest. When a full piece leaves and a 1-byte tail fails, half the charge comes back. Reproduced at `d660eb6`: 5 whole-file sends allowed against a limit of 3 (`06-final-state.md`).
+   - **Fix:** refund the bytes that didn't leave. `sendFile` reports `{ sentBytes, ofBytes }` alongside the piece counts, or the refund adds up the sizes of the unsent pieces, and `undo` takes off exactly those bytes.
+   - **Test:** a 65,537-byte file whose tail fails is charged 65,536 bytes, not half the file.
 
 ## Rounds, findings from our own fixes, and the stopping rule
 - **Part 2 rounds:**

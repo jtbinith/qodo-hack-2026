@@ -19,9 +19,12 @@ The stopping rule fired in round 3 (`05-blind2-fixes.md`), and this was the last
 - **Qodo's claim:** `refund` gives back the *share of pieces* that didn't leave, but the budget is in *bytes*, and the last piece can be much shorter. For a 65,537-byte file, if the 65,536-byte first piece leaves and the 1-byte tail fails, half the charge is refunded. So a device can be sent almost the whole file again and again.
 - **Checked [V]** with the real limiter at `d660eb6`, using `index.html`'s refund formula (`raw/28-qodo-new-finding-check.txt`): **5** whole-file asks were allowed in one window, 0.31 MB sent against a 0.19 MB budget. That's 5 files' worth against a limit of 3.
   - [A] In practice, the tail has to fail after the first piece leaves, for example on a stalled link.
+- **Reproduction script:** `repro-feeaf5d4.mjs`, run as `node repro-feeaf5d4.mjs <c5>`.
+- **Label: real.** It's reproduced with the real `askLimiter` and the real refund formula. The trigger, a short tail piece failing after a full piece left, was checked by reading `peers.js:197-209` (`sent` counts pieces, not bytes).
 - **Caused by our own fix:** yes. The piece-share refund came in `64e2044` (round 2, our 7a fix for the first blind review).
 - **Not caught by either blind review:** the second one read this refund code and called partial refunds "the exact share".
-- **Outcome:** **reported without changes.** The fix round has ended, and the stopping rule had already fired. [A] A likely fix is to refund the unsent *bytes*: `sendFile` reports bytes sent, or the refund adds up the sizes of the pieces that didn't leave.
+- **Outcome:** **reported without changes**, and not dismissed. The fix round has ended, and the stopping rule had already fired.
+- **The fix:** Qodo's structured finding carries no fix text, because the Resolver's read leaves out fix instructions. The fix that follows from its description is to refund the unsent **bytes**, not the share of pieces: `sendFile` reports `{ sentBytes, ofBytes }` (or the sizes of the pieces that didn't leave), and `undo` takes off exactly that. It's in the follow-up ticket as item 5 (`05-blind2-fixes.md`).
 
 ## Totals for part 2
 - **Rounds:** 3 fix rounds, plus this final review.
