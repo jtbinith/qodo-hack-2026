@@ -2,7 +2,7 @@
 // same file can't make its holder send it again and again, whole or in pieces.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { askBytes, askLimiter, pieceCount, LIMITS } from '../web/check.js';
+import { askBytes, askLimiter, pieceCount, validPrint, validNeed, inRoom, LIMITS } from '../web/check.js';
 
 const clock = () => { let t = 0; const now = () => t; now.at = (ms) => { t = ms; }; return now; };
 const SIZE = 10 * 24576, CS = 24576;   // a 10-piece file
@@ -115,14 +115,47 @@ test('300-piece lists on a 200 MB file stop at 3 files a minute (blind review 4)
   assert.ok(sent <= 3 * size, `${(sent / 2 ** 20) | 0} MB in 60 s`);
 });
 
-// blind review 3: counters stay when a device leaves, so leaving and rejoining doesn't reset them
-test('a device that leaves and rejoins keeps its counters until they go stale (blind review 3)', () => {
+// Counters live for their window whatever the device does; leaving and rejoining is tested in the
+// two-browser test, through the page's own presence handling (second blind review 5)
+test('a counter keeps its sends for the whole window', () => {
   const now = clock(), lim = askLimiter(now);
   asks(3, () => whole(lim));
-  now.at(2000);   // left and came back with the same id
+  now.at(59999);
   assert.equal(whole(lim), null);
   now.at(60000);
   assert.ok(whole(lim));
+});
+
+// second blind review 1: a zero-byte file used to be resendable without limit (0 + 0 > 0 is never true)
+test('every ask is charged at least one piece (second blind review 1)', () => {
+  assert.equal(askBytes({ t: 'want', pid: 'p' }, 0), 1);
+  assert.equal(askBytes({ t: 'need', fid: 'p', missing: null, cs: CS }, 0), 1);
+  assert.equal(askBytes({ t: 'need', fid: 'p', missing: [0], cs: CS }, 100), 100, 'a small file: the piece is the file');
+  assert.equal(askBytes({ t: 'need', fid: 'p', missing: [0], cs: CS }, SIZE), CS);
+});
+test('a zero-byte file can be sent at most 3 times a minute (second blind review 1)', () => {
+  const now = clock(), lim = askLimiter(now), cost = askBytes({ t: 'want', pid: 'p' }, 0);
+  assert.equal(asks(20000, () => lim.allow('b', 'z', cost, 0, false)), 3);
+});
+test('a print of size 0 is refused (second blind review 1)', () => {
+  const p = { t: 'print', pid: '0123456789abcdef', owner: 'x', name: 'empty', type: 'image/jpeg', size: 0,
+    sha: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', anchor: 'x', x: 1, y: 1, w: 150, h: 110, rot: 0, holders: ['x'] };
+  assert.equal(validPrint(p), false);
+  assert.ok(validPrint({ ...p, size: 1 }));
+});
+// second blind review 2: a need with an empty list cost nothing and kept a counter live for 60 s
+test('a need with an empty list is dropped (second blind review 2)', () => {
+  assert.equal(validNeed({ t: 'need', fid: '0123456789abcdef', missing: [], cs: CS }), false);
+  assert.ok(validNeed({ t: 'need', fid: '0123456789abcdef', missing: [0], cs: CS }));
+  assert.ok(validNeed({ t: 'need', fid: '0123456789abcdef', missing: null, cs: CS }));
+});
+test('only ids really in the room count, not names every object has (second blind review 2)', () => {
+  const peers = { a: {}, b: {} };
+  for (const id of ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty', 'isPrototypeOf',
+    'propertyIsEnumerable', 'toLocaleString', '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__'])
+    assert.equal(inRoom(peers, id), false, id);
+  assert.ok(inRoom(peers, 'a'));
+  assert.equal(inRoom(undefined, 'a'), false);
 });
 
 // Qodo on #87 (7e800d93): a full table must not push out a live counter, or other devices'

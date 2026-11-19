@@ -216,6 +216,18 @@ try {
   // at most, not exactly: B's own drags of these files in the last minute count too
   check(wantSends >= 1 && wantSends <= 3, `20 wants for one photo made A send it ${wantSends} times (at least 1, at most 3)`);
   check(needSends >= 1 && needSends <= 3, `20 needs listing every piece made A send the file ${needSends} times (at least 1, at most 3)`);
+  // B leaves and comes back with the same id (second blind review 5): A's presence list drops B and
+  // shows it again, through the page's own handling of who's here. B's counters are kept, so its
+  // new wants for the same photo inside the minute still send nothing
+  await A.evaluate((b) => { const t = window.__t, n = t.net, all = n.peers;
+    const show = (peers) => { Object.defineProperty(n, 'peers', { configurable: true, writable: true, value: peers }); n.listeners.forEach((f) => f('peers', peers)); };
+    show(Object.fromEntries(Object.entries(all).filter(([k]) => k !== b)));   // B has left
+    show(all); }, ids.b);                                                       // and is back
+  const beforeRejoin = await sendsTo(ids.b, askPid);
+  await flood({ t: 'want', pid: askPid });
+  await new Promise((r) => setTimeout(r, 2000));
+  const afterRejoin = await sendsTo(ids.b, askPid);
+  check(afterRejoin === beforeRejoin, `B left and came back, then 20 wants made A send photo-0.jpg ${afterRejoin - beforeRejoin} more times (none: its counter was kept)`);
   await A.evaluate(() => { const t = window.__t; t.peers.sendFile = t.realSendFile; });
   const D = await device(390, 700);
   await until(D, (pid) => window.__t && window.__t.prints.has(pid), askPid, 45000);
