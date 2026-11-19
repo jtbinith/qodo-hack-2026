@@ -1,0 +1,30 @@
+== probe.mjs on the real check.js at 2c28d31 (the fix)
+1 halves: kind pieces whole-file equivalents in 60 s = 30
+2 big file: n = 3200 kind of 300-list = pieces MB sent in 60 s = 1125 vs whole limit MB 600
+3 table full: 2000 honest want allowed? false
+3 after keepalive at 61 s, honest allowed? false
+4 leave/rejoin 10 times in 20 s: whole sends allowed = 30
+5 real sends after old undos land on new record = 6 (limit 3)
+5b at 60 s allowed 2 (correct would be 1: only A expired, C still in window; B refunded -> 2 slots used by B? correct=2)
+6 honest whole retries at 3..63 s: YY.................YY
+7 fuzz size violations 0 final size 1253
+8 10000 refused new-file asks took ms 655
+9 empty list kind pieces
+
+== probe.mjs on the real check.js at 8ddeaf8 (before the fix)
+1 halves: kind pieces whole-file equivalents in 60 s = 30
+2 big file: n = 3200 kind of 300-list = pieces MB sent in 60 s = 1125 vs whole limit MB 600
+3 table full: 0 honest want allowed? true
+3 after keepalive at 61 s, honest allowed? true
+4 leave/rejoin 10 times in 20 s: whole sends allowed = 30
+<scratch>/probe-pre.mjs:57
+  for (let k = 0; k < 3; k++) lim.undo('evil', 'p', 'whole');    // old ones fail with sent 0
+                                  ^
+
+TypeError: lim.undo is not a function
+    at <scratch>/probe-pre.mjs:57:35
+    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:654:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v25.2.1

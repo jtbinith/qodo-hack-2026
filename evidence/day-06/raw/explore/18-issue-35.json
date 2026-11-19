@@ -1,0 +1,2 @@
+{"issue":{"number":35,"title":"N1 · Record timings in the two-browser test","body":"### What and why\nLog time to ready and transfer time, direct and relay, to check G1's targets.","state":"open","author":{"login":"jtbinith","external_id":"145369582","is_bot":false,"is_self":false},"assignees":[],"labels":["type: chore","area: ci"],"comments_count":0,"created_at":"2026-11-12T00:06:04Z","updated_at":"2026-11-12T00:06:04Z","closed_at":null,"html_url":"https://github.com/jtbinith/qodo-hack-2026/issues/35"}}
+  trace d84d7556a9675effa8e843b392a66726

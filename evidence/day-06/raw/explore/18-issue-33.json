@@ -1,0 +1,2 @@
+{"issue":{"number":33,"title":"E4 · Quality and launch","body":"### Goal\nEvery change is checked automatically and the product is ready to show. PRD Q1, N1, N2, L1.","state":"open","author":{"login":"jtbinith","external_id":"145369582","is_bot":false,"is_self":false},"assignees":[],"labels":["type: epic","area: ci"],"comments_count":0,"created_at":"2026-11-12T00:06:01Z","updated_at":"2026-11-12T00:06:01Z","closed_at":null,"html_url":"https://github.com/jtbinith/qodo-hack-2026/issues/33"}}
+  trace db2c001ebf7e1789875e4bc6071c0e7e

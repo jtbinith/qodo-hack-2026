@@ -1,0 +1,2 @@
+{"pr_url":"https://github.com/jtbinith/qodo-hack-2026/pull/87","git_provider":null,"finding_count":0,"review_session":{"run_id":2043787,"status":"started","commit_sha":"8ddeaf8bf9b91805f5a5a84b2cca4036fe625408","started_at":"2026-11-18T22:51:11.201198Z","git_provider":"github","review_complete":null},"findings":[],"review_runs":[{"run_id":2043787,"commit_sha":"8ddeaf8bf9b91805f5a5a84b2cca4036fe625408","started_at":"2026-11-18T22:51:11.201198Z","status":"started","review_effort":null,"review_complete":null}]}
+  trace c8cdd3608a4859bd0fe3b49a1036e52b

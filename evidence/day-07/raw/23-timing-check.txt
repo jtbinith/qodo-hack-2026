@@ -1,0 +1,18 @@
+node v25.2.1, web/net.js and web/layout.js from this checkout
+
+== second tap at 1.9 s
+0.00 s  A taps its right strip (the time keeper's own tap)
+1.90 s  B's tap on its left strip reaches the time keeper
+2.00 s  (a 2 s timer started by A's own tap would fire here)
+2.80 s  joined {"a":"A","edgeA":"R","alongA":300,"b":"B","edgeB":"L","alongB":300}
+
+== second tap at 0.5 s
+0.00 s  A taps its right strip (the time keeper's own tap)
+0.50 s  B's tap on its left strip reaches the time keeper
+1.40 s  joined {"a":"A","edgeA":"R","alongA":300,"b":"B","edgeB":"L","alongB":300}
+2.00 s  (a 2 s timer started by A's own tap would fire here)
+
+== lone tap
+0.00 s  A taps its right strip (the time keeper's own tap)
+2.00 s  (a 2 s timer started by A's own tap would fire here)
+2.10 s  nomatch {"dev":"A"}

@@ -1,0 +1,26 @@
+blind scripts, src -> <checkout>/web at 4516d87
+$ node worst.mjs
+latest joined (ms after first tap): { t: 4450, c0: 250, tp: 1950, g: 500 }
+$ node run.mjs
+lone tap: [ 'nomatch@2100 {"dev":"A"}' ]
+1.9s pair: [
+  'joined@2800 {"a":"A","edgeA":"L","alongA":400,"b":"L","edgeB":"R","alongB":450}'
+]
+busy room: [
+  'joined@4200 {"a":"A","edgeA":"L","alongA":400,"b":"L","edgeB":"R","alongB":450}',
+  'nomatch@5000 {"dev":"C"}',
+  'nomatch@5800 {"dev":"C"}'
+]
+C spamming: [
+  'nomatch@3300 {"dev":"A"}',
+  'nomatch@7000 {"dev":"C"}',
+  'nomatch@7800 {"dev":"C"}'
+]
+one laptop tap + bystander C: [ 'retry@900 {"devs":["L","A","B","C"]}' ]
+PER_DEV evict: [ 'nomatch@2100 {"dev":"L"}', 'nomatch@2100 {"dev":"L"}' ]
+stack mid-edge: [
+  'joined@900 {"a":"A","edgeA":"L","alongA":400,"b":"L","edgeB":"R","alongB":200}',
+  'joined@900 {"a":"B","edgeA":"L","alongA":400,"b":"L","edgeB":"R","alongB":700}'
+]
+$ node swap.mjs
+[ 'B@200 <-> L@200', 'A@200 <-> L@650' ]

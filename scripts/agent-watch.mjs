@@ -149,7 +149,9 @@ const ALLOW = ['Skill',   // Read, Glob, Grep and Edit are allowed only inside t
   'Bash(npm test:*)', 'Bash(npm run test:unit)', 'Bash(npm run test:browsers)', 'Bash(node --test:*)',
   'Bash(node tests/two-browser.mjs)', 'Bash(node tests/two-browser.mjs --relay)',
   'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git show:*)', 'Bash(git add:*)', 'Bash(git commit:*)'];
-const DENY = ['Bash(git push:*)', 'Bash(git checkout:*)', 'Bash(git switch:*)', 'Bash(git reset:*)', 'Bash(git remote:*)', 'Bash(gh:*)', 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(ssh:*)', 'WebFetch', 'WebSearch'];
+const DENY = ['Bash(git push:*)', 'Bash(git checkout:*)', 'Bash(git switch:*)', 'Bash(git reset:*)', 'Bash(git remote:*)', 'Bash(gh:*)', 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(ssh:*)', 'WebFetch', 'WebSearch',
+  // no Qodo from unattended runs: qodo review uploads local code (Qodo on #86); Bash isn't allowed it anyway
+  'Skill(qodo-review)', 'Skill(qodo-review-resolver)', 'Skill(qodo-codebase-wisdom)', 'Bash(qodo:*)'];
 class Stop extends Error {}
 // refused before any agent starts: the label says why, the comment says the detail
 class Refuse extends Error { constructor(label, msg) { super(msg); this.label = label; } }

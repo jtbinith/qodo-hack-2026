@@ -1,0 +1,14 @@
+== blind-round2/v1.mjs on the real check.js at 64e2044
+1. whole asks allowed with full refunds each time (same ms): 1000
+2. zero-size file whole asks allowed: 20000  2000 more took 357 ms
+3. bytes for missing:[] = 0
+   table size 20000  honest new ask at 30 s: null
+   honest at 59.999 s: null
+   honest at 60 s: false
+4. ids passing net.peers[from] without presence: 12
+5. size after sweep 1
+6. leftover expected 147456 allowed exact fill? true
+
+== size-0 print and empty list through the real checks
+validPrint accepts a size-0 print: true
+validNeed accepts missing: []: true | askBytes = 0

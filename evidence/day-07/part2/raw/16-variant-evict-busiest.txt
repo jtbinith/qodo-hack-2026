@@ -1,0 +1,2 @@
+variant "evict the busiest": one device's sends of one big file within 3 s = 63 (limit 3)
+current fix (refuse when full): one device's sends of one big file within 3 s = 3 (limit 3)

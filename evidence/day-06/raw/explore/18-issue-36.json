@@ -1,0 +1,2 @@
+{"issue":{"number":36,"title":"N2 · Test on real devices and browsers","body":"### What and why\nRun the acceptance checks on Safari iOS, Chrome Android and Chrome and Firefox desktop.","state":"open","author":{"login":"jtbinith","external_id":"145369582","is_bot":false,"is_self":false},"assignees":[],"labels":["type: chore","area: ui"],"comments_count":0,"created_at":"2026-11-12T00:06:05Z","updated_at":"2026-11-12T00:06:05Z","closed_at":null,"html_url":"https://github.com/jtbinith/qodo-hack-2026/issues/36"}}
+  trace e3a004647cfd6c2f8173b63c68e03d2a

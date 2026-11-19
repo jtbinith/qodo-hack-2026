@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skills": {
+    "qodo-codebase-wisdom": {
+      "source": "qodo-ai/qodo-skills",
+      "ref": "588e413a73b466ec4fe9cec79a34051d13f06ab3",
+      "sourceType": "github",
+      "skillPath": "skills/qodo-codebase-wisdom/SKILL.md",
+      "computedHash": "b2e84b0e66eecf1c9021cda4b83b18c0b101e9b7da058a599caf26c9bc315c1f"
+    },
+    "qodo-review": {
+      "source": "qodo-ai/qodo-skills",
+      "ref": "588e413a73b466ec4fe9cec79a34051d13f06ab3",
+      "sourceType": "github",
+      "skillPath": "skills/qodo-review/SKILL.md",
+      "computedHash": "8f940a528cb5606fbe8667c2e21e97f842b21e9afe90a8b6aa3f1b747d7e2d9d"
+    },
+    "qodo-review-resolver": {
+      "source": "qodo-ai/qodo-skills",
+      "ref": "588e413a73b466ec4fe9cec79a34051d13f06ab3",
+      "sourceType": "github",
+      "skillPath": "skills/qodo-review-resolver/SKILL.md",
+      "computedHash": "fac240f566638a2e6bcb937a9a1ce31cc7c5fb91435c42323ed95dfebc56f9b3"
+    }
+  }
+}

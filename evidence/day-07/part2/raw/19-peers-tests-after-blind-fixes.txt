@@ -1,0 +1,24 @@
+✔ a send to a device that never sends its key gives up after 10 s (10.515544ms)
+✔ the cancelled send is not delivered late, and the receiver can ask again (5.681174ms)
+✔ a key that arrives before 10 s lets the send finish (3.906079ms)
+✔ a direct link whose buffer never drains gives up after 10 s (1.263212ms)
+✔ the timer restarts whenever the buffer drains (1.128699ms)
+✔ a throttled but working link finishes (3.467506ms)
+✔ a silent device times out while two others keep transferring (1.602791ms)
+✔ a short message to a silent device is dropped after 10 s without an error (0.690967ms)
+✔ a short message says whether it was sent or dropped (2.579248ms)
+✔ the caller hears when a device's key arrives, but not a bad one (1.799694ms)
+✔ one relay frame that fails to send doesn't block later frames (2.187456ms)
+✔ a send that gives up before any piece left says it sent 0 pieces (Qodo on #87) (0.558855ms)
+✔ a send that stalls after some pieces says how many it sent (Qodo on #87) (0.844218ms)
+✔ a send says how many of its pieces left when it finishes (Qodo on #87) (1.211929ms)
+✔ a relay send whose frames are all dropped finishes saying it sent 0 pieces (blind review 7) (0.704851ms)
+✔ an error another send already marked gives unknown counts, so nothing is given back (blind review 7) (1.201381ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 80.189174
