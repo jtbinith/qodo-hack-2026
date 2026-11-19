@@ -42,7 +42,7 @@ import { joinRoom } from './net.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
-import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, askKind, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
+import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
@@ -77,7 +77,10 @@ addEventListener('resize', resize); resize();
 const prints = new Map();
 const files = new Map();      // pid -> File (bytes I hold)
 const incoming = new Map();   // pid -> { parts: [], got, n }
-const asks = askLimiter();    // how often each device has made us send each file (S1.5)
+const asks = askLimiter();    // how much each device has made us send of each file (S1.5)
+// Give back the share of an allowed send that never left. `s` is sendFile's { sent, of }; anything
+// else (an error that couldn't say) gives nothing back, so a send that moved data stays counted.
+const refund = (tok, s) => { if (s && Number.isInteger(s.sent) && s.of > 0 && s.sent < s.of) asks.undo(tok, (s.of - s.sent) / s.of); };
 let layout = { pos: {}, group: {} }, sizes = {};
 const meWorld = () => layout.pos[id] || [0, 0];
 // A print's x, y are relative to the top-left of the screen it sits on (its anchor), so
@@ -174,7 +177,9 @@ function onMessage(from, m, bytes) {
     const p = prints.get(m.pid); if (p && drag?.p !== p) { p.anchor = m.anchor; p.x = m.x; p.y = m.y; }
   } else if (m.t === 'want') {           // someone wants the full photo
     const file = validPidMsg(m) && files.get(m.pid);
-    if (file && asks.allow(from, m.pid, 'whole')) peers.sendFile(from, m.pid, file).catch((e) => { if (!e?.sent) asks.undo(from, m.pid, 'whole'); gaveUp(from, m.pid, e); });
+    // counted only for devices in the room (S7), then given back for what never left (S1.5)
+    const tok = file && net.peers[from] && asks.allow(from, m.pid, file.size, file.size, false);
+    if (tok) peers.sendFile(from, m.pid, file).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
   } else if (m.t === 'have') {           // someone now holds the bytes
     const p = validPidMsg(m) && prints.get(m.pid);
     if (p && !p.holders.includes(from) && p.holders.length < 50) p.holders.push(from);
@@ -184,10 +189,11 @@ function onMessage(from, m, bytes) {
     const thumb = prints.get(pid)?.thumb;
     const src = m.fid.startsWith('thumb:') ? (thumb && new Blob([thumb])) : files.get(pid);
     const cs = LIMITS.chunkSizes.includes(m.cs) ? m.cs : null;
-    // only files we hold, then only lists a receiver could send, are counted (S1.5)
-    const kind = src && askKind(m, src.size);
-    // a send that gave up before any piece left is given back, so a link that recovers isn't refused (Qodo on #87)
-    if (kind && asks.allow(from, m.fid, kind)) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).catch((e) => { if (!e?.sent) asks.undo(from, m.fid, kind); if (m.fid === pid) gaveUp(from, pid, e); });
+    // only files we hold, then only lists a receiver could send, from devices in the room, are
+    // counted (S1.5); what never left is given back, so a link that recovers isn't refused (Qodo on #87)
+    const bytes = src && askBytes(m, src.size);
+    const tok = typeof bytes === 'number' && net.peers[from] && asks.allow(from, m.fid, bytes, src.size, m.missing !== null);
+    if (tok) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); if (m.fid === pid) gaveUp(from, pid, e); });
   } else if (m.t === 'chunk') {
     const inc = incoming.get(m.fid);
     if (!inc || inc.from !== from || !validChunk(m, bytes, inc)) return;
@@ -335,7 +341,6 @@ function start(room) {
     onMessage(from, m, bytes);
   });
   const known = new Set();
-  let here = new Set();   // who was in the room last time: a device that has left is forgotten (S1.5)
   // Catch everyone up. The owner announces its prints; once the owner has left, anyone
   // still holding a print announces it. Re-checked on every change in who's here, because
   // a device that closes can take a while to drop out of the room, and whenever a device's
@@ -349,9 +354,6 @@ function start(room) {
   peers.onReady(catchUp);
   net.on((ev) => {
     if (ev !== 'peers') return;
-    const now = new Set(others());
-    for (const k of here) if (!now.has(k)) asks.forget(k);
-    here = now;
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
   });

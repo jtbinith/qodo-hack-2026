@@ -153,6 +153,12 @@ try {
   // a device that never sends its key asks A for a photo. A gives up after 10 s and says so,
   // while A and B keep transferring (S1.3)
   const GHOST = 'zzzzsilent';
+  // the silent device is in the room (A only counts asks from devices in the room, S1.5/S7): A's
+  // presence list shows it for these steps, and is put back after them
+  const ghostHere = (on) => A.evaluate(([ghost, on]) => { const n = window.__t.net;
+    if (on) { let real = n.peers; Object.defineProperty(n, 'peers', { configurable: true, get: () => ({ ...real, [ghost]: { name: 'silent', w: 400, h: 800, joinedAt: 9e15 } }), set: (v) => { real = v; } }); }
+    else { const real = Object.fromEntries(Object.entries(n.peers).filter(([k]) => k !== ghost)); Object.defineProperty(n, 'peers', { configurable: true, writable: true, value: real }); } }, [GHOST, on]);
+  await ghostHere(true);
   const asked = Date.now();
   await A.evaluate((ghost) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'photo-1.jpg');
     t.onMessage(ghost, { t: 'want', pid: p.pid }); }, GHOST);
@@ -173,6 +179,7 @@ try {
     return document.getElementById('toast').textContent;
   }, GHOST);
   check(why.includes('Couldn’t send photo-1.jpg') && !why.includes('stopped answering'), `a read error isn't blamed on the other device ("${why}")`);
+  await ghostHere(false);
 
   // a stranger's malformed messages change nothing, even when aimed at a real transfer
   const ids = await A.evaluate(() => { const t = window.__t; return { a: t.id, b: Object.keys(t.net.peers).find((k) => k !== t.id) }; });
@@ -207,8 +214,8 @@ try {
   await new Promise((r) => setTimeout(r, 3000));
   const wantSends = await sendsTo(ids.b, askPid), needSends = await sendsTo(ids.b, needPid);
   // at most, not exactly: B's own drags of these files in the last minute count too
-  check(wantSends <= 3, `20 wants for one photo made A send it ${wantSends} times (at most 3)`);
-  check(needSends <= 3, `20 needs listing every piece made A send the file ${needSends} times (at most 3)`);
+  check(wantSends >= 1 && wantSends <= 3, `20 wants for one photo made A send it ${wantSends} times (at least 1, at most 3)`);
+  check(needSends >= 1 && needSends <= 3, `20 needs listing every piece made A send the file ${needSends} times (at least 1, at most 3)`);
   await A.evaluate(() => { const t = window.__t; t.peers.sendFile = t.realSendFile; });
   const D = await device(390, 700);
   await until(D, (pid) => window.__t && window.__t.prints.has(pid), askPid, 45000);
