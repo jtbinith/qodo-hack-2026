@@ -126,3 +126,15 @@ PASS a third device asked once and still got photo-0.jpg byte-identical
 - **Unpushed commits:** `bd07325`, `c29dc6f`, `6f692f7`, `18d4265`, `f25145f`, `9c6861e`, `085699c` and `df305a8`, plus a commit with these drafts and the final-state update.
 - **Effect:** this pushes to PR #86, so Qodo reviews its new head. Under the policy it's an evidence-only push, so anything that review raises is recorded as unresolved.
 - **Left out:** the untracked `evidence/explore-61/`, which isn't mine. It won't be committed.
+
+---
+
+## Posted (approved in one go)
+1. **Follow-up ticket filed: [#88](https://github.com/jtbinith/qodo-hack-2026/issues/88)**, "S1.5 follow-ups: byte-exact refunds, receiver re-asks, the room's device cap, and limits per device", labels `type: security`, `area: network` (`raw/33`).
+2. **#20's body** replaced with the new acceptance, with `#NN` → `#88` (`raw/32`).
+3. **#87's description** replaced, with `#NN` → `#88`, updated at 2026-11-19T00:58:51Z (`raw/31`).
+   - `gh pr edit` failed on a GitHub deprecation error (Projects classic), so I used the REST API (`PATCH pulls/87`).
+
+Both #20 and #87 match the drafts, apart from a trailing blank line that GitHub adds.
+
+4. **Evidence pushed:** `qodo-toolbox`, in the same step as this note.
