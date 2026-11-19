@@ -42,7 +42,7 @@ import { joinRoom } from './net.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
-import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
+import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
@@ -178,7 +178,7 @@ function onMessage(from, m, bytes) {
   } else if (m.t === 'want') {           // someone wants the full photo
     const file = validPidMsg(m) && files.get(m.pid);
     // counted only for devices in the room (S7), then given back for what never left (S1.5)
-    const tok = file && net.peers[from] && asks.allow(from, m.pid, file.size, file.size, false);
+    const tok = file && inRoom(net.peers, from) && asks.allow(from, m.pid, askBytes(m, file.size), file.size, false);
     if (tok) peers.sendFile(from, m.pid, file).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
   } else if (m.t === 'have') {           // someone now holds the bytes
     const p = validPidMsg(m) && prints.get(m.pid);
@@ -192,7 +192,7 @@ function onMessage(from, m, bytes) {
     // only files we hold, then only lists a receiver could send, from devices in the room, are
     // counted (S1.5); what never left is given back, so a link that recovers isn't refused (Qodo on #87)
     const bytes = src && askBytes(m, src.size);
-    const tok = typeof bytes === 'number' && net.peers[from] && asks.allow(from, m.fid, bytes, src.size, m.missing !== null);
+    const tok = typeof bytes === 'number' && inRoom(net.peers, from) && asks.allow(from, m.fid, bytes, src.size, m.missing !== null);
     if (tok) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); if (m.fid === pid) gaveUp(from, pid, e); });
   } else if (m.t === 'chunk') {
     const inc = incoming.get(m.fid);

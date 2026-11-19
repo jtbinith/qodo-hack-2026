@@ -29,7 +29,7 @@ export const isSha = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
 export function validPrint(m) {
   return !!m && isPid(m.pid) && isDevId(m.owner) && isDevId(m.anchor) &&
     isStr(m.name, 200) && typeof m.type === 'string' && m.type.length <= 100 &&
-    isInt(m.size, 0, LIMITS.fileBytes) && isInt(m.thumbSize ?? 0, 0, LIMITS.thumbBytes) && isSha(m.sha) &&
+    isInt(m.size, 1, LIMITS.fileBytes) && isInt(m.thumbSize ?? 0, 0, LIMITS.thumbBytes) && isSha(m.sha) &&
     isNum(m.x) && isNum(m.y) && isNum(m.w, 400) && m.w >= 40 && isNum(m.h, 400) && m.h >= 40 &&
     isNum(m.rot, Math.PI) &&
     Array.isArray(m.holders) && m.holders.length <= 50 && m.holders.every(isDevId);
@@ -112,7 +112,10 @@ export const isFid = (v) => isPid(v) || (typeof v === 'string' && v.startsWith('
 
 // want / have / dropcheck carry just a print id.
 export const validPidMsg = (m) => !!m && isPid(m.pid);
-export const validNeed = (m) => !!m && isFid(m.fid) && validMissing(m.missing) && (m.cs === undefined || LIMITS.chunkSizes.includes(m.cs));
+// a need with an empty list asks for nothing, so a real receiver never sends one (second blind review 2)
+export const validNeed = (m) => !!m && isFid(m.fid) && validMissing(m.missing) && m.missing?.length !== 0 && (m.cs === undefined || LIMITS.chunkSizes.includes(m.cs));
+// Is this device in the room? Only its own entry counts, not a name every object has (second blind review 2)
+export const inRoom = (peers, id) => !!peers && Object.hasOwn(peers, id);
 
 // What a device says about itself when it joins the room (presence).
 export const validPeerMeta = (m) => !!m && isStr(m.name, 40) && isNum(m.w, 20000) && m.w >= 100 && isNum(m.h, 20000) && m.h >= 100 && isNum(m.joinedAt, 1e15);
@@ -145,12 +148,14 @@ export function validSignal(env) {
 // send: the whole file for a want or a need with no list, and the listed pieces for a need with
 // a list (at most the file). null (drop it) if the list repeats a piece or names one past the
 // end: a real receiver never does. A list without a piece size is counted at the biggest piece
-// size, the most it could make us send.
+// size, the most it could make us send. Every ask is charged at least one piece, and at least a
+// byte, so even a zero-byte file has a budget (second blind review 1).
 export function askBytes(m, size) {
-  if (m.t === 'want' || m.missing === null) return size;
-  const cs = m.cs || Math.max(...LIMITS.chunkSizes), n = pieceCount(size, cs);
+  const cs = m.cs || Math.max(...LIMITS.chunkSizes), piece = Math.max(1, Math.min(size, cs));
+  if (m.t === 'want' || m.missing === null) return Math.max(1, size);
+  const n = pieceCount(size, cs);
   if (new Set(m.missing).size !== m.missing.length || m.missing.some((i) => i >= n)) return null;
-  return Math.min(size, m.missing.length * cs);
+  return Math.max(piece, Math.min(size, m.missing.length * cs));
 }
 
 // Counts what each device has asked us to send, per file: one budget of LIMITS.wholeSends whole
@@ -181,11 +186,11 @@ export function askLimiter(now = () => performance.now()) {
     let r = recs.get(key);
     if (r) {
       if (list && t - r.piece < LIMITS.pieceGap) return null;
-      if (recent(r, t).reduce((a, d) => a + d.bytes, 0) + bytes > LIMITS.wholeSends * size) return null;
+      if (recent(r, t).reduce((a, d) => a + d.bytes, 0) + bytes > LIMITS.wholeSends * Math.max(1, size)) return null;
     } else {
       if (full(dev) && t - swept >= LIMITS.sweepGap) { swept = t; for (const [k, o] of recs) if (!live(o, t)) drop(k, o); }
       if (full(dev)) return null;   // every counter in the way is live: refuse, never push one out
-      if (bytes > LIMITS.wholeSends * size) return null;
+      if (bytes > LIMITS.wholeSends * Math.max(1, size)) return null;
       r = { dev, sends: [], piece: -Infinity };
       recs.set(key, r); perDev.set(dev, (perDev.get(dev) || 0) + 1);
     }
