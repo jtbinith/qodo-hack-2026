@@ -1,0 +1,1 @@
+FAIL B left and came back, then 20 wants made A send photo-0.jpg 3 more times (none: its counter was kept)

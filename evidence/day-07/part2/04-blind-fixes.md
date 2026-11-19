@@ -59,7 +59,12 @@ The S1.3 silent-device step (`two-browser.mjs:155-182`) has A receive a `want` f
 ## Draft: #20's acceptance (for when you say go; not posted)
 - **Bullet 1:** "Per device and per file, the pieces sent in answer to its requests add up to at most 3 whole files in any 60 seconds. A `want` or a `need` with no list counts every piece, and a `need` with a list counts the pieces it lists. Pieces that were never sent are given back."
 - **Bullet 2:** "A `need` with a list is allowed at most once a second per device per file."
-- **Bullet on counters:** "The counters are bounded: one device has at most 1000, the room's table holds that many for each of the 20 devices a room can have (S7), and a live counter is never pushed out. Counters aren't deleted when a device leaves; they go stale after the window. The limits are named constants in `LIMITS` (Rule 3)."
+- **Bullet on counters** (updated after the second blind review). It replaces today's "The counters are bounded: they're cleared when a device leaves and capped in number":
+  - "The counters are bounded: one device has at most 1000, the room's table holds that many for each of the 20 devices a room can have (S7), and a live counter is never pushed out."
+  - "Counters are **not** cleared when a device leaves. They're kept until their 60-second window ends, so leaving and coming back with the same id doesn't reset them."
+  - "Only devices in the room's presence are counted and served."
+  - "Every ask is charged at least one piece, a print of size 0 is refused, and a `need` with an empty list is dropped."
+  - "The limits are named constants in `LIMITS` (Rule 3)."
 - **"How to test the attack" gains:** "B sends `need`s for alternating halves every second for a minute, then 300-piece lists for a 200 MB file every second: each time A sends at most 3 files' worth of pieces."
 
 ## Draft: a new ticket for blind 5 (not filed)
