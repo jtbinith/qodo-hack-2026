@@ -209,7 +209,7 @@ test('a send that gives up before any piece left says it sent 0 pieces (Qodo on 
   const s = watch(peers.sendFile('c', 'f1', file(100)));
   await settle(); await tick(TIMEOUT);
   assert.equal(s.state, 'rejected');
-  assert.equal(s.error.sent, 0);
+  assert.deepEqual(s.error.sent, { sent: 0, of: 1 });
 });
 test('a send that stalls after some pieces says how many it sent (Qodo on #87)', async () => {
   const { peers } = room();
@@ -218,5 +218,33 @@ test('a send that stalls after some pieces says how many it sent (Qodo on #87)',
   const s = watch(peers.sendFile('c', 'f1', file(3 * PIECE)));
   await settle(); await tick(TIMEOUT); await settle();
   assert.equal(s.state, 'rejected');
-  assert.equal(s.error.sent, 1);
+  assert.deepEqual(s.error.sent, { sent: 1, of: 3 });
 });
+test('a send says how many of its pieces left when it finishes (Qodo on #87)', async () => {
+  const { peers } = room();
+  direct(peers, 'c');
+  const s = watch(peers.sendFile('c', 'f1', file(3 * PIECE)));
+  await settle();
+  assert.equal(s.state, 'fulfilled');
+  assert.deepEqual(await peers.sendFile('c', 'f1', file(3 * PIECE), [0, 2]), { sent: 2, of: 2 });
+});
+// blind review 7: relay frames that are dropped (a bad key, a full outbox) resolve false without
+// throwing. The send finishes, but says none of its pieces left, so the caller gives it back
+test('a relay send whose frames are all dropped finishes saying it sent 0 pieces (blind review 7)', async () => {
+  const { peers, frames } = room();
+  await peers.onSignal('c', { pub: 'bm90IGEga2V5', reply: true });   // a malformed key: every frame is dropped
+  const r = await peers.sendFile('c', 'f1', file(3 * 24576));
+  assert.deepEqual(r, { sent: 0, of: 3 });
+  assert.equal(frames('c'), 0);
+});
+test('an error another send already marked gives unknown counts, so nothing is given back (blind review 7)', async () => {
+  const { peers } = room();
+  const dc = direct(peers, 'c'), shared = new Error('shared');
+  Object.defineProperty(shared, 'sent', { value: { sent: 0, of: 1 }, configurable: true });
+  dc.send = () => { throw shared; };
+  const s = watch(peers.sendFile('c', 'f1', file(PIECE)));
+  await settle();
+  assert.equal(s.state, 'rejected');
+  assert.equal(s.error.sent, null);
+});
+
