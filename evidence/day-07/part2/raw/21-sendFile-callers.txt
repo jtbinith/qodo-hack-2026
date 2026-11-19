@@ -1,0 +1,3 @@
+<c5>/web/index.html:158:  if (thumb) peers.sendFile(peer, 'thumb:' + p.pid, new Blob([thumb])).catch(() => {});   // the receiver asks again
+<c5>/web/index.html:182:    if (tok) peers.sendFile(from, m.pid, file).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
+<c5>/web/index.html:196:    if (tok) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); if (m.fid === pid) gaveUp(from, pid, e); });

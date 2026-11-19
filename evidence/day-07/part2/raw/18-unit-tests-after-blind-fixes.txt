@@ -1,0 +1,31 @@
+✔ the limits are named constants in LIMITS, sized so the table never fills for real (1.294357ms)
+✔ the receiver's own retries for a few missing pieces, 1.5 s apart, are never dropped (0.355574ms)
+✔ retries that ask for more than 3 files' worth in a minute are refused, even a piece at a time (0.927145ms)
+✔ pieces and whole asks share one budget of 3 files (0.192016ms)
+✔ alternating halves of the file stop at 3 files a minute (blind review 1) (0.213452ms)
+✔ 300-piece lists on a 200 MB file stop at 3 files a minute (blind review 4) (3.001417ms)
+✔ a device that leaves and rejoins keeps its counters until they go stale (blind review 3) (0.218348ms)
+✔ live counters are never pushed out, so other devices asking cannot reset a limit (Qodo on #87) (32.294976ms)
+✔ one device holds at most askRecordsPerDevice counters; only its own new files are refused (Qodo on #87) (3.132815ms)
+✔ a room of 20 devices each at its cap still leaves room for every one of them (blind review 2) (8.433289ms)
+✔ when every counter is live a new one is refused, and allowed once one goes stale (Qodo on #87) (26.735894ms)
+✔ a full table is swept for stale counters at most once a sweepGap (blind review 9) (13.642876ms)
+✔ undo gives back a whole-file send that sent nothing (Qodo on #87) (0.187127ms)
+✔ undo gives back only the share that never left (0.166621ms)
+✔ undo gives back a list ask that sent nothing, including its once-a-second slot (Qodo on #87) (0.051516ms)
+✔ undo removes the failed send itself, not the newest one (blind review 6) (0.074302ms)
+✔ an old token gives nothing back once its counter has been replaced (blind review 6) (1.082435ms)
+✔ undo for a token that is null, or a share of 0, does nothing (0.065622ms)
+✔ a send that gives up before any piece left says it sent 0 pieces (Qodo on #87) (1.470679ms)
+✔ a send that stalls after some pieces says how many it sent (Qodo on #87) (2.114866ms)
+✔ a send says how many of its pieces left when it finishes (Qodo on #87) (1.898932ms)
+✔ a relay send whose frames are all dropped finishes saying it sent 0 pieces (blind review 7) (1.259454ms)
+✔ an error another send already marked gives unknown counts, so nothing is given back (blind review 7) (2.540319ms)
+ℹ tests 89
+ℹ suites 0
+ℹ pass 89
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 154.466971
