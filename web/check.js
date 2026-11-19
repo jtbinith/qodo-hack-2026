@@ -10,6 +10,13 @@ export const LIMITS = {
   incoming: 20,                  // transfers arriving at once
   prints: 500,
   missingPerAsk: 300,
+  wholeSends: 3,                 // whole files' worth of bytes per device per file in any wholeWindow (S1.5)
+  wholeWindow: 60 * 1000,        // ms
+  pieceGap: 1000,                // ms between asks with a list of pieces, per device per file (S1.5)
+  devices: 20,                   // devices a room holds (PRD S7)
+  askRecordsPerDevice: 1000,     // (device, file) counters for one device: 2 per print (a photo and its thumbnail)
+  askRecords: 20000,             // counters kept at once: askRecordsPerDevice for every device a room holds
+  sweepGap: 1000,                // ms between sweeps for stale counters when the table is full
 };
 
 const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
@@ -22,7 +29,7 @@ export const isSha = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
 export function validPrint(m) {
   return !!m && isPid(m.pid) && isDevId(m.owner) && isDevId(m.anchor) &&
     isStr(m.name, 200) && typeof m.type === 'string' && m.type.length <= 100 &&
-    isInt(m.size, 0, LIMITS.fileBytes) && isInt(m.thumbSize ?? 0, 0, LIMITS.thumbBytes) && isSha(m.sha) &&
+    isInt(m.size, 1, LIMITS.fileBytes) && isInt(m.thumbSize ?? 0, 0, LIMITS.thumbBytes) && isSha(m.sha) &&
     isNum(m.x) && isNum(m.y) && isNum(m.w, 400) && m.w >= 40 && isNum(m.h, 400) && m.h >= 40 &&
     isNum(m.rot, Math.PI) &&
     Array.isArray(m.holders) && m.holders.length <= 50 && m.holders.every(isDevId);
@@ -105,7 +112,10 @@ export const isFid = (v) => isPid(v) || (typeof v === 'string' && v.startsWith('
 
 // want / have / dropcheck carry just a print id.
 export const validPidMsg = (m) => !!m && isPid(m.pid);
-export const validNeed = (m) => !!m && isFid(m.fid) && validMissing(m.missing) && (m.cs === undefined || LIMITS.chunkSizes.includes(m.cs));
+// a need with an empty list asks for nothing, so a real receiver never sends one (second blind review 2)
+export const validNeed = (m) => !!m && isFid(m.fid) && validMissing(m.missing) && m.missing?.length !== 0 && (m.cs === undefined || LIMITS.chunkSizes.includes(m.cs));
+// Is this device in the room? Only its own entry counts, not a name every object has (second blind review 2)
+export const inRoom = (peers, id) => !!peers && Object.hasOwn(peers, id);
 
 // What a device says about itself when it joins the room (presence).
 export const validPeerMeta = (m) => !!m && isStr(m.name, 40) && isNum(m.w, 20000) && m.w >= 100 && isNum(m.h, 20000) && m.h >= 100 && isNum(m.joinedAt, 1e15);
@@ -132,4 +142,71 @@ export function validSignal(env) {
     case 'cand': return !!d.cand && typeof d.cand.candidate === 'string' && d.cand.candidate.length <= 2000;
   }
   return false;
+}
+
+// Resend requests (S1.5). How many bytes a want or need for a file of `size` bytes asks us to
+// send: the whole file for a want or a need with no list, and the listed pieces for a need with
+// a list (at most the file). null (drop it) if the list repeats a piece or names one past the
+// end: a real receiver never does. A list without a piece size is counted at the biggest piece
+// size, the most it could make us send. Every ask is charged at least one piece, and at least a
+// byte, so even a zero-byte file has a budget (second blind review 1).
+export function askBytes(m, size) {
+  const cs = m.cs || Math.max(...LIMITS.chunkSizes), piece = Math.max(1, Math.min(size, cs));
+  if (m.t === 'want' || m.missing === null) return Math.max(1, size);
+  const n = pieceCount(size, cs);
+  if (new Set(m.missing).size !== m.missing.length || m.missing.some((i) => i >= n)) return null;
+  return Math.max(piece, Math.min(size, m.missing.length * cs));
+}
+
+// Counts what each device has asked us to send, per file: one budget of LIMITS.wholeSends whole
+// files' worth of bytes in any LIMITS.wholeWindow, whether asked for whole or in pieces (blind
+// review 1, 4), and a list ask at most once every LIMITS.pieceGap. allow() is called once a
+// request has passed its checks and we hold the file; it returns a token, or null if refused.
+// Only allowed requests are counted, so a device that keeps asking can't keep itself locked out.
+//
+// The table never fills for real: one device can hold at most LIMITS.askRecordsPerDevice
+// counters, more than it could honestly use (a photo and a thumbnail per print), and the table
+// holds that many for every device a room can have (LIMITS.devices, PRD S7). A live counter is
+// never pushed out, or other devices asking could reset a device's limit (Qodo on #87): stale
+// ones go, at most once every LIMITS.sweepGap, and if the table is still full the new (device,
+// file) is refused. Counters aren't deleted when a device leaves, so leaving and rejoining
+// doesn't reset them (blind review 3); they go stale. undo(token, share) gives back the share
+// of exactly that send which never left, and nothing if its counter has been replaced (blind
+// review 6).
+export function askLimiter(now = () => performance.now()) {
+  const recs = new Map();   // 'dev fid' -> { dev, sends: [{ t, bytes }], piece: time of the last list ask }
+  const perDev = new Map(); // dev -> how many counters it has
+  let swept = -Infinity;
+  const recent = (r, t) => (r.sends = r.sends.filter((d) => t - d.t < LIMITS.wholeWindow));
+  const live = (r, t) => recent(r, t).length > 0 || t - r.piece < LIMITS.pieceGap;
+  const drop = (k, r) => { recs.delete(k); const n = perDev.get(r.dev) - 1; if (n > 0) perDev.set(r.dev, n); else perDev.delete(r.dev); };
+  const full = (dev) => recs.size >= LIMITS.askRecords || (perDev.get(dev) || 0) >= LIMITS.askRecordsPerDevice;
+  function allow(dev, fid, bytes, size, list) {
+    const t = now(), key = dev + ' ' + fid;
+    let r = recs.get(key);
+    if (r) {
+      if (list && t - r.piece < LIMITS.pieceGap) return null;
+      if (recent(r, t).reduce((a, d) => a + d.bytes, 0) + bytes > LIMITS.wholeSends * Math.max(1, size)) return null;
+    } else {
+      if (full(dev) && t - swept >= LIMITS.sweepGap) { swept = t; for (const [k, o] of recs) if (!live(o, t)) drop(k, o); }
+      if (full(dev)) return null;   // every counter in the way is live: refuse, never push one out
+      if (bytes > LIMITS.wholeSends * Math.max(1, size)) return null;
+      r = { dev, sends: [], piece: -Infinity };
+      recs.set(key, r); perDev.set(dev, (perDev.get(dev) || 0) + 1);
+    }
+    const send = { t, bytes };
+    r.sends.push(send);
+    const tok = { key, r, send, prevPiece: r.piece, list };
+    if (list) r.piece = t;
+    return tok;
+  }
+  // `share` (0 to 1) of the send this token allowed never left: give that much back.
+  function undo(tok, share) {
+    if (!tok || recs.get(tok.key) !== tok.r || !(share > 0)) return;
+    const i = tok.r.sends.indexOf(tok.send);
+    if (i < 0) return;   // already outside the window
+    if (share >= 1) { tok.r.sends.splice(i, 1); if (tok.list && tok.r.piece === tok.send.t) tok.r.piece = tok.prevPiece; }
+    else tok.send.bytes *= 1 - share;
+  }
+  return { allow, undo, get size() { return recs.size; } };
 }

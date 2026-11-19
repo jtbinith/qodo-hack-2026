@@ -42,7 +42,7 @@ import { joinRoom } from './net.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
-import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
+import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
@@ -77,6 +77,10 @@ addEventListener('resize', resize); resize();
 const prints = new Map();
 const files = new Map();      // pid -> File (bytes I hold)
 const incoming = new Map();   // pid -> { parts: [], got, n }
+const asks = askLimiter();    // how much each device has made us send of each file (S1.5)
+// Give back the share of an allowed send that never left. `s` is sendFile's { sent, of }; anything
+// else (an error that couldn't say) gives nothing back, so a send that moved data stays counted.
+const refund = (tok, s) => { if (s && Number.isInteger(s.sent) && s.of > 0 && s.sent < s.of) asks.undo(tok, (s.of - s.sent) / s.of); };
 let layout = { pos: {}, group: {} }, sizes = {};
 const meWorld = () => layout.pos[id] || [0, 0];
 // A print's x, y are relative to the top-left of the screen it sits on (its anchor), so
@@ -173,7 +177,9 @@ function onMessage(from, m, bytes) {
     const p = prints.get(m.pid); if (p && drag?.p !== p) { p.anchor = m.anchor; p.x = m.x; p.y = m.y; }
   } else if (m.t === 'want') {           // someone wants the full photo
     const file = validPidMsg(m) && files.get(m.pid);
-    if (file) peers.sendFile(from, m.pid, file).catch((e) => gaveUp(from, m.pid, e));
+    // counted only for devices in the room (S7), then given back for what never left (S1.5)
+    const tok = file && inRoom(net.peers, from) && asks.allow(from, m.pid, askBytes(m, file.size), file.size, false);
+    if (tok) peers.sendFile(from, m.pid, file).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
   } else if (m.t === 'have') {           // someone now holds the bytes
     const p = validPidMsg(m) && prints.get(m.pid);
     if (p && !p.holders.includes(from) && p.holders.length < 50) p.holders.push(from);
@@ -183,7 +189,11 @@ function onMessage(from, m, bytes) {
     const thumb = prints.get(pid)?.thumb;
     const src = m.fid.startsWith('thumb:') ? (thumb && new Blob([thumb])) : files.get(pid);
     const cs = LIMITS.chunkSizes.includes(m.cs) ? m.cs : null;
-    if (src) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).catch((e) => m.fid === pid && gaveUp(from, pid, e));
+    // only files we hold, then only lists a receiver could send, from devices in the room, are
+    // counted (S1.5); what never left is given back, so a link that recovers isn't refused (Qodo on #87)
+    const bytes = src && askBytes(m, src.size);
+    const tok = typeof bytes === 'number' && inRoom(net.peers, from) && asks.allow(from, m.fid, bytes, src.size, m.missing !== null);
+    if (tok) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); if (m.fid === pid) gaveUp(from, pid, e); });
   } else if (m.t === 'chunk') {
     const inc = incoming.get(m.fid);
     if (!inc || inc.from !== from || !validChunk(m, bytes, inc)) return;

@@ -86,9 +86,9 @@ Every message from another device is checked in `web/check.js` (or `net.js` for 
 |---|---|---|---|
 | `print` | a shared item's name, type, size, SHA-256, place. Planned: whether it is for the joined group or everyone (F11, F12), a signature (S2) and, later, piece hashes (R1) | Any device | `validPrint` |
 | `move` | a print's new place | Any device | `validMove` |
-| `want` | a request for a file | Any device. Planned: only devices it was shared with (S10) | `validPidMsg` |
+| `want` | a request for a file | Any device. Planned: only devices it was shared with (S10) | `validPidMsg`, then only for a file we hold, at most `LIMITS.wholeSends` (3) whole sends per device per file in any `LIMITS.wholeWindow` (60 s) (S1.5) |
 | `have` | "I now hold this file" | Any device | `validPidMsg` |
-| `need` | a request for missing pieces | Any device | `validNeed` |
+| `need` | a request for missing pieces | Any device | `validNeed`, then only for a file we hold and `askKind`: a list that repeats a piece or names one past the end is dropped. No list, or one covering over half the pieces, counts as a whole send with `want`. Fewer pieces: at most once per `LIMITS.pieceGap` (1 s) per device per file (S1.5) |
 | `chunk` | one piece of a file | Only the device the file was requested from | `validChunk`: expected transfer, size, index and exact length. A finished thumbnail is decoded only if `thumbFits` accepts it: one JPEG frame of at most 400 × 400 with nothing after its end marker (S14) |
 | `dropcheck` | "check whether this print landed on you" | Any device | `validPidMsg` |
 | `got` (planned, F14) | "this file arrived and passed its fingerprint" | Devices it was sent to | `validPidMsg` |
