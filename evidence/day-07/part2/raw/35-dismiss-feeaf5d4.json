@@ -1,0 +1,2 @@
+{"results":{"feeaf5d4-1722-479a-a2aa-bd2f223b4fb6":{"status":"dismissed","reconciled":true,"failed_effects":[],"retryable":false,"reason":"deferred","explanation":"Deferred to #88 item 1: refund unsent bytes, not the share of pieces; the stopping rule fired.","detail":null}}}
+  trace 1410800cef03784b45663f7c525af7f0
