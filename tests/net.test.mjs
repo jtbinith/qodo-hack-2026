@@ -232,3 +232,57 @@ test('results say whether they answer this device’s latest push', async () => 
   const mine = B.heard.filter(({ ev, d }) => ev === 'retry' || (ev === 'nomatch' && d.dev === 'B'));
   assert.deepEqual(mine.map(({ ev, d }) => [ev, d.latest]), [['retry', false], ['nomatch', true]], names(B).join('; '));
 });
+
+// The time keeper leaves and the others hear it at different times (C5, #61). `leaves` takes
+// devices out of the room without telling anyone. `hear` tells the devices it names
+function leaves(devs, ...gone) {
+  for (const id of gone) { delete presence[id]; devs[id].leave(); channels = channels.filter((c) => c.key !== id); }
+}
+const hear = (...ids) => { for (const id of ids) channels.find((c) => c.key === id).handlers['presence:sync'](); };
+
+test('a device that hears late that the time keeper left still ends up with the new time keeper’s layout', async () => {
+  const devs = await room(), { A, B, C } = devs;
+  leaves(devs, 'L');
+  hear('A');                       // A hears first and takes over. B and C still count L
+  await tick(100);
+  assert.equal(A.leader, 'A'); assert.equal(B.leader, 'L');
+  A.push('R', 400); B.push('L', 400);
+  await tick(3000);
+  assert.equal(A.joins.length, 1, 'A joined B');
+  assert.deepEqual([B.joins, C.joins], [[], []], 'B and C, still counting L, did not use it yet');
+  hear('C', 'B');                  // the two hear in the opposite order to the one they arrived in
+  await settle();
+  assert.deepEqual([B.leader, C.leader], ['A', 'A']);
+  assert.deepEqual(B.joins, A.joins, 'B holds A’s layout');
+  assert.deepEqual(C.joins, A.joins, 'C holds A’s layout');
+});
+
+test('a layout from a device that isn’t the time keeper is still dropped (Rule 1)', async () => {
+  const devs = await room(), { A, C } = devs;
+  const fromB = (joins) => channels.find((c) => c.key === 'B').send({ event: 'layout', payload: { from: 'B', joins } });
+  fromB([{ a: 'B', edgeA: 'R', alongA: 1, b: 'C', edgeB: 'L', alongB: 1 }]);
+  await tick(500);
+  assert.deepEqual([A.joins, C.joins], [[], []], 'not used while L is the time keeper');
+  // L's own layout comes after B's, so what B sent is out of date: when L and A leave and B
+  // takes over, C doesn't take up B's old layout
+  devs.L.push('R', 450); A.push('L', 400);
+  await tick(3000);
+  assert.equal(C.joins.length, 1, 'C holds L’s layout');
+  leaves(devs, 'L', 'A');
+  hear('C');
+  await settle();
+  assert.equal(C.leader, 'B');
+  assert.deepEqual(C.joins, [], 'B’s layout from before L’s was not used');
+});
+
+test('a layout kept from the next time keeper is checked again when it takes over', async () => {
+  const devs = await room(), { B } = devs;
+  // A sends a layout naming C while L is the time keeper. Then L and C leave together
+  channels.find((c) => c.key === 'A').send({ event: 'layout', payload: { from: 'A', joins: [{ a: 'B', edgeA: 'R', alongA: 1, b: 'C', edgeB: 'L', alongB: 1 }] } });
+  await tick(500);
+  leaves(devs, 'L', 'C');
+  hear('B');
+  await settle();
+  assert.equal(B.leader, 'A');
+  assert.deepEqual(B.joins, [], 'A’s kept layout names C, which has left, so it is not used');
+});
