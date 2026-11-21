@@ -1,0 +1,234 @@
+// Unit tests for join results in web/net.js (C15, #68): results count only from the time
+// keeper, and a device that pushed gives up by itself when no result names it.
+// Several real joinRoom devices share a fake room server, and the clock is mocked so
+// seconds pass instantly. The room server takes LAG ms to pass each message on.
+import { test, mock, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+
+const LAG = 100;
+let channels = [], presence = {};
+class FakeChannel {
+  handlers = {};
+  on(type, filter, h) { this.handlers[type + ':' + filter.event] = h; return this; }
+  send({ event, payload }) {
+    if (bus.drop?.(event, payload)) return;
+    const copy = JSON.parse(JSON.stringify(payload));
+    for (const c of channels) if (c !== this) setTimeout(() => c.handlers['broadcast:' + event]?.({ payload: copy }), LAG);   // self: false
+  }
+  presenceState() { return Object.fromEntries(Object.entries(presence).map(([k, m]) => [k, [m]])); }
+  async track(m) { presence[this.key] = m; for (const c of channels) c.handlers['presence:sync']?.(); }
+  subscribe(cb) { cb('SUBSCRIBED'); }
+}
+const bus = { drop: null };
+globalThis.window = { supabase: { createClient: () => ({
+  channel: (name, { config }) => { const c = new FakeChannel(); c.key = config.presence.key; channels.push(c); return c; },
+  removeChannel() {},
+}) } };
+const realPerformance = globalThis.performance;
+const { joinRoom } = await import('../web/net.js');
+
+beforeEach(() => {
+  mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000 });
+  globalThis.performance = { timeOrigin: 0, now: () => Date.now() };
+  channels = []; presence = {}; bus.drop = null;
+});
+afterEach(() => { mock.timers.reset(); globalThis.performance = realPerformance; });
+
+const settle = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)); };
+const tick = async (ms) => { for (let k = 0; k < ms; k += 50) { mock.timers.tick(Math.min(50, ms - k)); await settle(); } };
+
+// L arrives first, so it is the time keeper. A, B and C are phones
+let start = 0;
+async function room() {
+  const devs = {};
+  for (const [id, w, h] of [['L', 1440, 900], ['A', 400, 800], ['B', 400, 800], ['C', 400, 800]]) {
+    const s = joinRoom({ room: 'r', id, name: id.toLowerCase(), size: { w, h } });
+    s.heard = []; s.times = [];   // results it heard, and the time of each of its pushes
+    s.on((ev, d) => { if (ev === 'pushed') s.times.push(d.t); if (['joined', 'retry', 'nomatch'].includes(ev)) s.heard.push({ ev, d, at: Date.now() - start }); });
+    devs[id] = s;
+    await tick(1);
+  }
+  start = Date.now();
+  await settle();
+  for (const s of Object.values(devs)) assert.equal(s.leader, 'L');
+  return devs;
+}
+const names = (s) => s.heard.map(({ ev, d }) => ev + ' ' + (d.dev || d.devs?.join(',') || d.a + '-' + d.b));
+const ownNoMatch = (s) => s.heard.filter(({ ev, d }) => ev === 'nomatch' && d.timedOut);
+const joinedAB = (tA, tB) => ({ a: 'A', edgeA: 'R', alongA: 1, tA, b: 'B', edgeB: 'L', alongB: 1, tB });
+
+test('joined, retry and nomatch carry the time keeper id', async () => {
+  const { L, A, B, C } = await room();
+  const sent = [];
+  bus.drop = (event, p) => { if (['joined', 'retry', 'nomatch'].includes(event)) sent.push([event, p]); return false; };
+  A.push('L', 400); L.push('R', 450);
+  await tick(3000);
+  C.push('T', 100);                  // a lone push: nomatch
+  await tick(4000);
+  L.push('R', 450); A.push('L', 400); B.push('L', 400);   // one laptop push, two phones: retry
+  await tick(3000);
+  assert.deepEqual(sent.map(([e]) => e).sort(), ['joined', 'nomatch', 'retry']);
+  for (const [event, p] of sent) assert.equal(p.from, 'L', `${event} names its sender`);
+  // and the pushes it answers, by the time each device put on its push
+  const [joined, nomatch, retry] = ['joined', 'nomatch', 'retry'].map((e) => sent.find(([x]) => x === e)[1]);
+  assert.deepEqual([joined.tA, joined.tB], [A.times[0], L.times[0]]);
+  assert.equal(nomatch.t, C.times[0]);
+  assert.deepEqual(retry.pushes, [{ dev: 'L', t: L.times[1] }, { dev: 'A', t: A.times[1] }, { dev: 'B', t: B.times[0] }]);
+  assert.deepEqual(names(C), ['joined A-L', 'nomatch C', 'retry L,A,B']);   // the room hears every result
+});
+
+test('a joined, retry or nomatch not sent by the time keeper is ignored', async () => {
+  const { L, A, B } = await room();
+  const fake = channels.find((c) => c.key === 'A');   // A's own channel, sending what only L should
+  const forge = (from) => {
+    fake.send({ event: 'joined', payload: { ...joinedAB(1, 2), ...(from && { from }) } });
+    fake.send({ event: 'retry', payload: { devs: ['B'], pushes: [{ dev: 'B', t: 2 }], ...(from && { from }) } });
+    fake.send({ event: 'nomatch', payload: { dev: 'B', t: 2, ...(from && { from }) } });
+  };
+  forge('A'); forge(undefined);
+  await tick(500);
+  assert.deepEqual(names(B), [], 'from a device that is not the time keeper, or with no sender');
+  assert.deepEqual(names(L), [], 'the time keeper takes results only from itself');
+  // This is the rule, not protection: a forged `from` still passes until #24 signs room messages
+  forge('L');
+  await tick(500);
+  assert.deepEqual(names(B), ['joined A-B', 'retry B', 'nomatch B']);
+  assert.deepEqual(names(L), [], 'the time keeper ignores results that claim to come from it');
+});
+
+test('a push the time keeper drops without a reply ends in this device’s own "No match"', async () => {
+  const { A } = await room();
+  bus.drop = (event, p) => event === 'push' && p.dev === 'A';   // e.g. a batch that is already full
+  A.push('L', 400);
+  await tick(5000);
+  assert.deepEqual(ownNoMatch(A), [], 'not before the time keeper’s latest possible decision (WINDOW + DEADLINE = 4.5 s) and the network');
+  await tick(1000);
+  assert.equal(ownNoMatch(A).length, 1, 'by 6 s');
+});
+
+test('another pair’s joined doesn’t stop this device’s wait', async () => {
+  const { A, B, C } = await room();
+  bus.drop = (event, p) => event === 'push' && p.dev === 'A';
+  A.push('L', 400); B.push('R', 400); C.push('L', 400);
+  await tick(8000);
+  assert.deepEqual(names(A).slice(0, 1), ['joined B-C']);
+  assert.equal(ownNoMatch(A).length, 1);
+});
+
+// A's push is lost, then the time keeper sends one result. Only results naming A stop A's wait
+async function waitThen(results) {
+  const { A } = await room();
+  bus.drop = (event, p) => event === 'push' && p.dev === 'A';
+  A.push('L', 400);
+  await tick(1000);
+  for (const r of results(A.times[0])) channels.find((c) => c.key === 'L').send(r);
+  await tick(9000);
+  return A;
+}
+for (const [what, result] of [
+  ['a joined naming this push', (t) => ({ event: 'joined', payload: { ...joinedAB(t, 5), from: 'L' } })],
+  ['a nomatch naming this push', (t) => ({ event: 'nomatch', payload: { dev: 'A', t, from: 'L' } })],
+  ['a retry listing this push', (t) => ({ event: 'retry', payload: { devs: ['B', 'A'], pushes: [{ dev: 'B', t: 5 }, { dev: 'A', t }], from: 'L' } })],
+]) test(`${what} stops its wait`, async () => {
+  const A = await waitThen((t) => [result(t)]);
+  assert.equal(A.heard.length, 1, names(A).join('; '));
+  assert.deepEqual(ownNoMatch(A), []);
+});
+test('a retry or nomatch for other devices doesn’t stop this device’s wait', async () => {
+  const A = await waitThen((t) => [{ event: 'retry', payload: { devs: ['B', 'C'], pushes: [{ dev: 'B', t }, { dev: 'C', t }], from: 'L' } },
+    { event: 'nomatch', payload: { dev: 'B', t, from: 'L' } }]);
+  assert.equal(ownNoMatch(A).length, 1, names(A).join('; '));
+});
+test('a result for another push from this device doesn’t stop this push’s wait', async () => {
+  const A = await waitThen((t) => [{ event: 'joined', payload: { ...joinedAB(t - 1, 5), from: 'L' } },
+    { event: 'nomatch', payload: { dev: 'A', t: t - 1, from: 'L' } },
+    { event: 'retry', payload: { devs: ['A'], pushes: [{ dev: 'A', t: t - 1 }], from: 'L' } }]);
+  assert.equal(ownNoMatch(A).length, 1, names(A).join('; '));
+});
+
+// one wait per push (fix round 1)
+test('each push has its own wait, which a later push doesn’t restart or cancel', async () => {
+  const { A } = await room();
+  bus.drop = (event, p) => event === 'push' && p.dev === 'A';
+  A.push('L', 400);
+  await tick(2000);
+  A.push('L', 400);
+  await tick(10000);
+  assert.deepEqual(ownNoMatch(A).map(({ d, at }) => [d.t, Math.round(at / 100) * 100]), [[A.times[0], 5500], [A.times[1], 7500]]);
+});
+test('a later push’s wait survives the join of an earlier push', async () => {
+  const { L, A } = await room();
+  A.push('L', 400); L.push('R', 450);
+  await tick(300);
+  bus.drop = (event, p) => event === 'push' && p.dev === 'A';   // A taps again before the join is decided, and this tap is lost
+  A.push('L', 400);
+  await tick(8000);
+  assert.deepEqual(names(A).slice(0, 1), ['joined A-L']);
+  assert.ok(A.heard[0].at > 300, 'the join came after the second push');
+  assert.deepEqual(ownNoMatch(A).map(({ d }) => d.t), [A.times[1]]);
+});
+test('a late nomatch for an earlier push doesn’t cancel a later push’s wait', async () => {
+  const { A } = await room();
+  A.push('T', 100);                  // alone: the time keeper says nomatch at about 2.4 s
+  await tick(2000);
+  bus.drop = (event, p) => event === 'push' && p.dev === 'A';
+  A.push('L', 400);                  // lost
+  await tick(10000);
+  assert.deepEqual(names(A).slice(0, 1), ['nomatch A']);
+  assert.deepEqual(ownNoMatch(A).map(({ d }) => d.t), [A.times[1]]);
+});
+
+test('a retry is never followed by this device’s own "No match"', async () => {
+  const { L, A, B } = await room();
+  L.push('R', 450); A.push('L', 400); B.push('L', 400);   // one laptop push answered by two phones
+  await tick(10000);
+  for (const s of [L, A, B]) assert.deepEqual(names(s), ['retry L,A,B'], s.id);
+});
+
+test('in a busy room a late join shows "Joined", never "No match" first', async () => {
+  // A pushes at 0 and L answers at 1.95 s. C pushes an edge nobody answers: its first push
+  // makes the burst resolve at 1.75 s, before L's push, so A's push waits and a new burst starts.
+  // C's later pushes put the decision back to that burst's DEADLINE, about 4.25 s
+  const { L, A, C } = await room();
+  const at = (ms, f) => setTimeout(f, ms);
+  at(0, () => A.push('L', 400));
+  at(1950, () => L.push('R', 450));
+  for (const ms of [850, 2700, 3500, 4200]) at(ms, () => C.push('T', 100));
+  await tick(12000);
+  const joined = A.heard.find(({ ev }) => ev === 'joined');
+  assert.ok(joined && joined.at > 4000, `the join is decided late (${joined?.at} ms)`);
+  assert.equal(A.heard[0].ev, 'joined', names(A).join('; '));
+  assert.deepEqual(ownNoMatch(A), []);
+});
+test('two pushes in the same millisecond share one wait, which their result stops', async () => {
+  const { A } = await room();
+  bus.drop = (event, p) => event === 'push' && p.dev === 'A';
+  A.push('L', 400); A.push('L', 400);   // the mocked clock doesn't move between them
+  assert.equal(A.times[0], A.times[1]);
+  await tick(1000);
+  channels.find((c) => c.key === 'L').send({ event: 'nomatch', payload: { dev: 'A', t: A.times[0], from: 'L' } });
+  await tick(9000);
+  assert.deepEqual(ownNoMatch(A), [], names(A).join('; '));
+});
+
+// fix round 2: the page acts on a result only when it answers this device's latest push
+test('results say whether they answer this device’s latest push', async () => {
+  const { L, A, B } = await room();
+  A.push('L', 400); L.push('R', 450);
+  await tick(300);
+  bus.drop = (event, p) => event === 'push' && p.dev === 'A';   // A taps again before the join is decided, and this tap is lost
+  A.push('L', 400);
+  await tick(8000);
+  assert.deepEqual(A.heard.map(({ ev, d }) => [ev, d.latest]), [['joined', false], ['nomatch', true]]);
+  assert.equal(L.heard[0].d.latest, true, 'the time keeper’s own result for its latest push');
+  // a retry for an earlier push, then the latest push's own wait runs out
+  bus.drop = (event, p) => event === 'push' && p.dev === 'B';   // both of B's pushes are lost
+  B.push('T', 100);
+  const t1 = B.times.at(-1);
+  await tick(300);
+  B.push('L', 400);
+  channels.find((c) => c.key === 'L').send({ event: 'retry', payload: { devs: ['B'], pushes: [{ dev: 'B', t: t1 }], from: 'L' } });
+  await tick(9000);
+  const mine = B.heard.filter(({ ev, d }) => ev === 'retry' || (ev === 'nomatch' && d.dev === 'B'));
+  assert.deepEqual(mine.map(({ ev, d }) => [ev, d.latest]), [['retry', false], ['nomatch', true]], names(B).join('; '));
+});

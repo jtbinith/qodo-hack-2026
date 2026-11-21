@@ -1,0 +1,2 @@
+{"results":{"4bf90ebe-18fb-43ef-8cbe-b845d9227735":{"status":"dismissed","reconciled":true,"failed_effects":[],"retryable":false,"reason":"deferred","explanation":"No join strip in this slice (#68 part 1). Strip, tap-position and keyboard tests come with the strip work in #68.","detail":null}}}
+  trace 99b1e77340682ae74ed79f2e3608c671

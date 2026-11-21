@@ -1,0 +1,25 @@
+{
+  "decisions": [
+    "The user chose a slice of issue #68 (C15) for this change: (1) joined, retry and nomatch carry `from` and are accepted only from the current time keeper, as layouts are; (2) the device that pushed runs its own no-match timer; (3) the page shows the three join messages. Source: #68 Acceptance and Edge cases.",
+    "Out of scope by the user's choice: the join strip UI and tap-to-along mapping, refusing overlapping joins (#68 open question 6), narrowing retry to the clashing devices (open question 7), Undo (#85). The existing orb and net.push stay the trigger.",
+    "The `from` check is not forgery protection: `from` is set by the sender on a channel anyone with the room code can use. #68 says so; real protection is #24 (signed room messages). The check stops honest mistakes and stale time keepers.",
+    "The no-match limit is a named constant derived from WINDOW + DEADLINE plus a network margin, because a decision can come up to about 4.5 s after the first tap in a busy room (measured 4450 ms on the real net.js, evidence/day-07/raw/26-blind-repro-on-real-web.txt). A 2 s timer fired before a valid join (Qodo finding 24cbc11a on PR #86).",
+    "The timer is cancelled only by a result naming this device (joined with a or b = this device, nomatch with dev = this device, retry whose devs include it), because results are broadcast to the whole room. 'Couldn't tell who to join. Try again' stays until the next tap and is never replaced by this device's own 'No match'. A joined naming this device always wins."
+  ],
+  "notes": "Expected behaviour is #68's Acceptance list under 'When only one device taps' and Edge cases 'nomatch is shown only on the device it names', 'joined, retry and nomatch are accepted only from the time keeper' and 'Joined with... shows only on the two devices the join names' (side from edgeA if this device is a, edgeB if b). Constraints: broadcasts use self:false, so the time keeper gets its own results by local emit (web/net.js:111,113,118); layouts are already accepted only from the leader (web/net.js:128-133). Must not break: npm run test:browsers direct and relay, and the time keeper is the only device that pairs pushes.",
+  "recent_work": [
+    "Evidence only, no code change: commit 99f3d2d records the final state of PR #89 in evidence/day-08/02-findings-and-verdicts.md and adds raw/H-pr89-after-b757dd4.json (Qodo's findings after b757dd4) and raw/I-dismiss-1baf3c69.json (1baf3c69 dismissed as deferred, stopping rule fired). The push-time change from round 3 was undone before b757dd4; 1baf3c69 and 240d001d are deferred to #68 (follow-up comment posted)."
+  ],
+  "context_refs": [
+    {
+      "kind": "ticket",
+      "url": "https://github.com/jtbinith/qodo-hack-2026/issues/68",
+      "label": "C15 Join screens by tapping a join strip"
+    },
+    {
+      "kind": "ticket",
+      "url": "https://github.com/jtbinith/qodo-hack-2026/issues/24",
+      "label": "S2 signed room messages (out of scope)"
+    }
+  ]
+}
