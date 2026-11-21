@@ -62,7 +62,13 @@ function newCode() {
 $('new').onclick = () => { $('code').value = newCode(); };
 
 let net = null, peers = null, W = innerWidth, H = innerHeight;
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(toast.h); toast.h = setTimeout(() => (t.style.opacity = 0), 2400); }
+// A sticky message stays until unstick(). Other messages show over it for a moment, then it comes back
+function toast(msg, sticky = false) {
+  const t = $('toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(toast.h);
+  if (sticky) toast.sticky = msg;
+  else toast.h = setTimeout(() => { if (toast.sticky) t.textContent = toast.sticky; else t.style.opacity = 0; }, 2400);
+}
+function unstick() { if (toast.sticky && $('toast').textContent === toast.sticky) $('toast').style.opacity = 0; toast.sticky = null; }
 function resize() {
   W = innerWidth; H = innerHeight;
   cv.width = W * devicePixelRatio; cv.height = H * devicePixelRatio;
@@ -357,8 +363,24 @@ function start(room) {
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
   });
-  net.on((ev) => {
-    if (ev === 'joined') toast('Screens joined ✨');
+  // Join results go to the whole room: each one is shown only on the devices it names.
+  // For results that answer this device's latest push (d.latest), until it pushes again,
+  // "Joined" always wins and "Try again" stays on screen and isn't replaced by "No match".
+  // A late join for an earlier push still says "Joined" if the latest push has no answer yet,
+  // since those screens did join, but it doesn't hide what the latest push gets. A late
+  // retry or nomatch for an earlier push shows nothing: the person has already tapped again
+  const SIDE = { R: 'on your right', L: 'on your left', T: 'above you', B: 'below you' };
+  let said = null;   // 'joined' or 'retry' since this device's last push
+  net.on((ev, d) => {
+    if (ev === 'pushed') { said = null; unstick(); }
+    else if (ev === 'joined' && (d.a === id || d.b === id) && (d.latest || !said)) {
+      const mine = d.a === id, other = net.peers[mine ? d.b : d.a]?.name || 'a device';
+      if (d.latest) { said = 'joined'; unstick(); }
+      toast(`Joined with ${other}, ${SIDE[mine ? d.edgeA : d.edgeB]}`);
+    } else if (ev === 'retry' && d.latest && said !== 'joined') {
+      said = 'retry';
+      toast('Couldn’t tell who to join. Try again', true);
+    } else if (ev === 'nomatch' && d.latest && !said) toast('No match. Tap again together');
   });
   window.__t = { net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
 }

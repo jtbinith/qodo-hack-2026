@@ -2,7 +2,7 @@
 // The server only relays messages. One device (the earliest to arrive) is the "time
 // keeper": everyone syncs their clock to it, and it decides which orb pushes pair up.
 import { addJoins, matchPushes, isValidJoins } from './layout.js';
-import { validPeerMeta, validPing, validPong, validDevList, validDev, validSignal } from './check.js';
+import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal } from './check.js';
 
 const SUPABASE_URL = 'https://aimoujzdcaxkejraattw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_D8DGNTiXWHRFaoE2ae3ACg_8G8Y_yDS'; // public by design
@@ -82,7 +82,14 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   // pushes, a batch holds at most 8 (the pairing search grows fast), and a batch is solved
   // no later than 2.5 s after it starts even if pushes keep arriving.
   const EDGES = { L: 1, R: 1, T: 1, B: 1 }, MAX_BATCH = 8, PER_DEV = 2, DEADLINE = 2500;
+  // A device that pushed gives up on that push by itself if no result names it, because the
+  // time keeper can drop a push without a reply. Each push waits on its own, keyed by its time. In a busy room the time keeper can decide up to
+  // WINDOW + DEADLINE after the first push of a burst, so the wait outlasts that, plus a
+  // margin for the network (#68).
+  const NET_MARGIN = 1000, NO_MATCH_AFTER = WINDOW + DEADLINE + NET_MARGIN;
   let pushes = [], burstTimer = null, burstStart = 0;
+  const waits = new Map();   // the time of each of this device's pushes -> its no-match timer
+  let latest = null;          // the time of this device's latest push
   function validPush(p) {
     const peer = p && s.peers[p.dev];
     if (!peer || !EDGES[p.edge] || !Number.isFinite(p.along) || !Number.isFinite(p.t)) return false;
@@ -106,18 +113,30 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     const sizes = Object.fromEntries(Object.entries(s.peers).map(([k, p]) => [k, { w: p.w, h: p.h }]));
     const { joins, retry, unmatched } = matchPushes(batch, WINDOW, { sizes, joins: s.joins });
     if (joins.length) {
-      s.joins = addJoins(s.joins, joins, sizes);
+      s.joins = addJoins(s.joins, joins.map(({ tA, tB, ...j }) => j), sizes);   // layouts don't carry push times
       sendLayout();
-      joins.forEach((j) => { send('joined', j); emit('joined', j); });
+      joins.forEach((j) => announce('joined', { ...j, from: id }));
     }
-    if (retry.length) { send('retry', { devs: retry }); emit('retry', { devs: retry }); }
+    if (retry.length) announce('retry', { devs: retry, pushes: batch.map((p) => ({ dev: p.dev, t: p.t })), from: id });
     // a lone push keeps waiting until its 2 s window is over, in case the other kid is slow
     const cutoff = s.now() - WINDOW;
     for (const p of unmatched) {
       if (p.t > cutoff) pushes.push(p);
-      else { send('nomatch', { dev: p.dev }); emit('nomatch', { dev: p.dev }); }
+      else announce('nomatch', { dev: p.dev, t: p.t, from: id });
     }
     if (pushes.length) { burstStart = performance.now(); burstTimer = setTimeout(resolve, 400); }
+  }
+  // Join results go to the whole room. Broadcasts don't come back to the sender, so the
+  // time keeper also hands its own results to this page.
+  function announce(ev, p) { send(ev, p); result(ev, p); }
+  // Only a result that names one of this device's pushes stops that push's wait: another
+  // pair's join, or the answer to an earlier push, doesn't. The page is told whether the
+  // result answers this device's latest push
+  function result(ev, p) {
+    const answered = ev === 'joined' ? [p.a === id && p.tA, p.b === id && p.tB]
+      : ev === 'retry' ? p.pushes.filter((q) => q.dev === id).map((q) => q.t) : [p.dev === id && p.t];
+    for (const t of answered) if (waits.has(t)) { clearTimeout(waits.get(t)); waits.delete(t); }
+    emit(ev, { ...p, latest: latest !== null && answered.includes(latest) });
   }
   function sendLayout() {
     if (s.leader !== id) return;
@@ -131,12 +150,19 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     if (!isValidJoins(payload.joins, [...Object.keys(s.peers), id])) return;
     s.joins = payload.joins; emit('layout');
   });
-  ch.on('broadcast', { event: 'joined' }, ({ payload }) => { if (isValidJoins([payload], [...Object.keys(s.peers), id])) emit('joined', payload); });
-  ch.on('broadcast', { event: 'retry' }, ({ payload }) => { if (validDevList(payload)) emit('retry', payload); });
-  ch.on('broadcast', { event: 'nomatch' }, ({ payload }) => { if (validDev(payload)) emit('nomatch', payload); });
+  // join results count only from the current time keeper, as layouts do. This stops honest
+  // mistakes and stale time keepers, not forgery: anyone can write `from` until #24
+  const fromLeader = (payload) => s.leader !== id && payload?.from === s.leader;
+  ch.on('broadcast', { event: 'joined' }, ({ payload }) => { if (fromLeader(payload) && isValidJoins([payload], [...Object.keys(s.peers), id]) && validJoined(payload)) result('joined', payload); });
+  ch.on('broadcast', { event: 'retry' }, ({ payload }) => { if (fromLeader(payload) && validRetry(payload)) result('retry', payload); });
+  ch.on('broadcast', { event: 'nomatch' }, ({ payload }) => { if (fromLeader(payload) && validNoMatch(payload)) result('nomatch', payload); });
 
   s.push = (edge, along) => {
     const p = { dev: id, edge, along, t: s.now() };
+    latest = p.t;
+    clearTimeout(waits.get(p.t));   // two pushes in the same millisecond share one wait
+    waits.set(p.t, setTimeout(() => { waits.delete(p.t); emit('nomatch', { dev: id, t: p.t, timedOut: true, latest: p.t === latest }); }, NO_MATCH_AFTER));
+    emit('pushed', p);
     send('push', p);
     onPush(p);
   };
@@ -144,7 +170,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => { if (validSignal(payload) && payload.to === id) onSignal(payload.from, payload.data); });
   s.signal = (to, data) => send('sig', { from: id, to, data });
   s.on = (f) => s.listeners.add(f);
-  s.leave = () => { clearInterval(pingTimer); client.removeChannel(ch); };
+  s.leave = () => { clearInterval(pingTimer); waits.forEach(clearTimeout); waits.clear(); client.removeChannel(ch); };
 
   ch.subscribe(async (st) => {
     if (st === 'SUBSCRIBED') {

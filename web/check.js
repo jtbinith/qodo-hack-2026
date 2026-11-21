@@ -124,9 +124,13 @@ export const validPeerMeta = (m) => !!m && isStr(m.name, 40) && isNum(m.w, 20000
 export const validPing = (p) => !!p && isDevId(p.from) && isDevId(p.to) && isNum(p.t0, 1e15);
 export const validPong = (p) => !!p && isDevId(p.to) && isNum(p.t0, 1e15) && isNum(p.t1, 1e15);
 
-// Join results the time keeper announces.
-export const validDevList = (p) => !!p && Array.isArray(p.devs) && p.devs.length <= 50 && p.devs.every(isDevId);
-export const validDev = (p) => !!p && isDevId(p.dev);
+// Join results the time keeper announces. Each names the pushes it answers by the time the
+// device put on its push. (The join itself is checked by isValidJoins in web/layout.js.)
+export const validJoined = (p) => !!p && isNum(p.tA, 1e15) && isNum(p.tB, 1e15);
+export const validNoMatch = (p) => !!p && isDevId(p.dev) && isNum(p.t, 1e15);
+export const validRetry = (p) => !!p && Array.isArray(p.devs) && p.devs.length <= 50 && p.devs.every(isDevId) &&
+  Array.isArray(p.pushes) && p.pushes.length > 0 && p.pushes.length <= 50 &&
+  p.pushes.every((q) => !!q && p.devs.includes(q.dev) && isNum(q.t, 1e15));
 
 // Connection setup and relayed frames (exactly one kind per message).
 const B64 = /^[A-Za-z0-9+/]*={0,2}$/;

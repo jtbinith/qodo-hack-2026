@@ -78,7 +78,7 @@ Every message from another device is checked in `web/check.js` (or `net.js` for 
 | `arrange` (planned, C16) | a mini-map request: "put me below Sam" | Devices in the room. Only the device named can accept | `validArrange` (to write) |
 | `arrange-ok` · `arrange-no` (planned, C16) | the answer to a mini-map request | Only the device that was asked | `validArrangeReply` (to write) |
 | `layout` | how screens are joined | The time keeper only | `isValidJoins` and the sender is the time keeper |
-| `joined` · `retry` · `nomatch` | join results | Should be the time keeper only | `isValidJoins` · `validDevList` · `validDev` |
+| `joined` · `retry` · `nomatch` | join results, each with the sender's id in `from` and the times of the pushes it answers (`tA`/`tB` · `pushes` · `t`) | The time keeper only (a forged `from` still passes until #24) | `isValidJoins` and `validJoined` · `validRetry` · `validNoMatch`, and the sender is the time keeper |
 | `sig` | connection setup: public key, WebRTC offer or answer, network candidate or a sealed relay frame | Any device. The sender isn't proven yet (S2) | `validSignal`: exactly one kind per message |
 
 **Device messages** (direct link or sealed relay)

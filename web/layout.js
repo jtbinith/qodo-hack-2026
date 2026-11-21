@@ -135,7 +135,7 @@ export function matchPushes(pushes, windowMs = 1000, ctx = {}) {
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (ok(pushes[i], pushes[j])) pairs.push([i, j]);
   const toJoin = ([i, j]) => {
     const [a, b] = pushes[i].dev < pushes[j].dev ? [pushes[i], pushes[j]] : [pushes[j], pushes[i]];
-    return { a: a.dev, edgeA: a.edge, alongA: a.along, b: b.dev, edgeB: b.edge, alongB: b.along };
+    return { a: a.dev, edgeA: a.edge, alongA: a.along, tA: a.t, b: b.dev, edgeB: b.edge, alongB: b.along, tB: b.t };
   };
   const sizes = ctx.sizes, base = ctx.joins || [];
   let best = null;

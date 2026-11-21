@@ -16,6 +16,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { serve } from './serve.mjs';
 import { iphoneJpeg, heicFile, exifr, sizedJpeg } from './jpeg-fixtures.mjs';
+import { solveLayout, overlapCount } from '../web/layout.js';
 
 const RELAY = process.argv.includes('--relay');
 const server = await serve(0);
@@ -54,6 +55,84 @@ try {
   await Promise.all([A.evaluate(() => window.__t.net.push('R', 300)), B.evaluate(() => window.__t.net.push('L', 350))]);
   await until(A, () => window.__t.net.joins.length === 1); await until(B, () => window.__t.net.joins.length === 1);
   check(true, 'screens joined');
+
+  // join results (C15, #68). A arrived first, so it is the time keeper. "Joined with…" shows
+  // on both devices the join names, each with its own side
+  const who = async (page) => page.evaluate(() => ({ id: window.__t.id, name: window.__t.net.name, leader: window.__t.net.leader }));
+  const [a, b] = [await who(A), await who(B)];
+  const toastOf = (page) => page.evaluate(() => document.getElementById('toast').textContent);
+  await until(B, () => document.getElementById('toast').textContent.startsWith('Joined with'), null, 10000);
+  const joinSaid = [await toastOf(A), await toastOf(B)];
+  check(a.leader === a.id && joinSaid[0] === `Joined with ${b.name}, on your right` && joinSaid[1] === `Joined with ${a.name}, on your left`, `the join says "${joinSaid.join('" and "')}"`);
+  // a lone push: the time keeper's nomatch shows only on the device it names
+  const loneAt = Date.now();
+  await B.evaluate(() => window.__t.net.push('T', 100));
+  await until(B, () => document.getElementById('toast').textContent === 'No match. Tap again together', null, 10000);
+  const loneTook = (Date.now() - loneAt) / 1000;
+  // under 4 s: this is the time keeper's nomatch, not the device's own wait (5.5 s)
+  check(loneTook >= 1.5 && loneTook < 4 && await toastOf(A) === joinSaid[0], `the time keeper's nomatch for a lone push shows on its device only (after ${loneTook.toFixed(1)} s)`);
+  // "Joined" wins over a nomatch for an earlier push: A pushes alone, then 1.9 s later pairs
+  // with B. The time keeper decides both at the same moment
+  await A.evaluate(() => window.__t.net.push('T', 100));
+  await new Promise((r) => setTimeout(r, 1900));
+  await Promise.all([A.evaluate(() => window.__t.net.push('R', 300)), B.evaluate(() => window.__t.net.push('L', 350))]);
+  await new Promise((r) => setTimeout(r, 4000));
+  const rejoinSaid = [await toastOf(A), await toastOf(B)];
+  check(rejoinSaid[0] === joinSaid[0] && rejoinSaid[1] === joinSaid[1], `a join decided with a nomatch for an earlier push still says "Joined" ("${rejoinSaid.join('" and "')}")`);
+  // results sent by a device that isn't the time keeper are ignored. A stranger with the room
+  // code sends them on the room's channel. The same messages claiming to come from the time keeper
+  // are heard: the check is the rule, not protection against forgery, until #24 signs messages
+  await B.evaluate(() => { const t = window.__t; t.heard = []; t.net.on((ev) => { if (['joined', 'retry', 'nomatch'].includes(ev)) t.heard.push(ev); }); });
+  const [, url, key] = readFileSync(new URL('../web/net.js', import.meta.url), 'utf8').match(/SUPABASE_URL = '([^']+)';\s*const SUPABASE_KEY = '([^']+)'/);
+  const stranger = async (from) => B.evaluate(async ([url, key, room, a, b, from]) => {
+    const client = window.supabase.createClient(url, key), ch = client.channel('stitch:photo-' + room, { config: { broadcast: { self: false } } });
+    await new Promise((ok) => ch.subscribe((st) => st === 'SUBSCRIBED' && ok()));
+    await ch.send({ type: 'broadcast', event: 'joined', payload: { a, edgeA: 'R', alongA: 300, tA: 1, b, edgeB: 'L', alongB: 350, tB: 2, from } });
+    await ch.send({ type: 'broadcast', event: 'retry', payload: { devs: [b], pushes: [{ dev: b, t: 2 }], from } });
+    await ch.send({ type: 'broadcast', event: 'nomatch', payload: { dev: b, t: 2, from } });
+    await client.removeChannel(ch);
+  }, [url, key, room, a.id, b.id, from]);
+  await stranger('zzzzstranger');
+  await new Promise((r) => setTimeout(r, 2000));
+  const strangerHeard = await B.evaluate(() => window.__t.heard.length);
+  await stranger(a.id);
+  const forgedHeard = await until(B, () => window.__t.heard.length === 3, null, 10000).then(() => true, () => false);
+  check(strangerHeard === 0 && forgedHeard, `results from a device that isn't the time keeper are ignored (heard ${strangerHeard}; with a forged time keeper id: ${forgedHeard})`);
+  // what the page shows for each result: "Try again" isn't replaced by this device's own
+  // "No match" until it pushes again, "Joined" always wins, results for other devices show nothing
+  const shows = await B.evaluate((a) => { const t = window.__t, out = [], said = () => document.getElementById('toast').textContent;
+    const fire = (ev, d) => { t.net.listeners.forEach((f) => f(ev, d)); out.push(said()); };
+    t.net.listeners.forEach((f) => f('pushed', {}));   // a fresh push: the forged results above are forgotten
+    fire('retry', { devs: [t.id], from: a, latest: true });
+    fire('nomatch', { dev: t.id, timedOut: true, latest: true });
+    fire('joined', { a, edgeA: 'R', alongA: 300, b: t.id, edgeB: 'L', alongB: 350, from: a, latest: true });
+    fire('retry', { devs: [t.id], from: a, latest: true });
+    fire('nomatch', { dev: t.id, from: a, latest: true });
+    t.net.listeners.forEach((f) => f('pushed', {}));
+    fire('nomatch', { dev: t.id, timedOut: true, latest: true });
+    fire('retry', { devs: [a], from: a, latest: false });
+    fire('joined', { a, edgeA: 'B', alongA: 1, b: 'zzzzother', edgeB: 'T', alongB: 1, from: a, latest: false });
+    // results for an earlier push of this device don't hide what the latest push gets: a late
+    // retry shows nothing, a late join still says "Joined" but the latest push's "No match" follows
+    t.net.listeners.forEach((f) => f('pushed', {}));
+    fire('retry', { devs: [t.id], from: a, latest: false });
+    fire('nomatch', { dev: t.id, timedOut: true, latest: true });
+    t.net.listeners.forEach((f) => f('pushed', {}));
+    fire('joined', { a, edgeA: 'R', alongA: 300, b: t.id, edgeB: 'L', alongB: 350, from: a, latest: false });
+    fire('nomatch', { dev: t.id, timedOut: true, latest: true });
+    return out; }, a.id);
+  const TRY = 'Couldn’t tell who to join. Try again', NO = 'No match. Tap again together';
+  const JOINED = `Joined with ${a.name}, on your left`;
+  check(JSON.stringify(shows) === JSON.stringify([TRY, TRY, JOINED, JOINED, JOINED, NO, NO, NO, NO, NO, JOINED, NO]), `join messages in order: ${JSON.stringify(shows)}`);
+  // "Try again" stays on screen until this device pushes again
+  const toastShown = () => B.evaluate(() => { const el = document.getElementById('toast'); return [el.textContent, getComputedStyle(el).opacity]; });
+  await B.evaluate((a) => window.__t.net.listeners.forEach((f) => { f('pushed', {}); f('retry', { devs: [window.__t.id], from: a, latest: true }); }), a.id);
+  await new Promise((r) => setTimeout(r, 3200));
+  const stays = await toastShown();
+  await B.evaluate(() => window.__t.net.listeners.forEach((f) => f('pushed', {})));
+  await new Promise((r) => setTimeout(r, 1000));
+  const gone = await toastShown();
+  check(stays[0] === TRY && stays[1] === '1' && gone[1] === '0', `"Try again" is still visible after 3 s (${JSON.stringify(stays)}) and goes on the next push (${JSON.stringify(gone)})`);
 
   // two real images (drawn in the browser) and one fake video
   const images = await A.evaluate(() => Promise.all([0, 1].map((i) => new Promise((ok) => {
@@ -368,6 +447,51 @@ try {
   const heard = await until(B2, (pid) => window.__t.prints.has(pid), pid, 20000).then(() => true, () => false);
   const took = await B2.evaluate(() => ((Date.now() - window.__keySent) / 1000).toFixed(1));
   check(heard, `A announced the print again once B's key came, and B has it (${took} s after the key)`);
+
+  // four devices in a fresh room (C15, #68): A–B, then C–D, then B–D join them all into one
+  // group. Each "Joined with…" shows only on the two devices it names, all four hold the time
+  // keeper's 3 joins, and a print A puts down reaches C, which is joined to A only through the group
+  const four = code(), say = (page) => page.evaluate(() => document.getElementById('toast').textContent);
+  const quad = {};
+  for (const k of ['A', 'B', 'C', 'D']) {
+    quad[k] = await device(400, 400, { at: four });
+    await until(quad[k], (n) => window.__t && Object.keys(window.__t.net.peers).length === n, Object.keys(quad).length);
+  }
+  for (const k of 'ABCD') await until(quad[k], () => Object.keys(window.__t.net.peers).length === 4);
+  const q = {};
+  for (const k of 'ABCD') q[k] = await quad[k].evaluate(() => ({ id: window.__t.id, name: window.__t.net.name, leader: window.__t.net.leader }));
+  const SIDES = { R: 'on your right', L: 'on your left', T: 'above you', B: 'below you' };
+  const before4 = {};
+  for (const [x, ex, y, ey, n] of [['A', 'R', 'B', 'L', 1], ['C', 'R', 'D', 'L', 2], ['B', 'B', 'D', 'T', 3]]) {
+    for (const k of 'ABCD') before4[k] = await say(quad[k]);
+    await Promise.all([quad[x].evaluate((e) => window.__t.net.push(e, 200), ex), quad[y].evaluate((e) => window.__t.net.push(e, 200), ey)]);
+    for (const k of 'ABCD') await until(quad[k], (n) => window.__t.net.joins.length === n, n);
+    await until(quad[x], (m) => document.getElementById('toast').textContent === m, `Joined with ${q[y].name}, ${SIDES[ex]}`, 10000).catch(() => {});
+    await until(quad[y], (m) => document.getElementById('toast').textContent === m, `Joined with ${q[x].name}, ${SIDES[ey]}`, 10000).catch(() => {});
+    await new Promise((r) => setTimeout(r, 1500));   // time for a wrong message to reach the others
+    const now = {};
+    for (const k of 'ABCD') now[k] = await say(quad[k]);
+    const others = [...'ABCD'].filter((k) => k !== x && k !== y);
+    check(now[x] === `Joined with ${q[y].name}, ${SIDES[ex]}` && now[y] === `Joined with ${q[x].name}, ${SIDES[ey]}` && others.every((k) => now[k] === before4[k]),
+      `four devices: the ${x}–${y} join says "${now[x]}" and "${now[y]}", and nothing new on ${others.join(' and ')} (${others.map((k) => JSON.stringify(now[k])).join(', ')})`);
+  }
+  const views = [];
+  for (const k of 'ABCD') views.push(await quad[k].evaluate(() => { const t = window.__t;
+    return { joins: JSON.stringify(t.net.joins), group: t.layout.group, sizes: Object.fromEntries(Object.entries(t.net.peers).map(([i, p]) => [i, { w: p.w, h: p.h }])) }; }));
+  const ids4 = Object.values(q).map((d) => d.id);
+  const sizes4 = views[0].sizes, joins4 = JSON.parse(views[0].joins);
+  const overlaps = overlapCount(solveLayout(ids4, joins4, sizes4), sizes4);
+  check(q.B.leader === q.A.id && joins4.length === 3 && views.every((v) => v.joins === views[0].joins) && overlaps === 0,
+    `four devices hold the time keeper's ${joins4.length} joins (same on all four: ${views.every((v) => v.joins === views[0].joins)}), with ${overlaps} overlapping screens`);
+  check(views.every((v) => new Set(ids4.map((i) => v.group[i])).size === 1 && ids4.every((i) => v.group[i] !== undefined)),
+    `four devices are one group on every page (${views.map((v) => ids4.map((i) => v.group[i]).join(',')).join(' | ')})`);
+  await quad.A.setInputFiles('#pick', [files[0]]);
+  const quadPid = await until(quad.A, () => window.__t.prints.size === 1 && [...window.__t.prints.keys()][0]).then((h) => h.jsonValue());
+  const seen = await until(quad.C, (pid) => { const t = window.__t, p = t.prints.get(pid);
+    return !!p && (t.layout.group[p.anchor] || p.anchor) === (t.layout.group[t.id] || t.id); }, quadPid, 30000).then(() => true, () => false);
+  const cView = await quad.C.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); return p ? { anchor: p.anchor, group: t.layout.group[p.anchor], mine: t.layout.group[t.id] } : null; }, quadPid);
+  check(seen && cView.anchor === q.A.id, `a print A puts down is visible on C, joined to A only through B and D (${JSON.stringify(cView)})`);
+  for (const k of 'ABCD') await quad[k].context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {
