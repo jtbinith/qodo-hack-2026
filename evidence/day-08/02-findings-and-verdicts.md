@@ -62,3 +62,8 @@ Qodo, local, on the uncommitted round 3: **new 240d001d "Clock correction blocks
 kept the cap and evidence fixes. 1baf3c69 and 240d001d are deferred to a follow-up on #68.
 
 Totals: problems caused by my own fixes: 2 (4209e603 in round 1, 240d001d in round 3).
+
+## Final state of PR #89
+Qodo re-attributed b36e79c1 and 6e7378d4 as resolved by b757dd4 (`raw/H-pr89-after-b757dd4.json`).
+1baf3c69 dismissed as deferred (`raw/I-dismiss-1baf3c69.json`), 4bf90ebe dismissed as deferred, 07c384af
+(local review only) unchanged. Follow-ups posted on #68: issuecomment-7067493146.

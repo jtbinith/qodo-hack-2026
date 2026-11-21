@@ -1,0 +1,2 @@
+{"results":{"1baf3c69-6969-4329-ab6e-e2713cb7a55c":{"status":"dismissed","reconciled":true,"failed_effects":[],"retryable":false,"reason":"deferred","explanation":"Stopping rule fired after 3 fix rounds: the round 3 fix (a unique push time) caused 240d001d, so pushes kept a timestamp from before a clock correction. Undone; deferred to the #68 follow-up.","detail":null}}}
+  trace f428e2e42fe963cc950fe69d044fbf7d
