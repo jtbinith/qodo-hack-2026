@@ -16,3 +16,15 @@ Red before the fix: `raw/02-pr90-round1-red.txt` (4 tests). Mutations: `raw/03-p
 Found by the new rule on my own tests: two older tests planted a finding without updating
 `finding_count`, so the fixed gate called them incomplete. The tests were wrong; fixed.
 `npm run test:unit`: 126/126.
+
+## Review 2: 0a1c652
+Checked first: covers 0a1c652, `completed`, `review_complete: true` (`raw/pr-90-review-2.json`).
+4 of round 1's findings re-attributed as implemented by Qodo. Still open: 6bc5fe96. New: 3be5f0ac.
+
+| Finding | Severity | Valid? | Evidence | Action |
+|---|---|---|---|---|
+| 3be5f0ac Missing comments strand valid fixes | High | yes, **caused by my round 1 fix** (be76b6d0): reading the stored review meant the agent got only titles when the comment lagged | test: the gate list had no description or place | fixed: the agent's gate list carries each finding's place and Qodo's full description |
+| 6bc5fe96 Low-only reviews skip the gate report (still open) | High | yes: my round 1 fix gave the reason but not the type or place | test | fixed: each Low carries Qodo's type (read from its PR comment: the stored review has no type), place and first sentence |
+
+Red: `raw/04-pr90-round2-red.txt` (3 tests). Mutations: `raw/05-pr90-round2-mutations.txt`. `npm run test:unit`: 129/129.
+Problems caused by my own fixes so far: 1 (3be5f0ac).

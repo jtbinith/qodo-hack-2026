@@ -1,0 +1,3 @@
+gate list without descriptions: 1 #90 test(s) fail: ["✖ #90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description"]
+no types from the comment: 1 #90 test(s) fail: ["✖ #90 6bc5fe96: Qodo's type for each finding is read from its PR comment"]
+Lows without place: 2 #90 test(s) fail: ["✖ #90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description", '✖ #90 6bc5fe96: a Low flagged for the owner gives its type, place and reason']

@@ -182,7 +182,7 @@ test("#90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pus
 test('#90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title', () => {
   const lines = lib.lowsReport?.({ lows: [{ title: 'PR body says refunds work', action_level: 'informational', description: 'The posted #87 body states that a send is given back. A reader would take it as correct.' }] }) ?? '';
   assert.match(lines, /Low findings for you/);
-  assert.match(lines, /Low: PR body says refunds work: The posted #87 body states that a send is given back\./);
+  assert.match(lines, /Low · PR body says refunds work: The posted #87 body states that a send is given back\./);
   assert.equal(lib.lowsReport?.({ lows: [] }), '');
 });
 test('#90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met', () => {

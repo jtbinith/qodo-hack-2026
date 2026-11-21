@@ -18,7 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -311,7 +311,7 @@ function writeReview(s, q, asks, g) {
   const inline = allPages((page) => ghJson('api', `repos/${REPO}/pulls/${s.pr}/comments?per_page=100&page=${page}`)).filter((c) => c.user.login === QODO)
     .map((c) => `### ${c.path}:${c.line ?? c.original_line ?? ''}\n${c.body}`);
   putAgentFile(s, 'review.md', `# Review of PR #${s.pr} at ${s.head.slice(0, 7)}\n\n` +
-    (g ? `## Quality gate\nFix these (High or Medium, or a label the gate couldn't read), if valid:\n${listed(g.blocking).map((t) => `- ${t}`).join('\n') || 'none'}\n\nDon't fix these Lows. List them in your report for jtbinith:\n${listed(g.lows).map((t) => `- ${t}`).join('\n') || 'none'}\n\n` : '') +
+    (g ? gateSection(g, findingTypes(qodoReview(s.pr)?.body)) : '') +
     (q ? `## Qodo's open findings\n${q.open.map((t) => `- ${t}`).join('\n') || 'none'}\n\n## Qodo's review comment\n${q.body}\n\n## Qodo's inline comments\n${inline.join('\n\n') || 'none'}\n\n` : '') +
     (asks.length ? `## From jtbinith (/agent)\n${asks.map((a) => a.body.slice(7)).join('\n\n')}\n` : ''));
 }
@@ -368,16 +368,16 @@ function continueRun(n, s) {
       if (g.state === 'incomplete') throw new Stop(`${g.why}, so the gate can't be checked. Ask Qodo to review it again, then \`/agent retry\`.`);
       if (g.state === 'done') {
         event(n, `quality gate met on ${s.head.slice(0, 7)}: no open High or Medium findings, ${g.lows.length} Low flagged`);
-        return stop(n, s, L.done, `Quality gate met on ${s.head.slice(0, 7)}: no open High or Medium findings. PR #${s.pr} is ready for you to review and merge.${lowsReport(g)}`);
+        return stop(n, s, L.done, `Quality gate met on ${s.head.slice(0, 7)}: no open High or Medium findings. PR #${s.pr} is ready for you to review and merge.${lowsReport(g, findingTypes(q?.body))}`);
       }
       if (s.round >= LIMITS.reviewRounds)
-        throw new Stop(`${g.blocking.length} High or Medium findings still open after ${LIMITS.reviewRounds} review rounds: ${listed(g.blocking).join('; ')}. A disputed one stays open until you dismiss it in Qodo.${lowsReport(g)}`);
+        throw new Stop(`${g.blocking.length} High or Medium findings still open after ${LIMITS.reviewRounds} review rounds: ${listed(g.blocking).join('; ')}. A disputed one stays open until you dismiss it in Qodo.${lowsReport(g, findingTypes(q?.body))}`);
       s.round++; save(n, s);
       event(n, `Qodo reviewed ${s.head.slice(0, 7)}. Round ${s.round}: ${g.blocking.length} to fix (${listed(g.blocking).join('; ')}), ${g.lows.length} Low`);
       writeReview(s, q && q.reviewed === s.head ? q : null, [], g);
       const before = head(s);
       agent(n, s, `review-${s.round}`, `Unattended run. Handle the review of PR #${s.pr} using step 7 of the skill at .claude/skills/work-ticket/SKILL.md. The review is in .agent/review.md.`);
-      if (head(s) === before) throw new Stop(`The agent judged none of the ${g.blocking.length} High or Medium findings valid (its evidence is in the report below). A disputed finding stays open until you decide: dismiss it in Qodo, or comment \`/agent …\` on PR #${s.pr}.${lowsReport(g)}`);
+      if (head(s) === before) throw new Stop(`The agent judged none of the ${g.blocking.length} High or Medium findings valid (its evidence is in the report below). A disputed finding stays open until you decide: dismiss it in Qodo, or comment \`/agent …\` on PR #${s.pr}.${lowsReport(g, findingTypes(q?.body))}`);
       checkAndPush(n, s, `review round ${s.round}`);
     }
   }
