@@ -160,15 +160,29 @@ export const severityOf = (f) => SEVERITY[f.action_level] || 'unknown';
 // skipped, partial or read only in part: never counts as done), 'fix' (an open High, Medium or
 // unreadable finding), or 'done' (only Lows open, and they are listed for the owner).
 // A finding with a label or status the gate can't read blocks: it is never treated as Low.
-export function gateVerdict(read, head) {
+export function gateVerdict(read, head, { prHead } = {}) {
+  if (prHead && prHead !== head) return { state: 'moved', why: `the PR's head is ${prHead.slice(0, 7)}, not ${head.slice(0, 7)}, the commit the runner pushed and Qodo reviewed` };
   if (read?.readError) return { state: 'wait', why: `Qodo's review couldn't be read (${read.readError})` };
   const r = read?.review_session;
   if (!r || r.commit_sha !== head || r.status === 'started') return { state: 'wait', why: `Qodo hasn't finished a review of ${head.slice(0, 7)} yet` };
   if (r.status !== 'completed') return { state: 'incomplete', why: `Qodo's review of ${head.slice(0, 7)} was ${r.status}` };
   if (r.review_complete !== true) return { state: 'incomplete', why: `Qodo's review of ${head.slice(0, 7)} is not complete` };
   if (read.qar_operation_result_truncated) return { state: 'incomplete', why: "Qodo's findings were only read in part" };
-  const open = (read.findings || []).filter((f) => !CLOSED.has(f.attribution_status));
+  if (!Array.isArray(read.findings) || (Number.isInteger(read.finding_count) && read.finding_count !== read.findings.length))
+    return { state: 'incomplete', why: `Qodo's read claims ${read.finding_count ?? '?'} findings but returned ${Array.isArray(read.findings) ? read.findings.length : 'none'}` };
+  const open = read.findings.filter((f) => !CLOSED.has(f.attribution_status));
   const unreadable = (f) => !OPEN.has(f.attribution_status) || severityOf(f) === 'unknown';
   const blocking = open.filter((f) => unreadable(f) || severityOf(f) !== 'Low'), lows = open.filter((f) => !blocking.includes(f));
   return blocking.length ? { state: 'fix', blocking, lows } : { state: 'done', blocking, lows };
 }
+
+// The Lows the gate flags for the owner: each with what Qodo says it is (its first sentence), so the
+// owner can decide without opening Qodo. Empty when there are none.
+export function lowsReport(g) {
+  if (!g.lows.length) return '';
+  const first = (t) => ((t || '').replace(/\s+/g, ' ').trim().split(/(?<=\.)\s/)[0] || '').slice(0, 240);
+  return '\n\n**Low findings for you** (not fixed, by the quality gate):\n' +
+    g.lows.map((f) => `- ${severityOf(f)}: ${decodeEntities(f.title)}: ${decodeEntities(first(f.description))}`).join('\n');
+}
+// The first line of the runner's comment on the ticket. A stopped run says NOT DONE first.
+export const stopTitle = (label) => (label === 'agent-done' ? '**Factory run finished.**' : '**NOT DONE.** The factory run stopped and needs you.');
