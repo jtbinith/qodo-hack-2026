@@ -415,18 +415,21 @@ try {
   const [cname, cbytes] = await C.evaluate(async () => { const f = [...window.__t.files.values()][0]; return [f.name, [...new Uint8Array(await f.arrayBuffer())]]; });
   check(!!expected[cname] && sha(Buffer.from(cbytes)) === expected[cname], `late guest downloaded ${cname} from B byte-identical`);
 
-  // a device whose key is late: in a fresh room, B holds back its key for 11 s after A's
-  // arrives, so A's print to B is dropped at 10 s. When the key comes, A must announce the
-  // print again and B must end up with it (S1.3). Both run relay-only, even in the direct run:
-  // holding the key doesn't stop a direct link, which could deliver the print without one
-  const KEY_LATE = 11000;
-  const holdKey = (late) => {   // runs in B's page before the app: wrap the app's signal lane once it exists
-    let t, heard = 0; const held = [];
+  // a device whose key is late: in a fresh room, B holds back its key until A has given up on its
+  // print to B, so the print is dropped. When the key comes, A must announce the print again and B
+  // must end up with it (S1.3). B releases the key when the test sees A's drop, not after a fixed
+  // time: a fixed 11 s raced A's 10 s give-up, which starts only when A's presence lists B, and
+  // presence can arrive more than a second after B hears A's key (#92). Both run relay-only, even
+  // in the direct run: holding the key doesn't stop a direct link, which could deliver the print without one
+  const KEY_MAX = 40000;   // B releases its key by itself after this, so a broken give-up can't hang the test
+  const holdKey = (max) => {   // runs in B's page before the app: wrap the app's signal lane once it exists
+    let t, armed = false; const held = [];
     Object.defineProperty(window, '__t', { configurable: true, get: () => t, set(v) {
       t = v; const sig = v.net.signal, on = v.peers.onSignal;
+      window.__releaseKey = () => { if (window.__keySent) return; window.__printsAtKey = [...t.prints.keys()]; window.__keySent = Date.now(); v.net.signal = sig; held.splice(0).forEach(([to, x]) => sig(to, x)); };
       v.net.signal = (to, d) => (d?.pub && !window.__keySent ? held.push([to, d]) : sig(to, d));
       v.peers.onSignal = (from, d) => {
-        if (d?.pub && !heard) { heard = Date.now(); setTimeout(() => { window.__printsAtKey = [...t.prints.keys()]; window.__keySent = Date.now(); v.net.signal = sig; held.splice(0).forEach(([to, x]) => sig(to, x)); }, late); }
+        if (d?.pub && !armed) { armed = true; window.__heardKey = Date.now(); setTimeout(() => window.__releaseKey(), max); }
         return on(from, d);
       };
     } });
@@ -434,16 +437,21 @@ try {
   const late = code();
   const A2 = await device(900, 600, { at: late, relay: true });
   const dropped = [];
-  A2.on('console', (m) => { if (m.text().startsWith('dropped message to')) dropped.push(m.text()); });
+  A2.on('console', (m) => { if (m.text().startsWith('dropped message to')) dropped.push({ text: m.text(), at: Date.now() }); });
   await until(A2, () => window.__t && window.__t.net.status === 'live');
   await A2.setInputFiles('#pick', [files[0]]);
   await until(A2, () => window.__t.prints.size === 1);
   const pid = await A2.evaluate(() => [...window.__t.prints.keys()][0]);
-  const B2 = await device(390, 700, { at: late, relay: true, init: `(${holdKey})(${KEY_LATE})` });
+  const B2 = await device(390, 700, { at: late, relay: true, init: `(${holdKey})(${KEY_MAX})` });
   const b2id = await until(B2, () => window.__t && window.__t.id).then((h) => h.jsonValue());
-  await until(B2, () => window.__keySent, null, KEY_LATE + 20000);
+  // wait for A to give up on B (its 10 s SEND_TIMEOUT, from whenever A started sending), then release B's key
+  const gaveUp = Date.now() + KEY_MAX;
+  while (!dropped.some((d) => d.text.includes(b2id)) && Date.now() < gaveUp) await new Promise((r) => setTimeout(r, 200));
+  await B2.evaluate(() => window.__releaseKey());
+  await until(B2, () => window.__keySent, null, 5000);
+  const drop = dropped.find((d) => d.text.includes(b2id));
   const early = await B2.evaluate((pid) => window.__printsAtKey.includes(pid), pid);   // B's prints as the key left, not now
-  check(!early && dropped.some((d) => d.includes(b2id)), `A dropped its print to B while B's key was late (${dropped.find((d) => d.includes(b2id)) || 'nothing dropped'})`);
+  check(!early && !!drop, `A dropped its print to B while B's key was late (${drop?.text || 'nothing dropped within ' + KEY_MAX / 1000 + ' s'})`);
   const heard = await until(B2, (pid) => window.__t.prints.has(pid), pid, 20000).then(() => true, () => false);
   const took = await B2.evaluate(() => ((Date.now() - window.__keySent) / 1000).toFixed(1));
   check(heard, `A announced the print again once B's key came, and B has it (${took} s after the key)`);

@@ -1,0 +1,12 @@
+== old delay=0
+PASS A dropped its print to B while B's key was late (dropped message to 7hsv0n11xvgfo no progress from 7hsv0n11xvgfo for 10 s)
+PASS A announced the print again once B's key came, and B has it (0.1 s after the key)
+== old delay=2500
+PASS A dropped its print to B while B's key was late (dropped message to 19yiglk10w3xo6 no progress from 19yiglk10w3xo6 for 10 s)
+PASS A announced the print again once B's key came, and B has it (0.1 s after the key)
+== new delay=0
+PASS A dropped its print to B while B's key was late (dropped message to lpio9fyfums0 no progress from lpio9fyfums0 for 10 s)
+PASS A announced the print again once B's key came, and B has it (0.1 s after the key)
+== new delay=2500
+PASS A dropped its print to B while B's key was late (dropped message to 1rhb5jav5yndd no progress from 1rhb5jav5yndd for 10 s)
+PASS A announced the print again once B's key came, and B has it (0.1 s after the key)
