@@ -27,13 +27,22 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   };
   const emit = (ev, data) => s.listeners.forEach((f) => f(ev, data));
   const send = (event, payload) => ch.send({ type: 'broadcast', event, payload });
+  const earlyLayouts = new Map();   // device id -> the latest layout it sent while it wasn't this device's time keeper (#61)
 
   function electLeader() {
     const all = Object.entries(s.peers).sort(([a, p], [b, q]) => (p.joinedAt - q.joinedAt) || (a < b ? -1 : 1));
     const prev = s.leader;
     s.leader = all.length ? all[0][0] : id;
     if (s.leader === id) { s.offset = 0; s.rtt = 0; }
-    if (prev !== s.leader) { s.samples = []; emit('leader', s.leader); if (s.leader === id) sendLayout(); }
+    if (prev !== s.leader) {
+      s.samples = []; emit('leader', s.leader);
+      // a layout the new time keeper sent before this device heard it took over (#61). It is
+      // checked again against who is here now, and used only if it still passes
+      const early = earlyLayouts.get(s.leader);
+      earlyLayouts.clear();
+      if (s.leader === id) sendLayout();
+      else if (early && isValidJoins(early, [...Object.keys(s.peers), id])) { s.joins = early; emit('layout'); }
+    }
   }
 
   ch.on('presence', { event: 'sync' }, () => {
@@ -46,6 +55,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     }
     // forget joins to devices that have left, so layouts never mention absent devices
     s.joins = s.joins.filter((j) => s.peers[j.a] && s.peers[j.b]);
+    for (const k of earlyLayouts.keys()) if (!s.peers[k]) earlyLayouts.delete(k);   // nothing kept from devices that have left
     electLeader();
     if (s.leader === id) sendLayout();
     emit('peers', s.peers);
@@ -146,9 +156,12 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   ch.on('broadcast', { event: 'push' }, ({ payload }) => onPush(payload));
   ch.on('broadcast', { event: 'layout' }, ({ payload }) => {
     // only the current leader's layout counts, and only if it is well-formed
-    if (s.leader === id || payload?.from !== s.leader) return;
-    if (!isValidJoins(payload.joins, [...Object.keys(s.peers), id])) return;
-    s.joins = payload.joins; emit('layout');
+    if (s.leader === id || !isValidJoins(payload?.joins, [...Object.keys(s.peers), id])) return;
+    if (payload.from === s.leader) { s.joins = payload.joins; earlyLayouts.clear(); emit('layout'); return; }
+    // From another device in the room, it isn't used. It is kept, one per device, in case this
+    // device hasn't yet heard that the sender took over (#61): electLeader uses it if so. A layout
+    // from the current time keeper replaces them all, and any change of time keeper clears them
+    if (typeof payload.from === 'string' && Object.hasOwn(s.peers, payload.from) && payload.from !== id) earlyLayouts.set(payload.from, payload.joins);
   });
   // join results count only from the current time keeper, as layouts do. This stops honest
   // mistakes and stale time keepers, not forgery: anyone can write `from` until #24
