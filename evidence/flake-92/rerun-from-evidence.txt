@@ -1,0 +1,5 @@
+TIMING A's presence lists B 937 ms after B heard A's key (delay 0)
+PASS A dropped its print to B while B's key was late (dropped message to 1ninfpc1vc6ezk no progress from 1ninfpc1vc6ezk 
+PASS A announced the print again once B's key came, and B has it (0.1 s after the key)
+PASS A dropped its print to B while B's key was late (dropped message to m351q8bbzui5 no progress from m351q8bbzui5 for 
+PASS A announced the print again once B's key came, and B has it (0.0 s after the key)

@@ -1,0 +1,15 @@
+relay 1 exit=0 72s fails=0 latekey=PASS A
+relay 2 exit=0 77s fails=0 latekey=PASS A
+relay 3 exit=0 75s fails=0 latekey=PASS A
+relay 4 exit=0 73s fails=0 latekey=PASS A
+relay 5 exit=0 73s fails=0 latekey=PASS A
+relay 6 exit=1 110s fails=1 latekey=
+relay 7 exit=0 77s fails=0 latekey=PASS A
+relay 8 exit=0 74s fails=0 latekey=PASS A
+relay 9 exit=0 75s fails=0 latekey=PASS A
+relay 10 exit=0 76s fails=0 latekey=PASS A
+direct 1 exit=0 71s fails=0 latekey=PASS A
+direct 2 exit=0 75s fails=0 latekey=PASS A
+direct 3 exit=0 69s fails=0 latekey=PASS A
+direct 4 exit=0 68s fails=0 latekey=PASS A
+direct 5 exit=0 68s fails=0 latekey=PASS A
