@@ -148,3 +148,27 @@ export function unpagedReads(src) {
   });
   return [...new Set(bad)];
 }
+
+// The quality gate (work-ticket skill, "Quality gate"), decided from Qodo's stored review
+// (`qodo read pr-review-session findings`), read fresh each time rather than from a saved note.
+// Qodo's action levels are its severity labels, as its PR comments show them (#87, #89).
+export const SEVERITY = { action_required: 'High', remediation_recommended: 'Medium', informational: 'Low' };
+const OPEN = new Set(['pending', 'partial_implementation', 'not_implemented', 'focus_areas_edited']);
+const CLOSED = new Set(['implemented', 'full_implementation', 'dismissed', 'detected_after_merge', 'outdated']);
+export const severityOf = (f) => SEVERITY[f.action_level] || 'unknown';
+// state: 'wait' (no finished review of this head yet), 'incomplete' (Qodo's review of the head was
+// skipped, partial or read only in part: never counts as done), 'fix' (an open High, Medium or
+// unreadable finding), or 'done' (only Lows open, and they are listed for the owner).
+// A finding with a label or status the gate can't read blocks: it is never treated as Low.
+export function gateVerdict(read, head) {
+  if (read?.readError) return { state: 'wait', why: `Qodo's review couldn't be read (${read.readError})` };
+  const r = read?.review_session;
+  if (!r || r.commit_sha !== head || r.status === 'started') return { state: 'wait', why: `Qodo hasn't finished a review of ${head.slice(0, 7)} yet` };
+  if (r.status !== 'completed') return { state: 'incomplete', why: `Qodo's review of ${head.slice(0, 7)} was ${r.status}` };
+  if (r.review_complete !== true) return { state: 'incomplete', why: `Qodo's review of ${head.slice(0, 7)} is not complete` };
+  if (read.qar_operation_result_truncated) return { state: 'incomplete', why: "Qodo's findings were only read in part" };
+  const open = (read.findings || []).filter((f) => !CLOSED.has(f.attribution_status));
+  const unreadable = (f) => !OPEN.has(f.attribution_status) || severityOf(f) === 'unknown';
+  const blocking = open.filter((f) => unreadable(f) || severityOf(f) !== 'Low'), lows = open.filter((f) => !blocking.includes(f));
+  return blocking.length ? { state: 'fix', blocking, lows } : { state: 'done', blocking, lows };
+}

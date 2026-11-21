@@ -162,3 +162,7 @@ test('a truncated read is not enough to call it done', () => {
   const r = fx('pr-87');
   assert.equal(gate({ ...r, qar_operation_result_truncated: true }, HEAD(r)).state, 'incomplete');
 });
+test("a failed read of Qodo's review is never taken as clean: wait, and say why", () => {
+  const g = gate({ readError: "error: unknown option '--pr-url'" }, 'a'.repeat(40));
+  assert.equal(g.state, 'wait'); assert.match(g.why, /couldn't be read.*unknown option/);
+});
