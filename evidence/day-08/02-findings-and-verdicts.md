@@ -65,5 +65,16 @@ Totals: problems caused by my own fixes: 2 (4209e603 in round 1, 240d001d in rou
 
 ## Final state of PR #89
 Qodo re-attributed b36e79c1 and 6e7378d4 as resolved by b757dd4 (`raw/H-pr89-after-b757dd4.json`).
+For 6e7378d4 that covers `repro/` only: every script there runs from the repo. `blind/` is kept as
+received, so its harness still imports the blind reviewer's own scrubbed copy (`../code/web/net.js`) and
+doesn't run from the repo; `repro/r1`–`r3` are the runnable copies (`repro/README.md`).
 1baf3c69 dismissed as deferred (`raw/I-dismiss-1baf3c69.json`), 4bf90ebe dismissed as deferred, 07c384af
 (local review only) unchanged. Follow-ups posted on #68: issuecomment-7067493146.
+
+## Last local review before pushing (18:47Z, trace 062af937…, base b757dd4, evidence-only commit)
+- New 98ac0a5b "Final-state note says a broken repro harness is fixed": **partly right**. `blind/harness.mjs`
+  does still import `../code/web/net.js`, on purpose (kept as received, README says so), and the note didn't
+  say that; now it does. But it also says "q2/q3 … still fail at load time": wrong, `q2` and `q3` are in
+  `repro/` and run (`B leader A | joins in layout []`, `A heard, in order: joined@3000, nomatch@3000`).
+- 240d001d shown as **still open: wrong**. The push-time change that caused it was undone before b757dd4
+  (`grep -c PUSH_STEP web/net.js` = 0; `repro/q7-clock-correction.mjs` prints `5000, 0, 0`).
