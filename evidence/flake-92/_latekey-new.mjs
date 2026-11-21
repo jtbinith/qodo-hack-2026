@@ -14,9 +14,9 @@
 import { chromium } from 'playwright';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { serve } from './serve.mjs';
-import { iphoneJpeg, heicFile, exifr, sizedJpeg } from './jpeg-fixtures.mjs';
-import { solveLayout, overlapCount } from '../web/layout.js';
+import { serve } from '../../tests/serve.mjs';
+import { iphoneJpeg, heicFile, exifr, sizedJpeg } from '../../tests/jpeg-fixtures.mjs';
+import { solveLayout, overlapCount } from '../../web/layout.js';
 
 const RELAY = process.argv.includes('--relay');
 const server = await serve(0);
