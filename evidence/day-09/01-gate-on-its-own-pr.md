@@ -41,3 +41,9 @@ All 6 earlier findings re-attributed as implemented by Qodo. 2 new Mediums, **bo
 **Gate: NOT DONE.** Two valid Mediums are open, and the stopping rule fired: two reviews in a row
 (2 and 3) found problems caused by my previous fix. Problems caused by my own fixes: 3.
 Handed back to the owner.
+
+## The owner's decision, then the gate itself on #90
+The owner chose to defer both: filed #91, and dismissed a8f66868 and 618be2c6 in Qodo as deferred
+with the reason on the PR (`raw/dismiss-*.json`). Then the gate's own code, run on PR #90's live
+state (`raw/06-gate-on-pr90-after-dismissals.txt`): head b8b2eaf, review b8b2eaf completed and
+complete, **gate: done**, 0 blocking, 0 Low. Merged after this evidence-only commit.

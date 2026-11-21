@@ -1,0 +1,2 @@
+{"results":{"a8f66868-3a85-4f5e-b6b3-2341001ce6e3":{"status":"dismissed","reconciled":true,"failed_effects":[],"retryable":false,"reason":"deferred","explanation":"Deferred to #91: show 'type not shown' when the comment doesn't cover the head. Stopping rule fired: two reviews in a row found problems caused by the previous fix.","detail":null}}}
+  trace b79ecdda2400722ad549148dd6875e4f

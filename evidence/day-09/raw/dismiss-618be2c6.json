@@ -1,0 +1,2 @@
+{"results":{"618be2c6-d438-4bf6-8407-ffe571cc5fc8":{"status":"dismissed","reconciled":true,"failed_effects":[],"retryable":false,"reason":"deferred","explanation":"Deferred to #91: give the full description, not the first sentence. Stopping rule fired: two reviews in a row found problems caused by the previous fix.","detail":null}}}
+  trace 296237e06389cc6953b65232df61a1de
