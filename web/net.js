@@ -2,12 +2,13 @@
 // The server only relays messages. One device (the earliest to arrive) is the "time
 // keeper": everyone syncs their clock to it, and it decides which orb pushes pair up.
 import { addJoins, matchPushes, isValidJoins } from './layout.js';
-import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal } from './check.js';
+import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk } from './check.js';
 
 const SUPABASE_URL = 'https://aimoujzdcaxkejraattw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_D8DGNTiXWHRFaoE2ae3ACg_8G8Y_yDS'; // public by design
 
 const WINDOW = 2000; // two pushes this close in time can pair (ms)
+const LAYOUT_GAP = 1000; // the time keeper answers layout asks at most once in this long (ms)
 const wall = () => performance.timeOrigin + performance.now();
 
 // `onSignal` (optional) receives messages sent with s.signal(to, data): a lane for
@@ -42,6 +43,10 @@ export function joinRoom({ room, id, name, size, onSignal }) {
       earlyLayouts.clear();
       if (s.leader === id) sendLayout();
       else if (early && isValidJoins(early, [...Object.keys(s.peers), id])) { s.joins = early; emit('layout'); }
+      // Nothing usable was kept: a late layout from the old time keeper may have replaced it
+      // (Qodo on #95). Ask the new time keeper to send its layout again. On a first election
+      // there's no need: the time keeper sends its layout when it hears this device arrive
+      else if (prev !== null) send('layoutask', { from: id, to: s.leader });
     }
   }
 
@@ -163,6 +168,15 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     // from the current time keeper replaces them all, and any change of time keeper clears them
     if (typeof payload.from === 'string' && Object.hasOwn(s.peers, payload.from) && payload.from !== id) earlyLayouts.set(payload.from, payload.joins);
   });
+  // The time keeper answers asks for its layout by sending it to the whole room, at most once
+  // every LAYOUT_GAP, so asks can't make it flood the room. An ask that comes while an answer is
+  // waiting is covered by that answer, which goes out after it
+  let answeredAt = -Infinity, answerTimer = null;
+  ch.on('broadcast', { event: 'layoutask' }, ({ payload }) => {
+    if (!validLayoutAsk(payload) || s.leader !== id || payload.to !== id || !Object.hasOwn(s.peers, payload.from) || answerTimer) return;
+    answerTimer = setTimeout(() => { answerTimer = null; answeredAt = performance.now(); sendLayout(); },
+      Math.max(0, answeredAt + LAYOUT_GAP - performance.now()));
+  });
   // join results count only from the current time keeper, as layouts do. This stops honest
   // mistakes and stale time keepers, not forgery: anyone can write `from` until #24
   const fromLeader = (payload) => s.leader !== id && payload?.from === s.leader;
@@ -183,7 +197,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => { if (validSignal(payload) && payload.to === id) onSignal(payload.from, payload.data); });
   s.signal = (to, data) => send('sig', { from: id, to, data });
   s.on = (f) => s.listeners.add(f);
-  s.leave = () => { clearInterval(pingTimer); waits.forEach(clearTimeout); waits.clear(); client.removeChannel(ch); };
+  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer);waits.forEach(clearTimeout); waits.clear(); client.removeChannel(ch); };
 
   ch.subscribe(async (st) => {
     if (st === 'SUBSCRIBED') {
