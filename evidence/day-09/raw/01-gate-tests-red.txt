@@ -1,0 +1,266 @@
+✔ a unit test name is found (1.100626ms)
+✔ a check() message on the next line is found (the #41 round 1 case) (0.278292ms)
+✔ a string inside the check() condition is not taken as its name (0.1145ms)
+✔ a template message counts up to its first ${…} (0.095819ms)
+✔ removed lines and short names are ignored (0.091497ms)
+✔ a named FAIL line counts as red, a crash in a named unit test does not (0.22504ms)
+✔ Qodo's escaped titles are decoded (0.132885ms)
+✔ /agent retry is told apart from an instruction (0.137803ms)
+✔ a regular expression with a bracket in the condition is skipped (0.137288ms)
+✔ a check() in one hunk is not closed by an unrelated hunk (0.145852ms)
+✔ a comment inside a wrapped check() is skipped (0.109495ms)
+✔ a retry pushes only when there is something new, otherwise it waits for Qodo again (0.066082ms)
+✔ an /agent instruction the agent makes no change for stops and asks the owner, retry or not (Qodo on 0191b36) (0.137117ms)
+✔ an old stop file is cleared before each agent run and when the owner reopens a run (#41 at 09:28) (0.054903ms)
+✔ what to publish is read from the PR itself, so old runs and half-finished posts are not repeated (Qodo on 829263e) (0.148171ms)
+✔ a comment over a limit is still marked read, so it cannot stop the run again on every tick (Qodo on 829263e) (0.134881ms)
+✔ every page is read, so a list past 100 is complete (0.060229ms)
+✔ a retry has its own limit, separate from instructions (0.035355ms)
+✔ every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66) (0.605316ms)
+✔ a list read with a page number but no allPages is still one page (Qodo on #67) (0.083847ms)
+✖ Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89) (0.638424ms)
+✖ #87 at its last commit: everything fixed or dismissed by the owner, so the gate is met (0.321615ms)
+✖ #89 at 696f158: 3 open Mediums block and the open Low is only flagged (0.165025ms)
+✖ #65: three open Highs block (0.137525ms)
+✖ #64: Qodo skipped its review of the head, so it isn't done even before counting findings (0.132267ms)
+✖ #86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too) (0.135716ms)
+✖ a review of an older commit, or one still running, means wait (0.125231ms)
+✖ an unknown label or status blocks: a label the gate cannot read is never treated as Low (0.165305ms)
+✖ a canary: one planted open Medium on a finished review means not done (0.147788ms)
+✖ a truncated read is not enough to call it done (0.131137ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 20
+ℹ fail 10
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 56.666821
+
+✖ failing tests:
+
+test at tests/runner-lib.test.mjs:119:1
+✖ Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89) (0.638424ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + undefined
+  - {
+  -   action_required: 'High',
+  -   informational: 'Low',
+  -   remediation_recommended: 'Medium'
+  - }
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:120:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { action_required: 'High', remediation_recommended: 'Medium', informational: 'Low' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:122:1
+✖ #87 at its last commit: everything fixed or dismissed by the owner, so the gate is met (0.321615ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'done'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:124:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'done',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:126:1
+✖ #89 at 696f158: 3 open Mediums block and the open Low is only flagged (0.165025ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== 'fix'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:128:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'fix',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:132:1
+✖ #65: three open Highs block (0.137525ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== 'fix'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:134:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'fix',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:136:1
+✖ #64: Qodo skipped its review of the head, so it isn't done even before counting findings (0.132267ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'incomplete'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:138:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'incomplete',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:140:1
+✖ #86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too) (0.135716ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'incomplete'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:142:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'incomplete',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:144:1
+✖ a review of an older commit, or one still running, means wait (0.125231ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'wait'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:146:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'wait',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:150:1
+✖ an unknown label or status blocks: a label the gate cannot read is never treated as Low (0.165305ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== 'fix'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:152:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'fix',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:156:1
+✖ a canary: one planted open Medium on a finished review means not done (0.147788ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== 'fix'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:159:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'fix',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:161:1
+✖ a truncated read is not enough to call it done (0.131137ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'incomplete'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:163:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'incomplete',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

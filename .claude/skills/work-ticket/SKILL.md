@@ -49,11 +49,42 @@ You get an issue number. Read the ticket from GitHub with `gh issue view`, never
 ## 7. Handle the review
 Started separately, for example "handle the review of #N".
 - Read the findings: `gh pr view <PR> --json comments,reviews` for Qodo's summary and `gh api repos/{owner}/{repo}/pulls/<PR>/comments` for inline comments. Use `--json`: the plain `--comments` form fails here and can print nothing while still exiting 0.
-- For each Qodo finding, say whether it is confirmed, wrong or out of scope, checked against the code and the ticket. Note anything the ticket asked for that the review didn't check.
-- Fix confirmed findings test first: a `test:` commit, then a `fix:` commit, for each finding. Rerun `npm test`. Stop before pushing, as in step 6.
+- For each Qodo finding, note its type and severity (see **Quality gate**) and say whether it is valid, wrong or out of scope, checked against the code and the ticket. Note anything the ticket asked for that the review didn't check.
+- Fix the findings the gate says to fix, test first: a `test:` commit, then a `fix:` commit, for each finding. Don't fix Lows: flag them. Rerun `npm test`. Stop before pushing, as in step 6.
+- End with the gate report (see **Quality gate**).
 - Say whether the ticket itself was wrong.
 - Decide whether a finding calls for a rule in AGENTS.md, a change to this skill or more context for the reviewer. Propose the exact wording in your report. Don't make the change yourself. Only the user approves it. It goes in its own PR (never in a ticket's PR). It merges before the next ticket starts.
 - After the merge, move the card to **Done**.
+
+## Quality gate
+The task is done only when this gate is met. It applies to every review: Qodo Reviewer on uncommitted code and Qodo's review of a PR.
+
+**Qodo's labels.** Severity is the `action_level` from `qodo read pr-review-session findings` or `qodo review --json`, shown in Qodo's PR comment as High, Medium or Low:
+- `action_required` = **High**, `remediation_recommended` = **Medium**, `informational` = **Low**.
+- Type is Qodo's own: 🐞 Bug, 📘 Rule violation, 📎 Requirement gap, 📜 Skill insight. The gate treats every type the same at a given severity.
+- A label or status you can't read is **not** Low. Treat it as Medium and say so.
+
+**Fix:** every **valid High or Medium** finding, of any type, test first (step 7).
+**Flag, don't fix:** every **Low** finding. List each one under **Low findings for jtbinith** in your report, with its type and why it matters. Leave Low rule violations unchanged.
+
+**Valid** means you reproduced it against the code and the ticket: a failing test or a run with its output. If a High or Medium isn't valid, don't fix it and don't treat it as closed: give the evidence in your report. It stays open until jtbinith dismisses it in Qodo.
+
+**Not done** if any of these is true. Report the task as NOT DONE and say exactly what you need:
+- a valid High or Medium is still open, or a disputed one hasn't been decided by jtbinith
+- a check didn't run or didn't pass (`npm test`, direct and relay)
+- the latest **completed** review doesn't cover the final commit. For a PR, its review of the head must be complete: a skipped or partial review doesn't count.
+- the final review was a quick or partial one. A local review with `--fast`, or one where Qodo ran only some of its reviewers, is a checkpoint, never the final word: on #89 a quick local pass came back clean and Qodo's PR review then found 2 Mediums.
+- the loop stalls: 3 fix rounds, the same finding still open after its fix, or two reviews in a row that find problems your last fix caused (it happened twice on #89)
+
+**Report**, after the last review:
+| Finding | Type | Severity | Valid? (evidence) | What you did |
+|---|---|---|---|---|
+
+then **Low findings for jtbinith**, then **Gate met: yes / no**, and why.
+
+In an unattended run the runner checks this gate itself, from Qodo's stored review of the PR head (not from your report). It marks the run done only when no High or Medium is open and the review of the head is complete.
+
+The gate is in this skill, not in AGENTS.md: Qodo reads AGENTS.md as review rules, so a gate there would change what the reviewer flags.
 
 ## Unattended runs
 When the prompt says this is an unattended run, `scripts/agent-watch.mjs` started you from a `ready-for-agent` label. Nobody is watching, and you have no GitHub access, so:
@@ -66,7 +97,7 @@ When the prompt says this is an unattended run, `scripts/agent-watch.mjs` starte
 - If the runner's own `npm test` fails, its last 150 lines are in `.agent/test-output.txt`. Find the step that failed there before deciding whether this branch caused it.
 - Write the PR title to `.agent/pr-title.txt` (Conventional Commits) and the PR description to `.agent/pr-body.md`, from `.github/pull_request_template.md`.
 - Write your report to `.agent/report.md`. Add an **Assumptions** section: anything you decided that the ticket didn't say. Put proposed rule or skill changes there too, as in step 7. Nobody can approve them during the run.
-- In step 7 the review is in `.agent/review.md`: Qodo's open findings and comments, and any `/agent` comment from jtbinith. It holds nothing from anyone else. Update `.agent/report.md` and `.agent/pr-body.md` with what you did.
+- In step 7 the review is in `.agent/review.md`: the gate's list (what to fix, which Lows to flag), Qodo's open findings and comments, and any `/agent` comment from jtbinith. It holds nothing from anyone else. Update `.agent/report.md` (with the gate report) and `.agent/pr-body.md` with what you did.
 
 ## Board
 Project 7 (owner jtbinith). To move ticket `<N>` to a column such as `In Progress`:

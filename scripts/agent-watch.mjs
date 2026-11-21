@@ -18,7 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -113,6 +113,17 @@ function qodoReview(pr) {
     .filter((t) => !t.startsWith('<s>') && !/Resolved/.test(t)).map((t) => decodeEntities(t.replace(/<[^>]+>/g, '').trim()));
   return { reviewed, open, body: c.body, at: Date.parse(c.updated_at) };   // when Qodo last updated its review
 }
+// Qodo's stored review of a PR, fresh from Qodo (a read: no code leaves the machine). The quality
+// gate decides from this, not from the agent's report. A failed read is reported, never taken as clean.
+// qodo lives in ~/.local/bin, which isn't on the systemd unit's PATH (scripts/systemd/)
+const QODO_BIN = process.env.QODO_BIN || join(homedir(), '.local/bin/qodo');
+// it also needs XDG_RUNTIME_DIR (its tool catalog lives there): without it `--pr-url` is "unknown"
+const QODO_ENV = { ...process.env, XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` };
+function qodoRead(pr) {
+  try { return JSON.parse(sh(QODO_BIN, ['read', 'pr-review-session', 'findings', '--pr-url', `https://github.com/${REPO}/pull/${pr}`, '--json'], { cwd: MAIN, env: QODO_ENV }).split('\n')[0]); }
+  catch (e) { return { readError: (e.stderr || e.message || '').toString().trim().split('\n')[0].slice(0, 200) }; }
+}
+const listed = (fs) => fs.map((f) => `${severityOf(f)}: ${decodeEntities(f.title)}`);
 const ownerAsks = (s) => issueComments(s.pr).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
 // what the owner's account did on GitHub: compared before and after every agent run
 const footprint = (s) => JSON.stringify({
@@ -234,7 +245,7 @@ function stop(n, s, label, why) {
   const report = s ? agentFile(s, 'report.md') : '', unchecked = label === L.done && s ? uncheckedCriteria(agentFile(s, 'pr-body.md')) : [];
   setLabels(n, [label, ...(unchecked.length ? [L.manual] : [])], [L.working, L.ready].filter((l) => has.includes(l)));
   const assumed = assumptions(report);
-  comment(n, `**Factory run ${label === L.done ? 'finished' : 'stopped and needs you'}.** ${why}\n\n` +
+  comment(n, `${stopTitle(label)} ${why}\n\n` +
     (unchecked.length ? `**Needs your check by hand** (the agent couldn't check these itself):\n${unchecked.map((u) => `- [ ] ${u}`).join('\n')}\n\n` : '') +
     (assumed ? `**Assumptions the agent made** (the ticket didn't say):\n${assumed}\n\n` : '') +
     (s ? `Agent runs: ${s.runs} · review rounds: ${s.round}/${LIMITS.reviewRounds} · instruction rounds: ${s.commentRounds}/${LIMITS.commentRounds} · retries: ${s.retryRounds || 0}/${LIMITS.retryRounds}` + (s.pr ? ` · PR #${s.pr}` : '') : '') +
@@ -296,10 +307,11 @@ function publish(n, s) {
 }
 
 // The review, from Qodo and the owner only, written to .agent/review.md for the agent to read.
-function writeReview(s, q, asks) {
+function writeReview(s, q, asks, g) {
   const inline = allPages((page) => ghJson('api', `repos/${REPO}/pulls/${s.pr}/comments?per_page=100&page=${page}`)).filter((c) => c.user.login === QODO)
     .map((c) => `### ${c.path}:${c.line ?? c.original_line ?? ''}\n${c.body}`);
   putAgentFile(s, 'review.md', `# Review of PR #${s.pr} at ${s.head.slice(0, 7)}\n\n` +
+    (g ? gateSection(g, findingTypes(qodoReview(s.pr)?.body)) : '') +
     (q ? `## Qodo's open findings\n${q.open.map((t) => `- ${t}`).join('\n') || 'none'}\n\n## Qodo's review comment\n${q.body}\n\n## Qodo's inline comments\n${inline.join('\n\n') || 'none'}\n\n` : '') +
     (asks.length ? `## From jtbinith (/agent)\n${asks.map((a) => a.body.slice(7)).join('\n\n')}\n` : ''));
 }
@@ -342,22 +354,30 @@ function continueRun(n, s) {
       if (afterOwnerRound({ committed: head(s) !== before }) === 'stop')
         throw new Stop(`The agent made no change for your /agent request. Its reasons are in the report below. Comment \`/agent retry\` on its own on PR #${s.pr} to re-run the checks.`);
       checkAndPush(n, s, 'owner comment');
-    } else if (!q || q.reviewed !== s.head) {
-      if ((Date.now() - (s.waitFrom || s.pushedAt)) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`Qodo hasn't reviewed ${s.head.slice(0, 7)} after ${LIMITS.reviewWaitMin} min.`);
-      if (DRY) { console.log(`DRY RUN would wait for Qodo's review of ${s.head.slice(0, 7)} (reviewed so far: ${q?.reviewed?.slice(0, 7) ?? 'none'})`); process.exit(0); }
-      sleep(LIMITS.reviewPollSec * 1000);
-    } else if (!q.open.length) {
-      event(n, `Qodo reviewed ${s.head.slice(0, 7)} ${Math.round((q.at - s.pushedAt) / 1000)} s after the push: no open findings`);
-      return stop(n, s, L.done, `Qodo has no open findings on ${s.head.slice(0, 7)}. PR #${s.pr} is ready for you to review and merge.`);
-    } else if (s.round >= LIMITS.reviewRounds) {
-      throw new Stop(`${q.open.length} Qodo findings still open after ${LIMITS.reviewRounds} review rounds: ${q.open.join('; ')}`);
     } else {
+      // the quality gate (work-ticket skill): every High and Medium fixed, Lows flagged for the owner.
+      // It reads Qodo's stored review and the PR's head fresh, not Qodo's rendered comment (which can lag).
+      const prHead = ghJson('api', `repos/${REPO}/pulls/${s.pr}`).head.sha;
+      const g = gateVerdict(qodoRead(s.pr), s.head, { prHead });
+      if (g.state === 'moved') throw new Stop(`${g.why}. Someone pushed to the branch outside the run, so the runner won't mark it done.`);
+      if (g.state === 'wait') {
+        if ((Date.now() - (s.waitFrom || s.pushedAt)) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why} after ${LIMITS.reviewWaitMin} min.`);
+        if (DRY) { console.log(`DRY RUN would wait: ${g.why}`); process.exit(0); }
+        sleep(LIMITS.reviewPollSec * 1000); continue;
+      }
+      if (g.state === 'incomplete') throw new Stop(`${g.why}, so the gate can't be checked. Ask Qodo to review it again, then \`/agent retry\`.`);
+      if (g.state === 'done') {
+        event(n, `quality gate met on ${s.head.slice(0, 7)}: no open High or Medium findings, ${g.lows.length} Low flagged`);
+        return stop(n, s, L.done, `Quality gate met on ${s.head.slice(0, 7)}: no open High or Medium findings. PR #${s.pr} is ready for you to review and merge.${lowsReport(g, findingTypes(q?.body))}`);
+      }
+      if (s.round >= LIMITS.reviewRounds)
+        throw new Stop(`${g.blocking.length} High or Medium findings still open after ${LIMITS.reviewRounds} review rounds: ${listed(g.blocking).join('; ')}. A disputed one stays open until you dismiss it in Qodo.${lowsReport(g, findingTypes(q?.body))}`);
       s.round++; save(n, s);
-      event(n, `Qodo reviewed ${s.head.slice(0, 7)} ${Math.round((q.at - s.pushedAt) / 1000)} s after the push. Round ${s.round}: ${q.open.length} open (${q.open.join('; ')})`);
-      writeReview(s, q, []);
+      event(n, `Qodo reviewed ${s.head.slice(0, 7)}. Round ${s.round}: ${g.blocking.length} to fix (${listed(g.blocking).join('; ')}), ${g.lows.length} Low`);
+      writeReview(s, q && q.reviewed === s.head ? q : null, [], g);
       const before = head(s);
       agent(n, s, `review-${s.round}`, `Unattended run. Handle the review of PR #${s.pr} using step 7 of the skill at .claude/skills/work-ticket/SKILL.md. The review is in .agent/review.md.`);
-      if (head(s) === before) throw new Stop(`The agent checked Qodo's ${q.open.length} open findings and judged none of them real (see its report). PR #${s.pr} needs your call.`);
+      if (head(s) === before) throw new Stop(`The agent judged none of the ${g.blocking.length} High or Medium findings valid (its evidence is in the report below). A disputed finding stays open until you decide: dismiss it in Qodo, or comment \`/agent …\` on PR #${s.pr}.${lowsReport(g, findingTypes(q?.body))}`);
       checkAndPush(n, s, `review round ${s.round}`);
     }
   }

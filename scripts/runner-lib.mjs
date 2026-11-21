@@ -148,3 +148,58 @@ export function unpagedReads(src) {
   });
   return [...new Set(bad)];
 }
+
+// The quality gate (work-ticket skill, "Quality gate"), decided from Qodo's stored review
+// (`qodo read pr-review-session findings`), read fresh each time rather than from a saved note.
+// Qodo's action levels are its severity labels, as its PR comments show them (#87, #89).
+export const SEVERITY = { action_required: 'High', remediation_recommended: 'Medium', informational: 'Low' };
+const OPEN = new Set(['pending', 'partial_implementation', 'not_implemented', 'focus_areas_edited']);
+const CLOSED = new Set(['implemented', 'full_implementation', 'dismissed', 'detected_after_merge', 'outdated']);
+export const severityOf = (f) => SEVERITY[f.action_level] || 'unknown';
+// state: 'wait' (no finished review of this head yet), 'incomplete' (Qodo's review of the head was
+// skipped, partial or read only in part: never counts as done), 'fix' (an open High, Medium or
+// unreadable finding), or 'done' (only Lows open, and they are listed for the owner).
+// A finding with a label or status the gate can't read blocks: it is never treated as Low.
+export function gateVerdict(read, head, { prHead } = {}) {
+  if (prHead && prHead !== head) return { state: 'moved', why: `the PR's head is ${prHead.slice(0, 7)}, not ${head.slice(0, 7)}, the commit the runner pushed and Qodo reviewed` };
+  if (read?.readError) return { state: 'wait', why: `Qodo's review couldn't be read (${read.readError})` };
+  const r = read?.review_session;
+  if (!r || r.commit_sha !== head || r.status === 'started') return { state: 'wait', why: `Qodo hasn't finished a review of ${head.slice(0, 7)} yet` };
+  if (r.status !== 'completed') return { state: 'incomplete', why: `Qodo's review of ${head.slice(0, 7)} was ${r.status}` };
+  if (r.review_complete !== true) return { state: 'incomplete', why: `Qodo's review of ${head.slice(0, 7)} is not complete` };
+  if (read.qar_operation_result_truncated) return { state: 'incomplete', why: "Qodo's findings were only read in part" };
+  if (!Array.isArray(read.findings) || (Number.isInteger(read.finding_count) && read.finding_count !== read.findings.length))
+    return { state: 'incomplete', why: `Qodo's read claims ${read.finding_count ?? '?'} findings but returned ${Array.isArray(read.findings) ? read.findings.length : 'none'}` };
+  const open = read.findings.filter((f) => !CLOSED.has(f.attribution_status));
+  const unreadable = (f) => !OPEN.has(f.attribution_status) || severityOf(f) === 'unknown';
+  const blocking = open.filter((f) => unreadable(f) || severityOf(f) !== 'Low'), lows = open.filter((f) => !blocking.includes(f));
+  return blocking.length ? { state: 'fix', blocking, lows } : { state: 'done', blocking, lows };
+}
+
+// Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
+// doesn't carry it; Qodo's PR comment shows it after each numbered title.
+export function findingTypes(commentBody) {
+  const text = decodeEntities((commentBody || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
+  const out = {};
+  for (const m of text.matchAll(/\d+\.\s+(.+?)\s+(?:🐞|📘|📎|📜|🔗) (Bug|Rule violation|Requirement gap|Skill insight|Cross-repo conflict)\b/gu)) out[m[1].trim()] = m[2];
+  return out;
+}
+const where = (f) => (f.location?.file_path ? ` (${f.location.file_path}${f.location.start_line ? `:${f.location.start_line}` : ''})` : '');
+const firstSentence = (t) => ((t || '').replace(/\s+/g, ' ').trim().split(/(?<=\.)\s/)[0] || '').slice(0, 240);
+const named = (f, types) => { const t = decodeEntities(f.title); return `${severityOf(f)} · ${types[t] ? `${types[t]} · ` : ''}${t}${where(f)}`; };
+// The Lows the gate flags for the owner: each with its type, place and what Qodo says it is (its
+// first sentence), so the owner can decide without opening Qodo. Empty when there are none.
+export function lowsReport(g, types = {}) {
+  if (!g.lows.length) return '';
+  return '\n\n**Low findings for you** (not fixed, by the quality gate):\n' +
+    g.lows.map((f) => `- ${named(f, types)}: ${decodeEntities(firstSentence(f.description))}`).join('\n');
+}
+// The gate's part of the agent's review file: each finding to fix in full (place and Qodo's whole
+// description), even when Qodo's rendered comment hasn't caught up yet, and the Lows to flag.
+export function gateSection(g, types = {}) {
+  const full = (f) => `### ${named(f, types)}\n${decodeEntities(f.description || '(no description in Qodo\'s review)')}`;
+  return `## Quality gate\nFix these if valid (High or Medium, or a label the gate couldn't read):\n\n${g.blocking.map(full).join('\n\n') || 'none'}\n\n` +
+    `Don't fix these Lows. List each in your report for jtbinith:\n${g.lows.map((f) => `- ${named(f, types)}: ${decodeEntities(firstSentence(f.description))}`).join('\n') || 'none'}\n\n`;
+}
+// The first line of the runner's comment on the ticket. A stopped run says NOT DONE first.
+export const stopTitle = (label) => (label === 'agent-done' ? '**Factory run finished.**' : '**NOT DONE.** The factory run stopped and needs you.');

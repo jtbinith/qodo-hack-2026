@@ -110,3 +110,102 @@ test('a list read with a page number but no allPages is still one page (Qodo on 
   assert.equal(reads("const r = ghJson('issue', 'list', '-R', REPO, '--limit', '1', '--json', 'number');"), 0);
   assert.equal(reads("const t = ghJson('api', `repos/${REPO}/issues/${n}`);"), 0);   // one ticket, not a list
 });
+
+// The quality gate (work-ticket skill, "Quality gate"), on Qodo's stored reviews of real PRs
+// (`qodo read pr-review-session findings`, trimmed to the fields the gate reads).
+const fx = (name) => JSON.parse(readFileSync(new URL(`./fixtures/qodo/${name}.json`, import.meta.url)));
+const HEAD = (r) => r.review_session.commit_sha;
+const gate = (...a) => lib.gateVerdict?.(...a) ?? {};
+test("Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89)", () => {
+  assert.deepEqual(lib.SEVERITY, { action_required: 'High', remediation_recommended: 'Medium', informational: 'Low' });
+});
+test('#87 at its last commit: everything fixed or dismissed by the owner, so the gate is met', () => {
+  const r = fx('pr-87'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'done'); assert.deepEqual(g.lows, []);
+});
+test('#89 at 696f158: 3 open Mediums block and the open Low is only flagged', () => {
+  const r = fx('pr-89-at-696f158'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'fix');
+  assert.deepEqual(g.blocking.map((f) => f.id.slice(0, 8)).sort(), ['1baf3c69', '4bf90ebe', 'b36e79c1']);
+  assert.deepEqual(g.lows.map((f) => f.id.slice(0, 8)), ['6e7378d4']);
+});
+test('#65: three open Highs block', () => {
+  const r = fx('pr-65'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'fix'); assert.equal(g.blocking.length, 3);
+});
+test("#64: Qodo skipped its review of the head, so it isn't done even before counting findings", () => {
+  const r = fx('pr-64'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'incomplete'); assert.match(g.why, /skipped/);
+});
+test("#86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too)", () => {
+  const r = fx('pr-86'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'incomplete'); assert.match(g.why, /not complete/);
+});
+test('a review of an older commit, or one still running, means wait', () => {
+  const r = fx('pr-87');
+  assert.equal(gate(r, 'f'.repeat(40)).state, 'wait');
+  assert.equal(gate({ ...r, review_session: { ...r.review_session, status: 'started' } }, HEAD(r)).state, 'wait');
+  assert.equal(gate(null, HEAD(r)).state, 'wait');
+});
+test('an unknown label or status blocks: a label the gate cannot read is never treated as Low', () => {
+  const r = fx('pr-87'), add = (f) => ({ ...r, finding_count: r.findings.length + 1, findings: [...r.findings, { id: 'canary00', title: 'canary', git_sha: HEAD(r), ...f }] });
+  assert.equal(gate(add({ action_level: 'critical', attribution_status: 'pending' }), HEAD(r)).state, 'fix');
+  assert.equal(gate(add({ action_level: 'informational', attribution_status: 'mystery' }), HEAD(r)).state, 'fix');
+  assert.equal(gate(add({ action_level: 'informational', attribution_status: 'pending' }), HEAD(r)).state, 'done');
+});
+test('a canary: one planted open Medium on a finished review means not done', () => {
+  const r = fx('pr-87');
+  const g = gate({ ...r, finding_count: r.findings.length + 1, findings: [...r.findings, { id: 'canary01', title: 'planted Medium', action_level: 'remediation_recommended', attribution_status: 'pending', git_sha: HEAD(r) }] }, HEAD(r));
+  assert.equal(g.state, 'fix'); assert.deepEqual(g.blocking.map((f) => f.id), ['canary01']);
+});
+test('a truncated read is not enough to call it done', () => {
+  const r = fx('pr-87');
+  assert.equal(gate({ ...r, qar_operation_result_truncated: true }, HEAD(r)).state, 'incomplete');
+});
+test("a failed read of Qodo's review is never taken as clean: wait, and say why", () => {
+  const g = gate({ readError: "error: unknown option '--pr-url'" }, 'a'.repeat(40));
+  assert.equal(g.state, 'wait'); assert.match(g.why, /couldn't be read.*unknown option/);
+});
+
+// Qodo's review of the gate's own PR (#90, 43ac74f), each finding as a test before its fix
+test('#90 38d06043: a read that claims more findings than it returns is incomplete, never done', () => {
+  const r = fx('pr-87');
+  assert.equal(gate({ ...r, finding_count: 3, findings: null }, HEAD(r)).state, 'incomplete');
+  assert.equal(gate({ ...r, finding_count: 3, findings: [] }, HEAD(r)).state, 'incomplete');
+  assert.equal(gate({ ...r, finding_count: 3 }, HEAD(r)).state, 'done');
+});
+test("#90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done", () => {
+  const r = fx('pr-87'), g = gate(r, HEAD(r), { prHead: 'e'.repeat(40) });
+  assert.equal(g.state, 'moved'); assert.match(g.why, /eeeeeee/);
+  assert.equal(gate(r, HEAD(r), { prHead: HEAD(r) }).state, 'done');
+});
+test('#90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title', () => {
+  const lines = lib.lowsReport?.({ lows: [{ title: 'PR body says refunds work', action_level: 'informational', description: 'The posted #87 body states that a send is given back. A reader would take it as correct.' }] }) ?? '';
+  assert.match(lines, /Low findings for you/);
+  assert.match(lines, /Low · PR body says refunds work: The posted #87 body states that a send is given back\./);
+  assert.equal(lib.lowsReport?.({ lows: [] }), '');
+});
+test('#90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met', () => {
+  assert.match(lib.stopTitle?.('agent-needs-help') ?? '', /^\*\*NOT DONE\.\*\*/);
+  assert.match(lib.stopTitle?.('agent-done') ?? '', /^\*\*Factory run finished\.\*\*/);
+});
+
+// Qodo's second review of #90 (0a1c652)
+const blocking1 = { id: '3be5f0ac', title: 'Missing comments strand valid fixes', action_level: 'action_required', attribution_status: 'pending',
+  location: { file_path: 'scripts/agent-watch.mjs', start_line: 377 }, description: 'continueRun starts a fix round from the stored review. The agent gets only titles.' };
+test("#90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description", () => {
+  const md = lib.gateSection?.({ blocking: [blocking1], lows: [] }, {}) ?? '';
+  assert.match(md, /High · Missing comments strand valid fixes \(scripts\/agent-watch\.mjs:377\)/);
+  assert.match(md, /The agent gets only titles\./);
+});
+test("#90 6bc5fe96: Qodo's type for each finding is read from its PR comment (🐞, 📘, 📎)", () => {
+  const types = lib.findingTypes?.(readFileSync(new URL('./fixtures/qodo/pr-65-comment.html', import.meta.url), 'utf8')) ?? {};
+  assert.equal(types["Publishing skips the PR's real state"], 'Rule violation');
+  assert.equal(types['Proofs marked posted before they land'], 'Rule violation');
+  assert.equal(types['Existing pull requests get duplicate proofs'], 'Bug');
+});
+test('#90 6bc5fe96: a Low flagged for the owner gives its type, place and reason', () => {
+  const low = { ...blocking1, title: 'PR body says refunds work', action_level: 'informational', location: { file_path: 'web/index.html', start_line: 83 } };
+  const md = lib.lowsReport?.({ lows: [low] }, { 'PR body says refunds work': 'Bug' }) ?? '';
+  assert.match(md, /Low · Bug · PR body says refunds work \(web\/index\.html:83\): continueRun starts a fix round from the stored review\./);
+});

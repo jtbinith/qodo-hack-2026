@@ -1,0 +1,131 @@
+✔ a unit test name is found (1.154956ms)
+✔ a check() message on the next line is found (the #41 round 1 case) (0.263637ms)
+✔ a string inside the check() condition is not taken as its name (0.101772ms)
+✔ a template message counts up to its first ${…} (0.083856ms)
+✔ removed lines and short names are ignored (0.087605ms)
+✔ a named FAIL line counts as red, a crash in a named unit test does not (0.244209ms)
+✔ Qodo's escaped titles are decoded (0.140938ms)
+✔ /agent retry is told apart from an instruction (0.134509ms)
+✔ a regular expression with a bracket in the condition is skipped (0.797404ms)
+✔ a check() in one hunk is not closed by an unrelated hunk (0.161218ms)
+✔ a comment inside a wrapped check() is skipped (0.08189ms)
+✔ a retry pushes only when there is something new, otherwise it waits for Qodo again (0.064299ms)
+✔ an /agent instruction the agent makes no change for stops and asks the owner, retry or not (Qodo on 0191b36) (0.058567ms)
+✔ an old stop file is cleared before each agent run and when the owner reopens a run (#41 at 09:28) (0.042684ms)
+✔ what to publish is read from the PR itself, so old runs and half-finished posts are not repeated (Qodo on 829263e) (0.146498ms)
+✔ a comment over a limit is still marked read, so it cannot stop the run again on every tick (Qodo on 829263e) (0.153448ms)
+✔ every page is read, so a list past 100 is complete (0.065354ms)
+✔ a retry has its own limit, separate from instructions (0.029864ms)
+✔ every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66) (0.638378ms)
+✔ a list read with a page number but no allPages is still one page (Qodo on #67) (0.090789ms)
+✔ Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89) (0.042532ms)
+✔ #87 at its last commit: everything fixed or dismissed by the owner, so the gate is met (0.226808ms)
+✔ #89 at 696f158: 3 open Mediums block and the open Low is only flagged (0.150255ms)
+✔ #65: three open Highs block (0.109052ms)
+✔ #64: Qodo skipped its review of the head, so it isn't done even before counting findings (0.148752ms)
+✔ #86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too) (0.097173ms)
+✔ a review of an older commit, or one still running, means wait (0.097964ms)
+✔ an unknown label or status blocks: a label the gate cannot read is never treated as Low (0.156418ms)
+✔ a canary: one planted open Medium on a finished review means not done (0.114078ms)
+✔ a truncated read is not enough to call it done (0.07244ms)
+✔ a failed read of Qodo's review is never taken as clean: wait, and say why (0.073054ms)
+✖ #90 38d06043: a read that claims more findings than it returns is incomplete, never done (0.637149ms)
+✖ #90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done (0.201232ms)
+✖ #90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title (0.118792ms)
+✖ #90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met (0.092568ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 31
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 56.567089
+
+✖ failing tests:
+
+test at tests/runner-lib.test.mjs:171:1
+✖ #90 38d06043: a read that claims more findings than it returns is incomplete, never done (0.637149ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'done'
+  - 'incomplete'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:173:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'done',
+    expected: 'incomplete',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:177:1
+✖ #90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done (0.201232ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'done' !== 'moved'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:179:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'done',
+    expected: 'moved',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:182:1
+✖ #90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title (0.118792ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Low findings for you/. Input:
+  
+  ''
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:184:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: /Low findings for you/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:188:1
+✖ #90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met (0.092568ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\*\*NOT DONE\.\*\*/. Input:
+  
+  ''
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:189:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: /^\*\*NOT DONE\.\*\*/,
+    operator: 'match',
+    diff: 'simple'
+  }
