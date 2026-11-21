@@ -17,6 +17,7 @@ export const LIMITS = {
   askRecordsPerDevice: 1000,     // (device, file) counters for one device: 2 per print (a photo and its thumbnail)
   askRecords: 20000,             // counters kept at once: askRecordsPerDevice for every device a room holds
   sweepGap: 1000,                // ms between sweeps for stale counters when the table is full
+  retryList: 50,                 // devices and pushes a retry may list. A real one lists at most one batch: MAX_BATCH (8) in web/net.js
 };
 
 const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
@@ -128,8 +129,8 @@ export const validPong = (p) => !!p && isDevId(p.to) && isNum(p.t0, 1e15) && isN
 // device put on its push. (The join itself is checked by isValidJoins in web/layout.js.)
 export const validJoined = (p) => !!p && isNum(p.tA, 1e15) && isNum(p.tB, 1e15);
 export const validNoMatch = (p) => !!p && isDevId(p.dev) && isNum(p.t, 1e15);
-export const validRetry = (p) => !!p && Array.isArray(p.devs) && p.devs.length <= 50 && p.devs.every(isDevId) &&
-  Array.isArray(p.pushes) && p.pushes.length > 0 && p.pushes.length <= 50 &&
+export const validRetry = (p) => !!p && Array.isArray(p.devs) && p.devs.length <= LIMITS.retryList && p.devs.every(isDevId) &&
+  Array.isArray(p.pushes) && p.pushes.length > 0 && p.pushes.length <= LIMITS.retryList &&
   p.pushes.every((q) => !!q && p.devs.includes(q.dev) && isNum(q.t, 1e15));
 
 // Connection setup and relayed frames (exactly one kind per message).

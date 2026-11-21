@@ -44,3 +44,21 @@ Rerun 2's checkpoint `tree_sha` a867c56f… equals `git rev-parse 34cf9de^{tree}
 - `npm run test:browsers`: flakes on unchanged main too (`raw/browsers-main-run1.txt`: timeout at :133;
   `run2`: FAIL "A dropped its print to B while B's key was late"). On the change: run 1 the same late-key FAIL,
   run 2 100 PASS 0 FAIL. The builder once saw a timeout at :412 (late guest joining), not seen again.
+
+## Qodo's PR review of #89 (head 696f158, run 2088324, completed)
+4 findings, 2 in code the local reviews had passed (both existed at rerun 1, a full review):
+| Finding | Verdict | What I did |
+|---|---|---|
+| 1baf3c69 A rapid second push gets no answer (two pushes with the same timestamp share one wait) | real, rare: needs two pushes in the same clock tick (`repro/q6-same-ms.mjs`: only `joined@1100`, no "No match") | fixed in round 3, then **undone** (see below); deferred |
+| b36e79c1 Retry validator hard-codes its size cap | real, minor (AGENTS.md Rule 3; `check.js:35` has an older inline 50) | fixed: `LIMITS.retryList`, boundary test, mutation checked |
+| 6e7378d4 The committed reproduction scripts cannot be run | real, my mistake (the `<checkout>` placeholder broke the import; the blind `r2.mjs` printed NaN) | fixed: `repro/` imports the repo's code, README; `blind/` kept as received |
+| 4bf90ebe Join tests skip non-facing and edge taps | out of scope | dismissed in Qodo as deferred (`raw/F-dismiss-4bf90ebe.json`) |
+
+## Fix round 3, local review before committing (18:35Z, trace b2cc87b7…)
+Qodo, local, on the uncommitted round 3: **new 240d001d "Clock correction blocks later joins"**, real and
+**caused by my 1baf3c69 fix** (each push at least the last push + 0.001 ms). `repro/q7-clock-correction.mjs`:
+5 s ahead, then corrected, later pushes still `+4000`, `+3000` ms ahead, so they can't pair.
+**The stopping rule fired** (3 fix rounds). I undid the push-time change (`q7` now prints `5000, 0, 0`) and
+kept the cap and evidence fixes. 1baf3c69 and 240d001d are deferred to a follow-up on #68.
+
+Totals: problems caused by my own fixes: 2 (4209e603 in round 1, 240d001d in round 3).

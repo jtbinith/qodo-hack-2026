@@ -46,7 +46,10 @@ test('join results must name the pushes they answer', () => {
   assert.ok(validNoMatch({ dev: 'dev1', t: 5 }));
   for (const bad of [null, { dev: 'dev1' }, { t: 5 }, { dev: '', t: 5 }, { dev: 'dev1', t: Infinity }]) assert.equal(validNoMatch(bad), false, JSON.stringify(bad));
   assert.ok(validRetry({ devs: ['a', 'b'], pushes: [{ dev: 'a', t: 1 }, { dev: 'b', t: 2 }] }));
+  const most = Array.from({ length: LIMITS.retryList }, (_, i) => 'd' + i);   // at the limit
+  assert.ok(validRetry({ devs: most, pushes: most.map((dev, t) => ({ dev, t })) }));
   for (const bad of [{ devs: ['a'] }, { devs: ['a'], pushes: [] }, { devs: ['a'], pushes: [{ dev: 'a' }] }, { devs: ['a'], pushes: [{ dev: 'c', t: 1 }] },
-    { devs: ['a'], pushes: Array(51).fill({ dev: 'a', t: 1 }) }, { devs: 'a', pushes: [{ dev: 'a', t: 1 }] }, { devs: ['a'], pushes: 'all' }])
+    { devs: ['a'], pushes: Array(LIMITS.retryList + 1).fill({ dev: 'a', t: 1 }) },
+    { devs: Array.from({ length: LIMITS.retryList + 1 }, (_, i) => 'd' + i), pushes: [{ dev: 'd0', t: 1 }] }, { devs: 'a', pushes: [{ dev: 'a', t: 1 }] }, { devs: ['a'], pushes: 'all' }])
     assert.equal(validRetry(bad), false, JSON.stringify(bad));
 });

@@ -25,7 +25,7 @@ globalThis.window = { supabase: { createClient: () => ({
   removeChannel() {},
 }) } };
 const realPerformance = globalThis.performance;
-const { joinRoom } = await import('<checkout>/web/net.js');
+const { joinRoom } = await import('../../../web/net.js');
 
 
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)); };

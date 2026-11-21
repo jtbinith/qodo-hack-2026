@@ -1,10 +1,10 @@
 import { setup, room, tick, names, ownNoMatch, bus } from './harness.mjs';
 setup();
 const { L, A } = await room();
-const log = [];
-A.on((ev, d) => { if (ev === 'pushed') log.push(`pushed ${d.edge}@${Date.now() - A.heard.start}`); });
+const log = [], t0 = Date.now();
+A.on((ev, d) => { if (ev === 'pushed') log.push(`pushed ${d.edge}@${Date.now() - t0}`); });
 bus.drop = (ev, p) => ev === 'push' && p.dev === 'A' && p.edge === 'T';   // 2nd push lost
-const t0 = Date.now();
+// t0 is set above, before the first push
 A.push('L', 400);
 const nomSentAt = [];
 await tick(2000);
