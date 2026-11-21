@@ -1,0 +1,116 @@
+✔ a unit test name is found (1.622269ms)
+✔ a check() message on the next line is found (the #41 round 1 case) (0.364295ms)
+✔ a string inside the check() condition is not taken as its name (0.133933ms)
+✔ a template message counts up to its first ${…} (0.124109ms)
+✔ removed lines and short names are ignored (0.109523ms)
+✔ a named FAIL line counts as red, a crash in a named unit test does not (0.286185ms)
+✔ Qodo's escaped titles are decoded (0.177286ms)
+✔ /agent retry is told apart from an instruction (0.247745ms)
+✔ a regular expression with a bracket in the condition is skipped (0.195887ms)
+✔ a check() in one hunk is not closed by an unrelated hunk (0.160679ms)
+✔ a comment inside a wrapped check() is skipped (0.118356ms)
+✔ a retry pushes only when there is something new, otherwise it waits for Qodo again (0.078813ms)
+✔ an /agent instruction the agent makes no change for stops and asks the owner, retry or not (Qodo on 0191b36) (0.09509ms)
+✔ an old stop file is cleared before each agent run and when the owner reopens a run (#41 at 09:28) (0.067164ms)
+✔ what to publish is read from the PR itself, so old runs and half-finished posts are not repeated (Qodo on 829263e) (0.206253ms)
+✔ a comment over a limit is still marked read, so it cannot stop the run again on every tick (Qodo on 829263e) (0.167149ms)
+✔ every page is read, so a list past 100 is complete (0.079ms)
+✔ a retry has its own limit, separate from instructions (0.037131ms)
+✔ every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66) (0.800896ms)
+✔ a list read with a page number but no allPages is still one page (Qodo on #67) (0.114734ms)
+✔ Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89) (0.051921ms)
+✔ #87 at its last commit: everything fixed or dismissed by the owner, so the gate is met (0.328318ms)
+✔ #89 at 696f158: 3 open Mediums block and the open Low is only flagged (0.248337ms)
+✔ #65: three open Highs block (0.1343ms)
+✔ #64: Qodo skipped its review of the head, so it isn't done even before counting findings (0.178062ms)
+✔ #86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too) (0.115832ms)
+✔ a review of an older commit, or one still running, means wait (0.121708ms)
+✔ an unknown label or status blocks: a label the gate cannot read is never treated as Low (0.194403ms)
+✔ a canary: one planted open Medium on a finished review means not done (0.206452ms)
+✔ a truncated read is not enough to call it done (0.111592ms)
+✔ a failed read of Qodo's review is never taken as clean: wait, and say why (0.088947ms)
+✔ #90 38d06043: a read that claims more findings than it returns is incomplete, never done (0.129616ms)
+✔ #90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done (0.149062ms)
+✔ #90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title (0.210105ms)
+✔ #90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met (0.076936ms)
+✖ #90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description (0.484504ms)
+✖ #90 6bc5fe96: Qodo's type for each finding is read from its PR comment (🐞, 📘, 📎) (0.387593ms)
+✖ #90 6bc5fe96: a Low flagged for the owner gives its type, place and reason (0.225218ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 35
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 67.531587
+
+✖ failing tests:
+
+test at tests/runner-lib.test.mjs:196:1
+✖ #90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description (0.484504ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /High · Missing comments strand valid fixes \(scripts\/agent-watch\.mjs:377\)/. Input:
+  
+  ''
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:198:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: /High · Missing comments strand valid fixes \(scripts\/agent-watch\.mjs:377\)/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:201:1
+✖ #90 6bc5fe96: Qodo's type for each finding is read from its PR comment (🐞, 📘, 📎) (0.387593ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'Rule violation'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:203:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'Rule violation',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:207:1
+✖ #90 6bc5fe96: a Low flagged for the owner gives its type, place and reason (0.225218ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Low · Bug · PR body says refunds work \(web\/index\.html:83\): continueRun starts a fix round from the stored review\./. Input:
+  
+  '\n' +
+    '\n' +
+    '**Low findings for you** (not fixed, by the quality gate):\n' +
+    '- Low: PR body says refunds work: continueRun starts a fix round from the stored review.'
+  
+      at TestContext.<anonymous> (file://<repo>/tests/runner-lib.test.mjs:210:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\n\n**Low findings for you** (not fixed, by the quality gate):\n- Low: PR body says refunds work: continueRun starts a fix round from the stored review.',
+    expected: /Low · Bug · PR body says refunds work \(web\/index\.html:83\): continueRun starts a fix round from the stored review\./,
+    operator: 'match',
+    diff: 'simple'
+  }

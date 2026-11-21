@@ -1,0 +1,202 @@
+<h3>Code Review by Qodo</h3>
+
+<code>🐞 Bugs (1)</code>  <code>📘 Rule violations (2)</code>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" height="10%" alt="Grey Divider">
+
+<br/>
+
+<img src="https://img.shields.io/badge/High-634FD1?style=flat-square" height="20px" alt="Action required">
+
+<details>
+<summary>  1.  Publishing skips the PR&#x27;s real state <code>📘 Rule violation</code></summary>
+
+<br/>
+
+> <details>
+><summary>Description</summary>
+><br/>
+>
+><pre>
+><b><i>publish()</i></b> uses the saved <b><i>s.posted</i></b> count instead of checking the live PR body and owner&#x27;s
+>comments before deciding that all proofs are present. If a proof is removed from the description, a
+>comment is deleted, or a comment fails to post while the count remains complete, later runner steps
+>and <b><i>/agent</i></b> retries do not restore the missing proof.
+></pre>
+></details>
+
+> <details>
+><summary>Code</summary>
+><br/>
+>
+><code>[scripts/agent-watch.mjs[R284-285]](https://github.com/jtbinith/qodo-hack-2026/pull/65/files#diff-f7a957c7057d24a400ef5397057df1a0e02dfb0d178acf2e726ae0b02470a362R284-R285)</code>
+>
+>```diff
+>+  const done = s.posted || 0;
+>+  if (done >= s.proofs.length) return;
+>```
+></details>
+
+> <details>
+><summary>Agent prompt</summary>
+><br/>
+>
+>```
+>The issue below was found during a code review. Follow the provided context and guidance below and implement a solution
+>
+>## Issue description
+>`publish()` treats the saved `s.posted` count as proof that publication is complete, so it cannot repair proof content missing from the live PR body or owner's comments.
+>
+>## Fix Focus Areas
+>- scripts/agent-watch.mjs[282-291]
+>- scripts/runner-lib.mjs[102-110]
+>
+>## Recommended Fix
+>At the start of `publish()`, read the PR body with `ghJson('api', `repos/${REPO}/pulls/${s.pr}`).body` and read `issueComments(s.pr)` filtered by `OWNER`. Use `publishPlan(s.proofs, body, comments)` to post only missing remote material. Treat `s.posted` at most as a hint, never as a reason to skip the GitHub check.
+>```
+> <code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>
+></details>
+
+[Dismiss ↗](https://app.qodo.ai/findings/febc39d7-ea65-464c-a32a-99762940c219?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/febc39d7-ea65-464c-a32a-99762940c219)
+
+<hr/>
+</details>
+
+
+<details>
+<summary>  2.  Proofs marked posted before they land <code>📘 Rule violation</code></summary>
+
+<br/>
+
+> <details>
+><summary>Description</summary>
+><br/>
+>
+><pre>
+><b><i>publish()</i></b> sets <b><i>s.posted</i></b> to the full proof count and saves it before patching the PR description
+>or posting proof comments. If a <b><i>gh</i></b> call fails or the process stops between those operations,
+><b><i>continueRun()</i></b> sees the saved count and returns early, leaving the missing description or comments
+>unpublished.
+></pre>
+></details>
+
+> <details>
+><summary>Code</summary>
+><br/>
+>
+><code>[scripts/agent-watch.mjs[R287-290]](https://github.com/jtbinith/qodo-hack-2026/pull/65/files#diff-f7a957c7057d24a400ef5397057df1a0e02dfb0d178acf2e726ae0b02470a362R287-R290)</code>
+>
+>```diff
+>+  s.posted = s.proofs.length; save(n, s);
+>+  writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
+>+  write(`update PR #${s.pr}'s description`, () => gh('api', '-X', 'PATCH', `repos/${REPO}/pulls/${s.pr}`, '-F', `body=@${join(HOME, `${n}-pr-body.md`)}`, '--jq', '.number'));
+>+  for (const p of fresh) comment(s.pr, p);   // a PR is an issue, so this is the same call as ticket comments
+>```
+></details>
+
+> <details>
+><summary>Agent prompt</summary>
+><br/>
+>
+>```
+>The issue below was found during a code review. Follow the provided context and guidance below and implement a solution
+>
+>## Issue description
+>`publish()` saves the full proof count before the PR description PATCH and proof comments complete. A failed `gh` call or interruption can therefore leave the saved count claiming publication is complete, causing recovery to skip missing writes.
+>
+>## Fix Focus Areas
+>- scripts/agent-watch.mjs[282-291]
+>- scripts/runner-lib.mjs[102-110]
+>
+>## Recommended Fix
+>Use `publishPlan` to determine outstanding body and comment writes from GitHub during recovery. Move the `s.posted` update and save until after the required PATCH and comment calls succeed, then re-check the PR body and owner's comments before persisting the marker. Ensure recovery still handles a successful PATCH followed by only some successful comments.
+>```
+> <code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>
+></details>
+
+[Dismiss ↗](https://app.qodo.ai/findings/9c98a4bd-fb6c-484c-b543-f9553c456ac5?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/9c98a4bd-fb6c-484c-b543-f9553c456ac5)
+
+<hr/>
+</details>
+
+
+<details>
+<summary>  3.  Existing pull requests get duplicate proofs <code>🐞 Bug</code></summary>
+
+<br/>
+
+> <details>
+><summary>Description</summary>
+><br/>
+>
+><pre>
+><b><i>publish()</i></b> treats an absent <b><i>s.posted</i></b> as zero and posts every proof after the first without
+>checking existing comments. State files saved by the previous runner have no such field, so the next
+>tick on an existing multi-proof PR repeats comments that were already published.
+></pre>
+></details>
+
+> <details>
+><summary>Code</summary>
+><br/>
+>
+><code>[scripts/agent-watch.mjs[R284-286]](https://github.com/jtbinith/qodo-hack-2026/pull/65/files#diff-f7a957c7057d24a400ef5397057df1a0e02dfb0d178acf2e726ae0b02470a362R284-R286)</code>
+>
+>```diff
+>+  const done = s.posted || 0;
+>+  if (done >= s.proofs.length) return;
+>+  const fresh = s.proofs.slice(Math.max(done, 1));
+>```
+></details>
+
+> <details>
+><summary>Agent prompt</summary>
+><br/>
+>
+>```
+>The issue below was found during a code review. Follow the provided context and guidance below and implement a solution
+>
+>## Issue description
+>Existing state files have no `posted` count, and treating them as zero reposts already-published proof comments.
+>## Fix Focus Areas
+>- scripts/agent-watch.mjs[282-290]
+>- scripts/runner-lib.mjs[102-110]
+>## Recommended Fix
+>For state without `posted`, inspect the PR body and owner comments before selecting work. Use the remote comparison to post only missing proofs and initialize any retained count only after reconciliation.
+>```
+> <code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>
+></details>
+
+[Dismiss ↗](https://app.qodo.ai/findings/a29a18e0-99a4-451d-bc79-46b03026a8f8?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/a29a18e0-99a4-451d-bc79-46b03026a8f8)
+
+<hr/>
+</details>
+
+
+
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" height="10%" alt="Grey Divider">
+
+<!-- qodo-self-review-slot -->
+
+
+
+<!-- qodo-daily-tip:start -->
+
+<details>
+<summary><strong>Tip of the day</strong></summary>
+
+<br/>
+
+<pre>💡 Did you know, you can enable the Remediation agent and Qodo fixes findings in a dedicated fix PR</pre>
+
+<a href="https://docs.qodo.ai/tips-and-tricks">More tips ↗</a> | <a href="https://app.qodo.ai/configurations?tab=display-preferences">Customize Qodo ↗</a> | <a href="https://docs.qodo.ai">Qodo docs ↗</a>
+
+</details>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" height="10%" alt="Grey Divider">
+<!-- qodo-daily-tip:end -->
+
+
+<!-- https://github.com/jtbinith/qodo-hack-2026/commit/e28ac1823948e907a5f905e8268bf5beeb7792b0 -->
+
+<a href="https://www.qodo.ai"><img src="https://www.qodo.ai/wp-content/uploads/2025/03/qodo-logo.svg" width="80" alt="Qodo Logo"></a>

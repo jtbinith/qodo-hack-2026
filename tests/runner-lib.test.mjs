@@ -189,3 +189,23 @@ test('#90 470fbdf1: a stopped run says NOT DONE first, a finished one says the g
   assert.match(lib.stopTitle?.('agent-needs-help') ?? '', /^\*\*NOT DONE\.\*\*/);
   assert.match(lib.stopTitle?.('agent-done') ?? '', /^\*\*Factory run finished\.\*\*/);
 });
+
+// Qodo's second review of #90 (0a1c652)
+const blocking1 = { id: '3be5f0ac', title: 'Missing comments strand valid fixes', action_level: 'action_required', attribution_status: 'pending',
+  location: { file_path: 'scripts/agent-watch.mjs', start_line: 377 }, description: 'continueRun starts a fix round from the stored review. The agent gets only titles.' };
+test("#90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description", () => {
+  const md = lib.gateSection?.({ blocking: [blocking1], lows: [] }, {}) ?? '';
+  assert.match(md, /High · Missing comments strand valid fixes \(scripts\/agent-watch\.mjs:377\)/);
+  assert.match(md, /The agent gets only titles\./);
+});
+test("#90 6bc5fe96: Qodo's type for each finding is read from its PR comment (🐞, 📘, 📎)", () => {
+  const types = lib.findingTypes?.(readFileSync(new URL('./fixtures/qodo/pr-65-comment.html', import.meta.url), 'utf8')) ?? {};
+  assert.equal(types["Publishing skips the PR's real state"], 'Rule violation');
+  assert.equal(types['Proofs marked posted before they land'], 'Rule violation');
+  assert.equal(types['Existing pull requests get duplicate proofs'], 'Bug');
+});
+test('#90 6bc5fe96: a Low flagged for the owner gives its type, place and reason', () => {
+  const low = { ...blocking1, title: 'PR body says refunds work', action_level: 'informational', location: { file_path: 'web/index.html', start_line: 83 } };
+  const md = lib.lowsReport?.({ lows: [low] }, { 'PR body says refunds work': 'Bug' }) ?? '';
+  assert.match(md, /Low · Bug · PR body says refunds work \(web\/index\.html:83\): continueRun starts a fix round from the stored review\./);
+});
