@@ -286,3 +286,51 @@ test('a layout kept from the next time keeper is checked again when it takes ove
   assert.equal(B.leader, 'A');
   assert.deepEqual(B.joins, [], 'A’s kept layout names C, which has left, so it is not used');
 });
+
+// Qodo on #95: the old time keeper's layout can arrive late, after the new time keeper's and
+// before the presence update. It is used, as L is still the time keeper then, and clears what was
+// kept from A. When C then hears that L left, it asks A for its layout instead of keeping L's
+const deliver = (to, event, payload) => channels.find((c) => c.key === to).handlers['broadcast:' + event]?.({ payload });
+
+test('a late layout from the old time keeper doesn’t leave a device with stale joins', async () => {
+  const devs = await room(), { A, B, C } = devs;
+  leaves(devs, 'L');
+  hear('A');
+  await tick(100);
+  A.push('R', 400); B.push('L', 400);
+  await tick(3000);
+  assert.equal(A.joins.length, 1, 'A joined B');
+  deliver('C', 'layout', { from: 'L', joins: [] });   // L's layout, sent before it left, arrives now
+  assert.equal(C.leader, 'L');
+  hear('C');
+  await tick(2000);
+  assert.equal(C.leader, 'A');
+  assert.deepEqual(C.joins, A.joins, 'C asked A and holds its layout');
+});
+
+test('only the time keeper answers a layout ask, and a malformed ask is dropped (Rule 1)', async () => {
+  await room();
+  const sent = [];
+  bus.drop = (event, p) => { if (event === 'layout') sent.push(p.from); return false; };
+  for (const bad of [null, {}, { from: 'C' }, { from: 'C', to: 7 }, { from: 'x'.repeat(41), to: 'L' }, { from: 'nobody', to: 'L' }])
+    deliver('L', 'layoutask', bad);
+  deliver('A', 'layoutask', { from: 'C', to: 'A' });   // A isn't the time keeper
+  deliver('A', 'layoutask', { from: 'C', to: 'L' });   // not addressed to A
+  await tick(3000);
+  assert.deepEqual(sent, [], 'nobody answered');
+  deliver('L', 'layoutask', { from: 'C', to: 'L' });
+  await tick(100);
+  assert.deepEqual(sent, ['L'], 'the time keeper answered a well-formed ask');
+});
+
+test('a flood of layout asks gets at most one answer per gap, and the last ask is still answered (Rule 3)', async () => {
+  await room();
+  const sent = [];
+  bus.drop = (event, p) => { if (event === 'layout') sent.push(Date.now()); return false; };
+  let last = 0;
+  for (let i = 0; i < 200; i++) { last = Date.now(); deliver('L', 'layoutask', { from: 'C', to: 'L' }); await tick(10); }   // 2 s of asks
+  await tick(2000);
+  assert.ok(sent.length >= 2 && sent.length <= 4, `answers: ${sent.length}`);
+  for (let i = 1; i < sent.length; i++) assert.ok(sent[i] - sent[i - 1] >= 1000, 'answers are at least 1 s apart');
+  assert.ok(sent[sent.length - 1] >= last, 'an answer went out after the last ask');
+});
