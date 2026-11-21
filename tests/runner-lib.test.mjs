@@ -110,3 +110,55 @@ test('a list read with a page number but no allPages is still one page (Qodo on 
   assert.equal(reads("const r = ghJson('issue', 'list', '-R', REPO, '--limit', '1', '--json', 'number');"), 0);
   assert.equal(reads("const t = ghJson('api', `repos/${REPO}/issues/${n}`);"), 0);   // one ticket, not a list
 });
+
+// The quality gate (work-ticket skill, "Quality gate"), on Qodo's stored reviews of real PRs
+// (`qodo read pr-review-session findings`, trimmed to the fields the gate reads).
+const fx = (name) => JSON.parse(readFileSync(new URL(`./fixtures/qodo/${name}.json`, import.meta.url)));
+const HEAD = (r) => r.review_session.commit_sha;
+const gate = (...a) => lib.gateVerdict?.(...a) ?? {};
+test("Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89)", () => {
+  assert.deepEqual(lib.SEVERITY, { action_required: 'High', remediation_recommended: 'Medium', informational: 'Low' });
+});
+test('#87 at its last commit: everything fixed or dismissed by the owner, so the gate is met', () => {
+  const r = fx('pr-87'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'done'); assert.deepEqual(g.lows, []);
+});
+test('#89 at 696f158: 3 open Mediums block and the open Low is only flagged', () => {
+  const r = fx('pr-89-at-696f158'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'fix');
+  assert.deepEqual(g.blocking.map((f) => f.id.slice(0, 8)).sort(), ['1baf3c69', '4bf90ebe', 'b36e79c1']);
+  assert.deepEqual(g.lows.map((f) => f.id.slice(0, 8)), ['6e7378d4']);
+});
+test('#65: three open Highs block', () => {
+  const r = fx('pr-65'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'fix'); assert.equal(g.blocking.length, 3);
+});
+test("#64: Qodo skipped its review of the head, so it isn't done even before counting findings", () => {
+  const r = fx('pr-64'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'incomplete'); assert.match(g.why, /skipped/);
+});
+test("#86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too)", () => {
+  const r = fx('pr-86'), g = gate(r, HEAD(r));
+  assert.equal(g.state, 'incomplete'); assert.match(g.why, /not complete/);
+});
+test('a review of an older commit, or one still running, means wait', () => {
+  const r = fx('pr-87');
+  assert.equal(gate(r, 'f'.repeat(40)).state, 'wait');
+  assert.equal(gate({ ...r, review_session: { ...r.review_session, status: 'started' } }, HEAD(r)).state, 'wait');
+  assert.equal(gate(null, HEAD(r)).state, 'wait');
+});
+test('an unknown label or status blocks: a label the gate cannot read is never treated as Low', () => {
+  const r = fx('pr-87'), add = (f) => ({ ...r, findings: [...r.findings, { id: 'canary00', title: 'canary', git_sha: HEAD(r), ...f }] });
+  assert.equal(gate(add({ action_level: 'critical', attribution_status: 'pending' }), HEAD(r)).state, 'fix');
+  assert.equal(gate(add({ action_level: 'informational', attribution_status: 'mystery' }), HEAD(r)).state, 'fix');
+  assert.equal(gate(add({ action_level: 'informational', attribution_status: 'pending' }), HEAD(r)).state, 'done');
+});
+test('a canary: one planted open Medium on a finished review means not done', () => {
+  const r = fx('pr-87');
+  const g = gate({ ...r, findings: [...r.findings, { id: 'canary01', title: 'planted Medium', action_level: 'remediation_recommended', attribution_status: 'pending', git_sha: HEAD(r) }] }, HEAD(r));
+  assert.equal(g.state, 'fix'); assert.deepEqual(g.blocking.map((f) => f.id), ['canary01']);
+});
+test('a truncated read is not enough to call it done', () => {
+  const r = fx('pr-87');
+  assert.equal(gate({ ...r, qar_operation_result_truncated: true }, HEAD(r)).state, 'incomplete');
+});

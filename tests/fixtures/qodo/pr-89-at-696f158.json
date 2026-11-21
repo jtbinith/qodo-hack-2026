@@ -1,0 +1,41 @@
+{
+ "pr_url": "https://github.com/jtbinith/qodo-hack-2026/pull/89",
+ "review_session": {
+  "run_id": 2088324,
+  "status": "completed",
+  "commit_sha": "696f15805d23e2c1a3bbc57e19abaa47b16a2240",
+  "started_at": "2026-11-21T18:24:39.870692Z",
+  "git_provider": "github",
+  "review_complete": true
+ },
+ "findings": [
+  {
+   "id": "b36e79c1-d2c1-4649-aa86-0eecc3459c14",
+   "title": "Retry validator hard-codes its size cap",
+   "action_level": "remediation_recommended",
+   "attribution_status": "pending",
+   "git_sha": "696f15805d23e2c1a3bbc57e19abaa47b16a2240"
+  },
+  {
+   "id": "1baf3c69-6969-4329-ab6e-e2713cb7a55c",
+   "title": "A rapid second push gets no answer",
+   "action_level": "remediation_recommended",
+   "attribution_status": "pending",
+   "git_sha": "696f15805d23e2c1a3bbc57e19abaa47b16a2240"
+  },
+  {
+   "id": "4bf90ebe-18fb-43ef-8cbe-b845d9227735",
+   "title": "Join tests skip non-facing and edge taps",
+   "action_level": "remediation_recommended",
+   "attribution_status": "pending",
+   "git_sha": "696f15805d23e2c1a3bbc57e19abaa47b16a2240"
+  },
+  {
+   "id": "6e7378d4-de09-4cbc-bfe5-15cabd5d271b",
+   "title": "The committed reproduction scripts cannot be run",
+   "action_level": "informational",
+   "attribution_status": "pending",
+   "git_sha": "696f15805d23e2c1a3bbc57e19abaa47b16a2240"
+  }
+ ]
+}
