@@ -28,3 +28,16 @@ Checked first: covers 0a1c652, `completed`, `review_complete: true` (`raw/pr-90-
 
 Red: `raw/04-pr90-round2-red.txt` (3 tests). Mutations: `raw/05-pr90-round2-mutations.txt`. `npm run test:unit`: 129/129.
 Problems caused by my own fixes so far: 1 (3be5f0ac).
+
+## Review 3: b8b2eaf
+Checked first: covers b8b2eaf, `completed`, `review_complete: true` (`raw/pr-90-review-3.json`).
+All 6 earlier findings re-attributed as implemented by Qodo. 2 new Mediums, **both caused by my round 2 fix**:
+
+| Finding | Severity | Valid? | Evidence |
+|---|---|---|---|
+| a8f66868 Owners lose Low types when comments lag | Medium | yes: `findingTypes(q?.body)` reads types from a comment without checking it covers the head, and a missing type is silently left out | `scripts/agent-watch.mjs` done branch; `named()` in `runner-lib.mjs` |
+| 618be2c6 Low reports can omit why a finding matters | Medium | yes: `firstSentence` keeps only the first sentence, and my own test's example puts the impact in the second | `tests/runner-lib.test.mjs` 6bc5fe96 example |
+
+**Gate: NOT DONE.** Two valid Mediums are open, and the stopping rule fired: two reviews in a row
+(2 and 3) found problems caused by my previous fix. Problems caused by my own fixes: 3.
+Handed back to the owner.
