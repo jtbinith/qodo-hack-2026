@@ -166,3 +166,26 @@ test("a failed read of Qodo's review is never taken as clean: wait, and say why"
   const g = gate({ readError: "error: unknown option '--pr-url'" }, 'a'.repeat(40));
   assert.equal(g.state, 'wait'); assert.match(g.why, /couldn't be read.*unknown option/);
 });
+
+// Qodo's review of the gate's own PR (#90, 43ac74f), each finding as a test before its fix
+test('#90 38d06043: a read that claims more findings than it returns is incomplete, never done', () => {
+  const r = fx('pr-87');
+  assert.equal(gate({ ...r, finding_count: 3, findings: null }, HEAD(r)).state, 'incomplete');
+  assert.equal(gate({ ...r, finding_count: 3, findings: [] }, HEAD(r)).state, 'incomplete');
+  assert.equal(gate({ ...r, finding_count: 3 }, HEAD(r)).state, 'done');
+});
+test("#90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done", () => {
+  const r = fx('pr-87'), g = gate(r, HEAD(r), { prHead: 'e'.repeat(40) });
+  assert.equal(g.state, 'moved'); assert.match(g.why, /eeeeeee/);
+  assert.equal(gate(r, HEAD(r), { prHead: HEAD(r) }).state, 'done');
+});
+test('#90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title', () => {
+  const lines = lib.lowsReport?.({ lows: [{ title: 'PR body says refunds work', action_level: 'informational', description: 'The posted #87 body states that a send is given back. A reader would take it as correct.' }] }) ?? '';
+  assert.match(lines, /Low findings for you/);
+  assert.match(lines, /Low: PR body says refunds work: The posted #87 body states that a send is given back\./);
+  assert.equal(lib.lowsReport?.({ lows: [] }), '');
+});
+test('#90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met', () => {
+  assert.match(lib.stopTitle?.('agent-needs-help') ?? '', /^\*\*NOT DONE\.\*\*/);
+  assert.match(lib.stopTitle?.('agent-done') ?? '', /^\*\*Factory run finished\.\*\*/);
+});
