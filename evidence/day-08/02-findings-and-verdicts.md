@@ -78,3 +78,6 @@ doesn't run from the repo; `repro/r1`–`r3` are the runnable copies (`repro/REA
   `repro/` and run (`B leader A | joins in layout []`, `A heard, in order: joined@3000, nomatch@3000`).
 - 240d001d shown as **still open: wrong**. The push-time change that caused it was undone before b757dd4
   (`grep -c PUSH_STEP web/net.js` = 0; `repro/q7-clock-correction.mjs` prints `5000, 0, 0`).
+
+## One more local review (18:49Z, trace f51a4b46…, incremental)
+98ac0a5b resolved, nothing new. 240d001d still listed open (wrong, see above). 07c384af unchanged by choice.
