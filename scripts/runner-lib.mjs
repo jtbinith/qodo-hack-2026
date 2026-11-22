@@ -101,8 +101,9 @@ export const staleFiles = (when) => (when === 'reopen' ? ['stop.md', 'test-outpu
 // runner or a post interrupted halfway is never repeated. Every proof goes in the description; each
 // one after the first (which the PR opened with) is also posted as a comment. A proof is found by
 // its first line, which names its commit range.
-export function publishPlan(proofs, prBody, commentBodies) {
-  const head = (p) => p.split('\n')[0];
+// `show` is how the runner shows text on GitHub (publicText), so a proof is looked for as it was posted.
+export function publishPlan(proofs, prBody, commentBodies, show = (t) => t) {
+  const head = (p) => show(p).split('\n')[0];
   return {
     updateBody: proofs.some((p) => !(prBody || '').includes(head(p))),
     comment: proofs.slice(1).filter((p) => !commentBodies.some((b) => b.startsWith(head(p)))),

@@ -299,7 +299,7 @@ function publish(n, s) {
   if (!s.pr || !(s.proofs || []).length) return;
   const prBodyNow = ghJson('api', `repos/${REPO}/pulls/${s.pr}`).body || '';
   const posted = issueComments(s.pr).filter((c) => c.user.login === OWNER).map((c) => c.body);
-  const plan = publishPlan(s.proofs, prBodyNow, posted);
+  const plan = publishPlan(s.proofs, prBodyNow, posted, shown);
   if (plan.updateBody) {
     writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
     write(`update PR #${s.pr}'s description`, () => gh('api', '-X', 'PATCH', `repos/${REPO}/pulls/${s.pr}`, '-F', `body=@${join(HOME, `${n}-pr-body.md`)}`, '--jq', '.number'));

@@ -229,3 +229,17 @@ test('ordinary text is left alone', () => {
   const who = { home: '/home/jdoe', user: 'jdoe' };
   assert.equal(lib.publicText?.('Quality gate met on e620c50: no open High or Medium findings. Meet me at home.', who), 'Quality gate met on e620c50: no open High or Medium findings. Meet me at home.');
 });
+// Qodo on #97 (ad0aa47)
+test('#97 bc54c3e8: proofs shown with redaction are found again on the PR, so nothing is posted twice', () => {
+  const who = { home: '/home/runner', user: 'runner' }, show = (t) => lib.publicText?.(t, who) ?? t;
+  const proofs = ['Proof from the runner: abc..def\nnpm test passed', 'Proof from the runner: def..123\nnpm test passed'];
+  const body = proofs.map(show).join('\n\n'), comments = [show(proofs[1])];
+  const plan = lib.publishPlan(proofs, body, comments, show);
+  assert.deepEqual(plan, { updateBody: false, comment: [] });
+});
+test('#97 5d2b2594 (disputed): a short account name is already hidden wherever the home path appears', () => {
+  const who = { home: '/home/al', user: 'al' };
+  const out = lib.publicText?.('cwd /home/al/x and /home/al', who) ?? '';
+  assert.doesNotMatch(out, /\/home\/al/);
+  assert.equal(out, 'cwd ~/x and ~');
+});
