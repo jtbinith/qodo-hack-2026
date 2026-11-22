@@ -498,7 +498,7 @@ test('the red check runs the browser tests even when the unit tests fail', () =>
   const red = src.match(/function proveRed[\s\S]*?\n\}/)?.[0] || '';
   assert.match(red, /npmTest\(dir, \{ bothSuites: true \}\)/);
   const npm = src.match(/function npmTest[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(npm, /test:unit; u=\$\?; npm run test:browsers; b=\$\?/);
+  assert.match(npm, /test:unit; u=\$\?; node tests\/two-browser\.mjs; d=\$\?; node tests\/two-browser\.mjs --relay; r=\$\?/);
 });
 
 // The blind review of #110 (0c967b8): its repro, copied from .agent/blind/relay-hidden.test.mjs

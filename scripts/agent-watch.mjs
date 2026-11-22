@@ -216,11 +216,12 @@ function agent(n, s, what, prompt, profile = WORKER) {
 }
 
 const uncommitted = (s) => sh('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: s.dir }).split('\n').filter((l) => l && !/ \.agent\//.test(l) && !/ node_modules$/.test(l));
-// `npm test` is unit && browsers. The red check runs both suites whatever the first one does: a test:
+// `npm test` is unit && direct && relay. The red check runs all three whatever the others do: a test:
 // commit's browser test can't be hidden by an earlier test: commit's unit tests, which still fail
-// there because the fix comes later (#96's first factory run)
+// there because the fix comes later (#96's first factory run), and a relay-only check can't be hidden
+// by a failing direct run (blind review on #110)
 function npmTest(dir, { bothSuites = false } = {}) {
-  const args = bothSuites ? ['sh', '-c', 'npm run test:unit; u=$?; npm run test:browsers; b=$?; exit $((u | b))'] : ['npm', 'test'];
+  const args = bothSuites ? ['sh', '-c', 'npm run test:unit; u=$?; node tests/two-browser.mjs; d=$?; node tests/two-browser.mjs --relay; r=$?; exit $((u | d | r))'] : ['npm', 'test'];
   const r = spawnSync(SANDBOX, args, { cwd: dir, encoding: 'utf8', timeout: LIMITS.testRunMin * 60000 });
   const out = (r.stdout || '') + (r.stderr || '');
   return { ok: r.status === 0 && !/^FAIL /m.test(out), out, fails: out.split('\n').filter((l) => /^FAIL |^✖ |AssertionError/.test(l)) };
