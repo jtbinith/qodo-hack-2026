@@ -58,7 +58,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
       const results = earlyResults.get(s.leader) || [];
       earlyResults.clear();
       if (s.leader !== id) for (const { ev, p, at } of results)
-        if (performance.now() - at < NO_MATCH_AFTER && validResult[ev](p)) result(ev, p);
+        if (performance.now() - at < NO_MATCH_AFTER && validResult[ev](p) && namesOnlyHere(ev, p)) result(ev, p);
     }
   }
   // The room server can drop the ask or its answer (Qodo on #95), so the ask is sent again until
@@ -209,6 +209,11 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     joined: (p) => validJoined(p) && isValidJoins([p], [...Object.keys(s.peers), id]),
     retry: validRetry, nomatch: validNoMatch,
   };
+  // A kept result is replayed only if every device it names is still here (Qodo on #96): a kept
+  // retry or nomatch naming a device that has left is dropped, so it can't stop a push's wait.
+  // (A joined is already checked against who is here by validResult.)
+  const here = (d) => d === id || Object.hasOwn(s.peers, d);
+  const namesOnlyHere = (ev, p) => ev === 'retry' ? p.devs.every(here) : ev === 'nomatch' ? here(p.dev) : true;
   function onResult(ev, payload) {
     if (s.leader === id || !validResult[ev](payload)) return;
     if (payload.from === s.leader) { result(ev, payload); return; }
