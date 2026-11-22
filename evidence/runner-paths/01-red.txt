@@ -1,0 +1,118 @@
+✔ a unit test name is found (1.608449ms)
+✔ a check() message on the next line is found (the #41 round 1 case) (0.356046ms)
+✔ a string inside the check() condition is not taken as its name (0.130746ms)
+✔ a template message counts up to its first ${…} (0.111193ms)
+✔ removed lines and short names are ignored (0.163277ms)
+✔ a named FAIL line counts as red, a crash in a named unit test does not (0.295721ms)
+✔ Qodo's escaped titles are decoded (0.248744ms)
+✔ /agent retry is told apart from an instruction (0.187127ms)
+✔ a regular expression with a bracket in the condition is skipped (0.199447ms)
+✔ a check() in one hunk is not closed by an unrelated hunk (0.147094ms)
+✔ a comment inside a wrapped check() is skipped (0.135762ms)
+✔ a retry pushes only when there is something new, otherwise it waits for Qodo again (0.077728ms)
+✔ an /agent instruction the agent makes no change for stops and asks the owner, retry or not (Qodo on 0191b36) (0.08558ms)
+✔ an old stop file is cleared before each agent run and when the owner reopens a run (#41 at 09:28) (0.078722ms)
+✔ what to publish is read from the PR itself, so old runs and half-finished posts are not repeated (Qodo on 829263e) (0.171519ms)
+✔ a comment over a limit is still marked read, so it cannot stop the run again on every tick (Qodo on 829263e) (0.161621ms)
+✔ every page is read, so a list past 100 is complete (0.077516ms)
+✔ a retry has its own limit, separate from instructions (0.038045ms)
+✔ every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66) (0.838841ms)
+✔ a list read with a page number but no allPages is still one page (Qodo on #67) (0.127499ms)
+✔ Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89) (0.069028ms)
+✔ #87 at its last commit: everything fixed or dismissed by the owner, so the gate is met (0.463208ms)
+✔ #89 at 696f158: 3 open Mediums block and the open Low is only flagged (0.264652ms)
+✔ #65: three open Highs block (0.198431ms)
+✔ #64: Qodo skipped its review of the head, so it isn't done even before counting findings (0.251722ms)
+✔ #86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too) (0.201872ms)
+✔ a review of an older commit, or one still running, means wait (0.235059ms)
+✔ an unknown label or status blocks: a label the gate cannot read is never treated as Low (0.281424ms)
+✔ a canary: one planted open Medium on a finished review means not done (0.213547ms)
+✔ a truncated read is not enough to call it done (0.135001ms)
+✔ a failed read of Qodo's review is never taken as clean: wait, and say why (0.135972ms)
+✔ #90 38d06043: a read that claims more findings than it returns is incomplete, never done (0.188476ms)
+✔ #90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done (0.38854ms)
+✔ #90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title (0.32496ms)
+✔ #90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met (0.13915ms)
+✔ #90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description (0.185399ms)
+✔ #90 6bc5fe96: Qodo's type for each finding is read from its PR comment (🐞, 📘, 📎) (0.629334ms)
+✔ #90 6bc5fe96: a Low flagged for the owner gives its type, place and reason (0.141268ms)
+✖ a crash message with a home path is posted with ~ and without the username or domain (0.647634ms)
+✖ a partial path or the username on its own is hidden too (0.538667ms)
+✖ ordinary text is left alone (0.22276ms)
+ℹ tests 41
+ℹ suites 0
+ℹ pass 38
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 98.769972
+
+✖ failing tests:
+
+test at tests/runner-lib.test.mjs:215:1
+✖ a crash message with a home path is posted with ~ and without the username or domain (0.647634ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /--body-file ~\/\.local\/state\/qodo-agent\/41-pr-body\.md/. Input:
+  
+  'The runner crashed: Command failed: gh pr edit 52 --body-file /home/CORP.EXAMPLE.COM/someone/.local/state/qodo-agent/41-pr-body.md'
+  
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-paths/tests/runner-lib.test.mjs:219:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'The runner crashed: Command failed: gh pr edit 52 --body-file /home/CORP.EXAMPLE.COM/someone/.local/state/qodo-agent/41-pr-body.md',
+    expected: /--body-file ~\/\.local\/state\/qodo-agent\/41-pr-body\.md/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:222:1
+✖ a partial path or the username on its own is hidden too (0.538667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'Log: `~/.local/state/qodo-agent/logs/61-1-work.log`'
+  
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-paths/tests/runner-lib.test.mjs:226:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'Log: `~/.local/state/qodo-agent/logs/61-1-work.log`',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:228:1
+✖ ordinary text is left alone (0.22276ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'Quality gate met on e620c50: no open High or Medium findings. Meet me at home.'
+  
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-paths/tests/runner-lib.test.mjs:230:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'Quality gate met on e620c50: no open High or Medium findings. Meet me at home.',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
