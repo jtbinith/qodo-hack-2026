@@ -32,6 +32,8 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   const emit = (ev, data) => s.listeners.forEach((f) => f(ev, data));
   const send = (event, payload) => ch.send({ type: 'broadcast', event, payload });
   const earlyLayouts = new Map();   // device id -> the latest layout it sent while it wasn't this device's time keeper (#61)
+  const earlyResults = new Map();   // device id -> the newest join results it sent while it wasn't this device's time keeper (#96)
+  const EARLY_RESULTS = 8;          // at most this many kept per device
 
   function electLeader() {
     const all = Object.entries(s.peers).sort(([a, p], [b, q]) => (p.joinedAt - q.joinedAt) || (a < b ? -1 : 1));
@@ -51,6 +53,12 @@ export function joinRoom({ room, id, name, size, onSignal }) {
       // (Qodo on #95). Ask the new time keeper to send its layout again. On a first election
       // there's no need: the time keeper sends its layout when it hears this device arrive
       else if (prev !== null) ask(s.leader, ASK_TRIES);
+      // join results the new time keeper sent before this device heard it took over (#96). Each is
+      // checked again against who is here now, and only while a push could still be waiting on it
+      const results = earlyResults.get(s.leader) || [];
+      earlyResults.clear();
+      if (s.leader !== id) for (const { ev, p, at } of results)
+        if (performance.now() - at < NO_MATCH_AFTER && validResult[ev](p)) result(ev, p);
     }
   }
   // The room server can drop the ask or its answer (Qodo on #95), so the ask is sent again until
@@ -75,7 +83,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     }
     // forget joins to devices that have left, so layouts never mention absent devices
     s.joins = s.joins.filter((j) => s.peers[j.a] && s.peers[j.b]);
-    for (const k of earlyLayouts.keys()) if (!s.peers[k]) earlyLayouts.delete(k);   // nothing kept from devices that have left
+    for (const kept of [earlyLayouts, earlyResults]) for (const k of kept.keys()) if (!s.peers[k]) kept.delete(k);   // nothing kept from devices that have left
     electLeader();
     if (s.leader === id) sendLayout();
     emit('peers', s.peers);
@@ -193,11 +201,24 @@ export function joinRoom({ room, id, name, size, onSignal }) {
       Math.max(0, answeredAt + LAYOUT_GAP - performance.now()));
   });
   // join results count only from the current time keeper, as layouts do. This stops honest
-  // mistakes and stale time keepers, not forgery: anyone can write `from` until #24
-  const fromLeader = (payload) => s.leader !== id && payload?.from === s.leader;
-  ch.on('broadcast', { event: 'joined' }, ({ payload }) => { if (fromLeader(payload) && isValidJoins([payload], [...Object.keys(s.peers), id]) && validJoined(payload)) result('joined', payload); });
-  ch.on('broadcast', { event: 'retry' }, ({ payload }) => { if (fromLeader(payload) && validRetry(payload)) result('retry', payload); });
-  ch.on('broadcast', { event: 'nomatch' }, ({ payload }) => { if (fromLeader(payload) && validNoMatch(payload)) result('nomatch', payload); });
+  // mistakes and stale time keepers, not forgery: anyone can write `from` until #24.
+  // A result from another device in the room isn't used either. Like a layout, it is kept, the
+  // newest EARLY_RESULTS per device, in case this device hasn't yet heard that the sender took
+  // over (#96): electLeader then uses it. Any change of time keeper clears what was kept
+  const validResult = {
+    joined: (p) => validJoined(p) && isValidJoins([p], [...Object.keys(s.peers), id]),
+    retry: validRetry, nomatch: validNoMatch,
+  };
+  function onResult(ev, payload) {
+    if (s.leader === id || !validResult[ev](payload)) return;
+    if (payload.from === s.leader) { result(ev, payload); return; }
+    if (typeof payload.from !== 'string' || !Object.hasOwn(s.peers, payload.from) || payload.from === id) return;
+    const kept = earlyResults.get(payload.from) || [];
+    kept.push({ ev, p: payload, at: performance.now() });
+    if (kept.length > EARLY_RESULTS) kept.shift();
+    earlyResults.set(payload.from, kept);
+  }
+  for (const ev of Object.keys(validResult)) ch.on('broadcast', { event: ev }, ({ payload }) => onResult(ev, payload));
 
   s.push = (edge, along) => {
     const p = { dev: id, edge, along, t: s.now() };
