@@ -1,0 +1,82 @@
+✔ a unit test name is found (1.152994ms)
+✔ a check() message on the next line is found (the #41 round 1 case) (0.263959ms)
+✔ a string inside the check() condition is not taken as its name (0.099396ms)
+✔ a template message counts up to its first ${…} (0.094273ms)
+✔ removed lines and short names are ignored (0.092625ms)
+✔ a named FAIL line counts as red, a crash in a named unit test does not (1.081742ms)
+✔ Qodo's escaped titles are decoded (0.16615ms)
+✔ /agent retry is told apart from an instruction (0.1617ms)
+✔ a regular expression with a bracket in the condition is skipped (0.14693ms)
+✔ a check() in one hunk is not closed by an unrelated hunk (0.165515ms)
+✔ a comment inside a wrapped check() is skipped (0.102967ms)
+✔ a retry pushes only when there is something new, otherwise it waits for Qodo again (0.063603ms)
+✔ an /agent instruction the agent makes no change for stops and asks the owner, retry or not (Qodo on 0191b36) (0.064876ms)
+✔ an old stop file is cleared before each agent run and when the owner reopens a run (#41 at 09:28) (0.070571ms)
+✔ what to publish is read from the PR itself, so old runs and half-finished posts are not repeated (Qodo on 829263e) (0.158142ms)
+✔ a comment over a limit is still marked read, so it cannot stop the run again on every tick (Qodo on 829263e) (0.129873ms)
+✔ every page is read, so a list past 100 is complete (0.066691ms)
+✔ a retry has its own limit, separate from instructions (0.030717ms)
+✔ every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66) (0.64356ms)
+✔ a list read with a page number but no allPages is still one page (Qodo on #67) (0.095497ms)
+✔ Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89) (0.03715ms)
+✔ #87 at its last commit: everything fixed or dismissed by the owner, so the gate is met (0.24118ms)
+✔ #89 at 696f158: 3 open Mediums block and the open Low is only flagged (0.147182ms)
+✔ #65: three open Highs block (0.097911ms)
+✔ #64: Qodo skipped its review of the head, so it isn't done even before counting findings (0.139931ms)
+✔ #86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too) (0.106758ms)
+✔ a review of an older commit, or one still running, means wait (0.153059ms)
+✔ an unknown label or status blocks: a label the gate cannot read is never treated as Low (0.165262ms)
+✔ a canary: one planted open Medium on a finished review means not done (0.130873ms)
+✔ a truncated read is not enough to call it done (0.090303ms)
+✔ a failed read of Qodo's review is never taken as clean: wait, and say why (0.073177ms)
+✔ #90 38d06043: a read that claims more findings than it returns is incomplete, never done (0.113952ms)
+✔ #90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done (0.116802ms)
+✔ #90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title (0.192667ms)
+✔ #90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met (0.081728ms)
+✔ #90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description (0.115211ms)
+✔ #90 6bc5fe96: Qodo's type for each finding is read from its PR comment (🐞, 📘, 📎) (0.340169ms)
+✔ #90 6bc5fe96: a Low flagged for the owner gives its type, place and reason (0.077697ms)
+✔ a crash message with a home path is posted with ~ and without the username or domain (0.171913ms)
+✔ a partial path or the username on its own is hidden too (0.090279ms)
+✔ ordinary text is left alone (0.076571ms)
+✖ #97 bc54c3e8: proofs shown with redaction are found again on the PR, so nothing is posted twice (0.808167ms)
+✔ #97 5d2b2594: a short account name is hidden in paths, however short (0.068698ms)
+ℹ tests 43
+ℹ suites 0
+ℹ pass 42
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 60.941084
+
+✖ failing tests:
+
+test at tests/runner-lib.test.mjs:233:1
+✖ #97 bc54c3e8: proofs shown with redaction are found again on the PR, so nothing is posted twice (0.808167ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   comment: [
+  +     'Proof from the runner: def..123\nnpm test passed'
+  +   ],
+  +   updateBody: true
+  -   comment: [],
+  -   updateBody: false
+    }
+  
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-paths/tests/runner-lib.test.mjs:238:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { updateBody: true, comment: [ 'Proof from the runner: def..123\nnpm test passed' ] },
+    expected: { updateBody: false, comment: [] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

@@ -209,3 +209,37 @@ test('#90 6bc5fe96: a Low flagged for the owner gives its type, place and reason
   const md = lib.lowsReport?.({ lows: [low] }, { 'PR body says refunds work': 'Bug' }) ?? '';
   assert.match(md, /Low · Bug · PR body says refunds work \(web\/index\.html:83\): continueRun starts a fix round from the stored review\./);
 });
+
+// The runner's GitHub comments and PR text never show the machine's home path, username or
+// domain (they leaked into two public comments, #41 and #61, through a crash message and a log path)
+test('a crash message with a home path is posted with ~ and without the username or domain', () => {
+  const who = { home: '/home/CORP.EXAMPLE.COM/someone', user: 'someone' };
+  const crash = 'The runner crashed: Command failed: gh pr edit 52 --body-file /home/CORP.EXAMPLE.COM/someone/.local/state/qodo-agent/41-pr-body.md';
+  const out = lib.publicText?.(crash, who) ?? crash;
+  assert.match(out, /--body-file ~\/\.local\/state\/qodo-agent\/41-pr-body\.md/);
+  assert.doesNotMatch(out, /CORP\.EXAMPLE\.COM|someone|\/home\//);
+});
+test('a partial path or the username on its own is hidden too', () => {
+  const who = { home: '/home/CORP.EXAMPLE.COM/someone', user: 'someone' };
+  const out = lib.publicText?.('cwd /home/CORP.EXAMPLE.COM/x, user someone, host CORP.EXAMPLE.COM', who) ?? '';
+  assert.doesNotMatch(out, /CORP\.EXAMPLE\.COM|someone/);
+  assert.equal(lib.publicText?.('Log: `~/.local/state/qodo-agent/logs/61-1-work.log`', who), 'Log: `~/.local/state/qodo-agent/logs/61-1-work.log`');
+});
+test('ordinary text is left alone', () => {
+  const who = { home: '/home/jdoe', user: 'jdoe' };
+  assert.equal(lib.publicText?.('Quality gate met on e620c50: no open High or Medium findings. Meet me at home.', who), 'Quality gate met on e620c50: no open High or Medium findings. Meet me at home.');
+});
+// Qodo on #97 (ad0aa47)
+test('#97 bc54c3e8: proofs shown with redaction are found again on the PR, so nothing is posted twice', () => {
+  const who = { home: '/home/runner', user: 'runner' }, show = (t) => lib.publicText?.(t, who) ?? t;
+  const proofs = ['Proof from the runner: abc..def\nnpm test passed', 'Proof from the runner: def..123\nnpm test passed'];
+  const body = proofs.map(show).join('\n\n'), comments = [show(proofs[1])];
+  const plan = lib.publishPlan(proofs, body, comments, show);
+  assert.deepEqual(plan, { updateBody: false, comment: [] });
+});
+test('#97 5d2b2594 (disputed): a short account name is already hidden wherever the home path appears', () => {
+  const who = { home: '/home/al', user: 'al' };
+  const out = lib.publicText?.('cwd /home/al/x and /home/al', who) ?? '';
+  assert.doesNotMatch(out, /\/home\/al/);
+  assert.equal(out, 'cwd ~/x and ~');
+});

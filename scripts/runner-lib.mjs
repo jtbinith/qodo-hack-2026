@@ -101,8 +101,9 @@ export const staleFiles = (when) => (when === 'reopen' ? ['stop.md', 'test-outpu
 // runner or a post interrupted halfway is never repeated. Every proof goes in the description; each
 // one after the first (which the PR opened with) is also posted as a comment. A proof is found by
 // its first line, which names its commit range.
-export function publishPlan(proofs, prBody, commentBodies) {
-  const head = (p) => p.split('\n')[0];
+// `show` is how the runner shows text on GitHub (publicText), so a proof is looked for as it was posted.
+export function publishPlan(proofs, prBody, commentBodies, show = (t) => t) {
+  const head = (p) => show(p).split('\n')[0];
   return {
     updateBody: proofs.some((p) => !(prBody || '').includes(head(p))),
     comment: proofs.slice(1).filter((p) => !commentBodies.some((b) => b.startsWith(head(p)))),
@@ -203,3 +204,15 @@ export function gateSection(g, types = {}) {
 }
 // The first line of the runner's comment on the ticket. A stopped run says NOT DONE first.
 export const stopTitle = (label) => (label === 'agent-done' ? '**Factory run finished.**' : '**NOT DONE.** The factory run stopped and needs you.');
+
+// Text the runner posts on GitHub (comments, PR title and body) with this machine's home path
+// shown as ~, and any other part of it (the username, a domain folder) hidden. A crash message or
+// a log path put the full path into two public comments (#41, #61). Case matters, and only whole
+// words are hidden, so ordinary words are left alone.
+export function publicText(text, { home, user }) {
+  if (!text || !home) return text;
+  let out = text.split(home).join('~');
+  const parts = [...new Set([...home.split('/').filter((p) => p && p !== 'home'), user].filter((p) => p && p.length >= 3))];
+  for (const p of parts) out = out.replace(new RegExp(`(?<![\\w.-])${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'g'), '<redacted>');
+  return out;
+}
