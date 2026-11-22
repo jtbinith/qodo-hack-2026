@@ -18,7 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -151,7 +151,8 @@ mkdirSync(BIN, { recursive: true });
 for (const tool of ['node', 'npm', 'npx']) writeFileSync(join(BIN, tool), `#!/bin/sh\nexec ${SANDBOX} ${tool} "$@"\n`, { mode: 0o755 });
 // This machine's sign-in setup lives in an uncommitted local config, not in the repo:
 // ~/.config/qodo-agent/local.json, for example { "settingsKeys": [...], "denyDirs": [...], "passEnv": [...] }
-const LOCAL = (() => { try { return JSON.parse(readFileSync(join(homedir(), '.config/qodo-agent/local.json'), 'utf8')); } catch { return {}; } })();
+// A missing or malformed file counts as empty: then any run that needs it fails loudly at sign-in (see agent()).
+const LOCAL = (() => { try { return JSON.parse(readFileSync(join(homedir(), '.config/qodo-agent/local.json'), 'utf8')) || {}; } catch { return {}; } })();
 writeFileSync(AGENT_SETTINGS, JSON.stringify(agentSettings(JSON.parse(readFileSync(join(homedir(), '.claude/settings.json'), 'utf8')), LOCAL)));
 const TOOLS = 'Read,Edit,Write,Glob,Grep,Bash,Skill';
 const ALLOW = ['Skill',   // Read, Glob, Grep and Edit are allowed only inside the worktree (in agent())
@@ -175,12 +176,11 @@ function agent(n, s, what, prompt) {
     '--tools', TOOLS, '--allowedTools', ...ALLOW, `Read(/${s.dir}/**)`, `Edit(/${s.dir}/**)`, '--disallowedTools', ...DENY, '--output-format', 'text'],
     { cwd: s.dir, encoding: 'utf8', timeout: LIMITS.agentRunMin * 60000, stdio: ['ignore', 'pipe', 'pipe'],
       // a small environment: the agent's node and npm are the container ones in BIN
-      env: { PATH: `${BIN}:${process.env.PATH}`, HOME: homedir(), USER: process.env.USER || '', LANG: process.env.LANG || 'C.UTF-8', AGENT_RUN: '1',
-        ...Object.fromEntries((LOCAL.passEnv || []).map((k) => [k, process.env[k] || ''])) } });
+      env: agentEnv({ PATH: `${BIN}:${process.env.PATH}`, HOME: homedir(), USER: process.env.USER || '', LANG: process.env.LANG || 'C.UTF-8', AGENT_RUN: '1' }, LOCAL, process.env) });
   writeFileSync(log, `$ claude -p ${JSON.stringify(prompt)}\n\n${r.stdout || ''}\n${r.stderr || ''}\nexit ${r.status}${r.error ? ' ' + r.error.message : ''}\n`);
   s.runs++; save(n, s);
   event(n, `agent run ${s.runs} (${what}) ended: exit ${r.status}${r.error ? ' (' + r.error.code + ')' : ''}`);
-  if (r.status !== 0) throw new Stop(`Agent run ${s.runs} (${what}) didn't finish: exit ${r.status}${r.error ? ', ' + r.error.code : ''}. Log: \`${log}\``);
+  if (r.status !== 0) throw new Stop(`Agent run ${s.runs} (${what}) didn't finish: exit ${r.status}${r.error ? ', ' + r.error.code : ''}. Log: \`${log}\`. If \`claude\` or its sign-in isn't set up on this machine, see ~/.config/qodo-agent/ (local.json, env).`);
   // don't take the agent's word for it: check what actually changed
   const after = footprint(s);
   if (after !== before) throw new Stop(`Something changed on GitHub during agent run ${s.runs} (${what}). The agent isn't allowed to touch GitHub.\n\n${fence(before + '\n→\n' + after)}`);

@@ -221,9 +221,19 @@ export function publicText(text, { home, user }) {
 // keys the machine's local config names, and a read ban on private folders (the local config can
 // add more). No permissions, plugins, hooks or MCP from the user's settings.
 const DENY_DIRS = ['.ssh', '.config', '.aws', '.claude', '.kiro', '.local', '.gnupg', 'Documents', 'Pictures'];
-export function agentSettings(user, local = {}) {
-  const keys = ['env', 'model', ...(local.settingsKeys || [])];
-  const keep = Object.fromEntries(keys.filter((k) => k in user).map((k) => [k, user[k]]));
-  keep.permissions = { deny: [...DENY_DIRS, ...(local.denyDirs || [])].map((d) => `Read(~/${d}/**)`) };
+// Keys the local config can never bring in: they control what the agent may do, not how it signs in
+const CONTROL = new Set(['permissions', 'hooks', 'enabledPlugins', 'mcpServers', 'enableAllProjectMcpServers', 'enabledMcpjsonServers', 'disableAllHooks', 'statusLine', 'apiKeyHelper', 'additionalDirectories']);
+const strings = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);   // a malformed list counts as empty
+export function agentSettings(user, local) {
+  const l = local && typeof local === 'object' ? local : {};
+  const keys = ['env', 'model', ...strings(l.settingsKeys).filter((k) => !CONTROL.has(k))];
+  const keep = Object.fromEntries(keys.filter((k) => user && k in user).map((k) => [k, user[k]]));
+  keep.permissions = { deny: [...DENY_DIRS, ...strings(l.denyDirs)].map((d) => `Read(~/${d}/**)`) };
   return keep;
+}
+// The agent's environment: the runner's own (PATH with the sandbox wrappers first, HOME, ...), plus
+// the extra names the local config lists. A listed name can never replace one the runner sets.
+export function agentEnv(base, local, processEnv) {
+  const extra = strings(local && typeof local === 'object' ? local.passEnv : null).filter((k) => !(k in base));
+  return { ...base, ...Object.fromEntries(extra.map((k) => [k, (processEnv || {})[k] || ''])) };
 }

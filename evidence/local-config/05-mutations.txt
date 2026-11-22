@@ -1,0 +1,3 @@
+control keys allowed: ["✖ #99 4074a5ef: the local config can't bring in control settings such "]
+reserved env names allowed: ["✖ #99 8829f7df: the local config can pass extra env names but can't re"]
+malformed lists trusted: ['✖ #99 2c5a216f: a malformed local config is ignored rather than crashi']

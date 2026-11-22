@@ -3,18 +3,25 @@
 // The words are built from parts so this file doesn't match itself.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const WORDS = [new RegExp('bed' + 'rock', 'i'), new RegExp('\\.mid' + 'way'), new RegExp('\\.tool' + 'box\\b'), new RegExp('awsCredential' + 'Export'), new RegExp('msg_bd' + 'rk_')];
-test('no tracked file names the sign-in setup or work tooling', () => {
-  const files = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean);
+// every file in the checkout, read from disk (not git: the factory's test container has no git directory)
+function* files(dir) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (['.git', 'node_modules', '.agent'].includes(e.name)) continue;
+    const p = join(dir, e.name);
+    if (e.isDirectory()) yield* files(p); else if (e.isFile()) yield p;
+  }
+}
+test('no file in the repo names the sign-in setup or work tooling', () => {
   const hits = [];
-  for (const f of files) {
-    let text; try { text = readFileSync(root + f, 'utf8'); } catch { continue; }
+  for (const f of files(root)) {
+    let text; try { text = readFileSync(f, 'utf8'); } catch { continue; }
     if (text.includes('\u0000')) continue;   // binary
-    text.split('\n').forEach((line, i) => { for (const w of WORDS) if (w.test(line)) hits.push(`${f}:${i + 1}: ${w.source}`); });
+    text.split('\n').forEach((line, i) => { for (const w of WORDS) if (w.test(line)) hits.push(`${f.slice(root.length)}:${i + 1}: ${w.source}`); });
   }
   assert.deepEqual(hits, []);
 });
