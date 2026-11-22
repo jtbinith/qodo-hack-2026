@@ -282,3 +282,33 @@ test('#99 40078388 and 89d294d4: an unset machine is refused before the agent st
   assert.equal(lib.machineReady?.({ localConfig: false, claude: true })?.why, "This machine isn't set up: missing local config.");
   assert.doesNotMatch(both.why, /\/|~/);
 });
+
+// Day 10: the gate's verdict as a `qodo-gate` commit status on the PR head, which the ruleset
+// requires, so a PR merges only when the gate says done (or the owner bypasses it on GitHub).
+const status = (g) => lib.gateStatus?.(g) ?? {};
+test('qodo-gate: only a met gate is green, and it says how many Lows were flagged', () => {
+  const r = fx('pr-87'), s = status(gate(r, HEAD(r)));
+  assert.equal(s.state, 'success'); assert.match(s.description, /no open High or Medium/);
+  const low = { ...r, finding_count: r.findings.length + 1, findings: [...r.findings, { id: 'low00001', title: 'a Low', action_level: 'informational', attribution_status: 'pending', git_sha: HEAD(r) }] };
+  assert.match(status(gate(low, HEAD(r))).description, /1 Low flagged/);
+});
+test('qodo-gate: open High or Medium findings are red and counted', () => {
+  const r = fx('pr-89-at-696f158'), s = status(gate(r, HEAD(r)));
+  assert.equal(s.state, 'failure'); assert.match(s.description, /3 High or Medium open/);
+});
+test("qodo-gate: an incomplete or skipped review is red, never green", () => {
+  for (const name of ['pr-64', 'pr-86']) { const r = fx(name); assert.equal(status(gate(r, HEAD(r))).state, 'failure', name); }
+});
+test("qodo-gate: no finished review of the head yet is pending, so it can't merge but isn't a verdict", () => {
+  const r = fx('pr-87');
+  assert.equal(status(gate(r, 'f'.repeat(40))).state, 'pending');
+  assert.equal(status(gate({ readError: 'boom' }, 'a'.repeat(40))).state, 'pending');
+});
+test('qodo-gate: a head that moved is red', () => {
+  const r = fx('pr-87');
+  assert.equal(status(gate(r, HEAD(r), { prHead: 'e'.repeat(40) })).state, 'failure');
+});
+test("qodo-gate: the description fits GitHub's 140-character limit", () => {
+  const long = { state: 'incomplete', why: 'x'.repeat(400) };
+  assert.ok(status(long).description.length <= 140);
+});
