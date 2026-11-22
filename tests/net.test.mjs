@@ -462,6 +462,23 @@ test('a kept joined is checked again when its sender takes over (#96)', async ()
   assert.deepEqual(names(B), [], 'A’s kept joined names C, which has left, so it is dropped');
 });
 
+test('a kept retry or nomatch naming a device that has left is dropped, and doesn’t stop this device’s wait (#96, Qodo)', async () => {
+  const devs = await room(), { B } = devs;
+  bus.drop = (event, p) => event === 'push' && p.dev === 'B';   // L never answers B's push
+  B.push('L', 400);
+  // A sends results naming C while L is the time keeper. Then L and C leave together
+  const fromA = channels.find((c) => c.key === 'A');
+  fromA.send({ event: 'retry', payload: { devs: ['B', 'C'], pushes: [{ dev: 'B', t: B.times[0] }, { dev: 'C', t: 1 }], from: 'A' } });
+  fromA.send({ event: 'nomatch', payload: { dev: 'C', t: 1, from: 'A' } });
+  await tick(500);
+  leaves(devs, 'L', 'C');
+  hear('B');
+  await tick(6000);
+  assert.equal(B.leader, 'A');
+  assert.deepEqual(names(B), ['nomatch B'], names(B).join('; '));
+  assert.equal(ownNoMatch(B).length, 1, 'B’s push ended in its own timeout, not in a result naming C');
+});
+
 test('a result from a device not in the room is never kept (#96, Rule 1)', async () => {
   const { B } = await room();
   channels.find((c) => c.key === 'A').send({ event: 'nomatch', payload: { dev: 'B', t: 2, from: 'X' } });
