@@ -483,7 +483,7 @@ test('blind review of #107: a blind review that reproduced a High is described a
 
 // The blind review of #107 (23fbc47), round 3: its repro, copied from .agent/blind/blind-gap.test.mjs
 test('blind review of #107 round 3: a head the runner pushed cannot be posted green before its blind review runs', () => {
-  const push = runnerSrc().match(/function checkAndPush[\s\S]*?\n\}/)?.[0] || '';
+  const push = runnerSrc().match(/function checkAndPush[\s\S]*?\nfunction openPr[\s\S]*?\n\}/)?.[0] || '';   // PR opening moved into openPr (#113)
   const statuses = /postBlind\(/.test(push)
     ? [{ context: 'blind-review', state: 'pending' }, { context: 'qodo-gate', state: 'pending' }]
     : [{ context: 'qodo-gate', state: 'pending' }];
@@ -542,13 +542,13 @@ test("Qodo's stated reason for an incomplete review is quoted from its comment (
 });
 test('an owner /agent retry on the ticket resumes a run that stopped before its first push', () => {
   const plan = (s, asks) => lib.resumePlan?.(s, asks, { retryRounds: 5 });
-  const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', retryRounds: 0 };
-  assert.equal(plan(s, [{ retry: true }]), 'resume');
-  assert.equal(plan({ ...s, pr: 112 }, [{ retry: true }]), null, 'a run with a PR goes the PR way');
-  assert.equal(plan(s, [{ retry: false, text: 'do x' }]), null, 'only a retry: there is no PR to read instructions from');
+  const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', retryRounds: 0, stoppedAt: '2026-11-22T22:00:00Z' }, at = '2026-11-22T23:00:00Z';
+  assert.equal(plan(s, [{ retry: true, at }]), 'resume');
+  assert.equal(plan({ ...s, pr: 112 }, [{ retry: true, at }]), null, 'a run with a PR goes the PR way');
+  assert.equal(plan(s, [{ retry: false, text: 'do x', at }]), null, 'only a retry: there is no PR to read instructions from');
   assert.equal(plan(s, []), null);
-  assert.equal(plan({ ...s, retryRounds: 5 }, [{ retry: true }]), 'limit');
-  assert.equal(plan({ ...s, phase: 'done' }, [{ retry: true }]), null);
+  assert.equal(plan({ ...s, retryRounds: 5 }, [{ retry: true, at }]), 'limit');
+  assert.equal(plan({ ...s, phase: 'done' }, [{ retry: true, at }]), null);
 });
 
 // Qodo's review and the blind review of #113 (63bf29a), each finding as a test before its fix

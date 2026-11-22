@@ -29,4 +29,5 @@ jobs:
       - run: npm run test:unit
       # The two-browser test has a known flaky step (#100). One re-run, with a warning on the run
       # when it was needed, so a flake shows up but doesn't block a merge. Two failures still fail.
-      - run: npm run test:browsers || { echo "::warning::the two-browser test failed once and was re-run (flaky, see #100)"; npm run test:browsers; }
+      - run: |
+          npm run test:browsers || { echo "::warning::the two-browser test failed once and was re-run (flaky, see #100)"; npm run test:browsers; }

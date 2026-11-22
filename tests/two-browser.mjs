@@ -194,12 +194,14 @@ try {
 
   // drag photo-0 and the video onto B's screen with the mouse: press on the print, move past
   // A's right edge (B's screen is joined there) and let go
+  const drags = [];
   async function drag(page, name, toX) {   // toX: where to let go, in this page's screen x (beyond its right edge = the joined screen)
     const at = await page.evaluate((name) => {
       const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name), [wx, wy] = t.world(p), me = t.layout.pos[t.id];
       t.prints.delete(p.pid); t.prints.set(p.pid, p);   // on top, so the press picks this print even where prints overlap
       return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 };
     }, name);
+    drags.push({ name, at });   // for the dump if the transfer below times out (#100)
     await page.mouse.move(at.x, at.y); await page.mouse.down();
     for (let k = 1; k <= 12; k++) await page.mouse.move(at.x + ((toX - at.x) * k) / 12, at.y);
     await page.mouse.up();
@@ -209,7 +211,15 @@ try {
   await drag(A, 'IMG_0001.JPG', 900 + 150);
   await drag(A, 'IMG_0003.JPG', 900 + 150);
   const before = await B.evaluate(() => window.__t.prints.size);
-  await until(B, () => window.__t.files.size === 4, null, 90000);
+  // #100: this wait sometimes times out. If it does, say which files arrived and where each dragged
+  // print was, so the next failure shows its cause
+  try { await until(B, () => window.__t.files.size === 4, null, 90000); } catch (e) {
+    const state = { drags,
+      B: await B.evaluate(() => ({ files: [...window.__t.files.values()].map((f) => f.name), prints: [...window.__t.prints.values()].map((p) => ({ name: p.name, x: p.x, y: p.y })) })).catch((x) => String(x)),
+      A: await A.evaluate(() => ({ me: window.__t.layout.pos[window.__t.id], prints: [...window.__t.prints.values()].map((p) => ({ name: p.name, x: p.x, y: p.y, w: p.w, h: p.h })) })).catch((x) => String(x)) };
+    console.log(`#100 state at the timeout: ${JSON.stringify(state)}`);
+    throw e;
+  }
   const got = await B.evaluate(() => Promise.all([...window.__t.files.entries()].map(async ([pid, f]) => {
     const bmp = await createImageBitmap(f).catch(() => null), shown = bmp && [bmp.width, bmp.height];
     return [f.name, [...new Uint8Array(await f.arrayBuffer())], window.__t.prints.get(pid).sha, shown];

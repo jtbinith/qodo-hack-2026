@@ -270,7 +270,7 @@ function shortReason(text) {
   return ((item || plain || '').replace(/^[-*]\s+/, '').replace(/[*_`]/g, '').split(/(?<=\.)\s/)[0] || '').slice(0, 110);
 }
 function stop(n, s, label, why) {
-  if (s) { s.phase = label === L.done ? 'done' : 'help'; save(n, s); }
+  if (s) { s.phase = label === L.done ? 'done' : 'help'; s.stoppedAt = new Date().toISOString(); save(n, s); }
   const has = issue(n).labels.map((l) => l.name);
   const report = s ? agentFile(s, 'report.md') : '', unchecked = label === L.done && s ? uncheckedCriteria(agentFile(s, 'pr-body.md')) : [];
   setLabels(n, [label, ...(unchecked.length ? [L.manual] : [])], [L.working, L.ready].filter((l) => has.includes(l)));
@@ -358,6 +358,7 @@ function blindReview(n, s) {
 
 // Gets the agent's commits green, proves the red, then pushes. Throws Stop when it can't.
 function checkAndPush(n, s, why) {
+  if (!s.pr && s.head && head(s) === s.head) return openPr(n, s, why);   // pushed before, but no PR yet: finish opening it
   for (let attempt = 1; ; attempt++) {
     if (agentFile(s, 'stop.md')) throw new Stop('The agent stopped instead of guessing:\n\n' + agentFile(s, 'stop.md'));
     if (head(s) === (s.head || s.base)) throw new Stop('The agent made no new commits.');
@@ -396,6 +397,12 @@ function checkAndPush(n, s, why) {
   const flakes = s.flakes || []; s.flakes = [];   // shown once, in this push's proof
   const proof = `**Red → green, checked by the runner** (not the agent) for ${s.head ? s.head.slice(0, 7) : 'main'}..${pushed.slice(0, 7)}:\n${red.join('\n')}\n- \`${pushed.slice(0, 7)}\` (head): \`npm test\` **passes**, direct and relay.\n${localProof}${flakes.length ? `\n${flakes.join('\n')}` : ''}`;
   s.head = pushed; s.pushedAt = s.waitFrom = Date.now(); s.proofs = [...(s.proofs || []), proof];
+  return openPr(n, s, why);
+}
+// Opens the PR for the pushed head (or updates the open one) and marks the head pending. Also the
+// way on for a branch that was pushed but whose PR creation failed (Qodo on #113).
+function openPr(n, s, why) {
+  const pushed = s.head;
   if (!s.pr) {
     writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
     const url = write(`open a PR from ${s.branch}`, () => gh('pr', 'create', '-R', REPO, '--head', s.branch, '--base', 'main', '--title', shown(agentFile(s, 'pr-title.txt').trim()) || `Ticket #${n}`, '--body-file', join(HOME, `${n}-pr-body.md`)), 'https://github.com/x/pull/0');
@@ -495,13 +502,13 @@ function continueRun(n, s) {
         if (plan !== 'stop') {
           if (plan === 'reask') {
             write(`ask Qodo to review PR #${s.pr} again`, () => gh('pr', 'comment', String(s.pr), '-R', REPO, '--body', '/review'));
-            s.reasked = { head: s.head, run: read?.review_session?.run_id }; s.waitFrom = Date.now(); save(n, s);
+            if (!DRY) { s.reasked = { head: s.head, run: read?.review_session?.run_id }; s.waitFrom = Date.now(); save(n, s); }   // a rehearsal never records an ask it didn't make (Qodo on #113)
             event(n, `${g.why}: asked Qodo to review ${s.head.slice(0, 7)} again`);
           } else if ((Date.now() - s.waitFrom) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why}, and Qodo hadn't started a new review ${LIMITS.reviewWaitMin} min after it was asked again.`);
           if (DRY) { console.log(`DRY RUN would wait for Qodo's new review`); process.exit(0); }
           sleep(LIMITS.reviewPollSec * 1000); continue;
         }
-        const reason = qodoReason(q?.body);
+        const reason = q?.reviewed === s.head ? qodoReason(q.body) : '';   // only from Qodo's comment on this head (Qodo on #113)
         throw new Stop(`${g.why}, twice: the runner asked Qodo to review again and the new run was incomplete too${reason ? `. Qodo says: "${reason}"` : ''}. Ask Qodo to review it again, then \`/agent retry\`.`);
       }
       if (g.state === 'done') {
@@ -578,8 +585,11 @@ try {
     const s = load(n);
     if (!s || s.pr || !existsSync(s.dir)) continue;
     const asks = issueComments(n).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
-    const plan = resumePlan(s, asks.map((a) => parseAsk(a.body)), LIMITS);
+    const openPr = ghJson('pr', 'list', '-R', REPO, '--state', 'open', '--limit', '1', '--json', 'number')[0]?.number || null;
+    const plan = resumePlan(s, asks.map((a) => ({ ...parseAsk(a.body), at: a.created_at })), LIMITS, { openPr });
     if (!plan) continue;
+    if (plan === 'wait') { event(n, `/agent retry on the ticket waits: PR #${openPr} is still open`); break; }
+    if (DRY) { console.log(`DRY RUN would resume #${n} on its /agent retry. Stopping here.`); process.exit(0); }   // a rehearsal uses up nothing (blind review on #113)
     current = { n, s };
     s.lastAsk = asks.at(-1).id; save(n, s);
     if (plan === 'limit') throw new Stop(`\`/agent retry\` was used ${LIMITS.retryRounds} times on this run. Label the ticket \`${L.ready}\` again for a fresh run.`);
