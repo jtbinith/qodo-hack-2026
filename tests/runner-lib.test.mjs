@@ -379,7 +379,7 @@ test('wisdom: an unknown verdict is unverified, never holds', () => {
 
 // Day 10: Qodo's local review of the unpushed commits, run by the runner before every push. It goes
 // through the same gate as the PR review (localRead turns `qodo review --json` into the PR read's shape).
-const local = (name, head = 'h'.repeat(40)) => lib.gateVerdict?.(lib.localRead?.(fx(name), head), head) ?? {};
+const local = (name, head = 'h'.repeat(40)) => lib.gateVerdict?.(lib.localRead?.(fx(name), head, { status: 0 }), head) ?? {};
 test('local review, Day 8 run A: 2 open Mediums block the push', () => {
   const g = local('local-day8-A');
   assert.equal(g.state, 'fix'); assert.deepEqual(g.blocking.map((f) => f.id.slice(0, 8)).sort(), ['07c384af', 'e5fa90a2']);
@@ -391,13 +391,13 @@ test('local review, Day 8 run J: the dismissed Medium is closed, the High still 
 });
 test('local review: no findings and full coverage lets the push go ahead', () => {
   const r = { ...fx('local-day8-A'), findings: [] };
-  assert.equal(lib.gateVerdict?.(lib.localRead?.(r, 'h'), 'h')?.state, 'done');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.(r, 'h', { status: 0 }), 'h')?.state, 'done');
 });
 test("local review: incomplete coverage or finding state is never clean", () => {
   const r = { ...fx('local-day8-A'), findings: [] };
-  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, meta: { coverage: { complete: false } } }, 'h'), 'h')?.state, 'incomplete');
-  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, finding_state: { complete: false } }, 'h'), 'h')?.state, 'incomplete');
-  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, meta: {} }, 'h'), 'h')?.state, 'incomplete');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, meta: { coverage: { complete: false } } }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, finding_state: { complete: false } }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, meta: {} }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
 });
 test('local review: output that failed to run or parse is never clean', () => {
   assert.notEqual(lib.gateVerdict?.(lib.localRead?.({ readError: 'boom' }, 'h'), 'h')?.state ?? 'x', 'done');

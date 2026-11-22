@@ -226,12 +226,16 @@ export function wisdomVerdict(result, lines) {
 // Qodo's local review of the unpushed commits (`qodo review --base <pushed> --json`), in the shape of a
 // PR read, so the one gate decides both. Complete only when Qodo says both its finding state and its
 // coverage are complete; a run that failed keeps its error (gateVerdict never takes that as clean).
-export function localRead(out, head) {
+// A run that exited non-zero is a failed read, whatever it printed (Qodo on #107). Qodo's own finding
+// count and truncation flag go through, so a partial list is never taken as the whole (Qodo on #107).
+export function localRead(out, head, { status } = {}) {
+  if (status !== 0) return { readError: `qodo review exit ${status ?? 'unknown'}` };
   if (!out || typeof out !== 'object') return { readError: 'no output from qodo review' };
   if (out.readError) return out;
   const complete = out.finding_state?.complete === true && out.meta?.coverage?.complete === true;
   return { review_session: { commit_sha: head, status: 'completed', review_complete: complete }, findings: out.findings,
-    finding_count: Array.isArray(out.findings) ? out.findings.length : undefined };
+    finding_count: Number.isInteger(out.finding_count) ? out.finding_count : Array.isArray(out.findings) ? out.findings.length : undefined,
+    qar_operation_result_truncated: out.qar_operation_result_truncated };
 }
 
 // The blind review, after Qodo's gate is met: a reviewer that sees the ticket and the code, not Qodo's
@@ -253,6 +257,14 @@ export function blindVerdict(j, runs) {
     else out.flagged.push({ ...f, why: f.why, unproven: serious });
   }
   return { state: out.blocking.length ? 'fix' : 'done', ...out };
+}
+
+// May `qodo-gate` be posted green on a head? Not while the runner's blind review of that head is
+// pending or failed (its own `blind-review` status, newest first as GitHub lists them): a manual
+// --post can't skip it (Qodo on #107). A head with no blind review (a PR made by hand) is up to Qodo.
+export function mayPostSuccess(statuses) {
+  const blind = (statuses || []).find((x) => x && x.context === 'blind-review');
+  return !blind || blind.state === 'success';
 }
 
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review

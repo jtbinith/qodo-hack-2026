@@ -23,7 +23,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, realpathSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { qodoRead, postGate, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
+import { qodoRead, postGate, postBlind, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
 import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros } from './runner-lib.mjs';
 
@@ -179,7 +179,7 @@ const DENY = ['Bash(git push:*)', 'Bash(git checkout:*)', 'Bash(git switch:*)', 
   'Skill(qodo-review)', 'Skill(qodo-review-resolver)', 'Skill(qodo-codebase-wisdom)', 'Bash(qodo:*)'];
 // The Wisdom check (before any code): read-only. It may read the worktree, run `qodo read` through the
 // Codebase Wisdom skill and write only .agent/. Everything else is denied: nobody can approve it.
-const WISDOM = { tools: 'Read,Glob,Grep,Write,Bash,Skill', allow: (dir) => ['Skill(qodo-codebase-wisdom)', 'Bash(qodo --version)', 'Bash(qodo read:*)', `Read(/${dir}/**)`, `Edit(/${dir}/.agent/**)`],   // an Edit rule covers Write
+const WISDOM = { tools: 'Read,Glob,Grep,Write,Bash,Skill', allow: (dir) => ['Skill(qodo-codebase-wisdom)', 'Bash(qodo --version)', 'Bash(qodo read:*)', `Read(/${dir}/**)`, `Edit(/${dir}/.agent/wisdom.json)`],   // an Edit rule covers Write; only its result file (Qodo on #107)
   deny: [...DENY.filter((d) => !/qodo-codebase-wisdom|Bash\(qodo:/.test(d)), 'Bash(qodo review:*)', 'Bash(qodo codebase:*)', 'Bash(qodo pr-review-session:*)', 'Bash(qodo rules:*)', 'Bash(qodo review-notes:*)', 'Bash(qodo review-skills:*)', 'Bash(qodo login:*)', 'Bash(qodo logout:*)', 'Bash(qodo skills:*)', 'Bash(qodo agents:*)', 'Bash(qodo update:*)', 'Bash(qodo uninstall:*)', 'Bash(node:*)', 'Bash(npm:*)', 'Bash(npx:*)'] };
 // The blind reviewer (after Qodo's gate is met): it reads the code and the ticket, never Qodo's review or
 // the agent's report or PR text, and may write only .agent/blind/ (its findings and repro tests).
@@ -289,8 +289,9 @@ const WISDOM_PROMPT = (n) => `Unattended run, read only. Before anyone builds ti
 List every statement the ticket makes about the existing code or behaviour (what happens now, where, which check, which test, which earlier PR) as a claim. For each claim give a verdict: "holds", "wrong" or "unverified", with the repo-relative file, the line, and a quote of at least 8 characters copied exactly from that line (or within 3 lines of it) that shows it. The runner checks every quote: one it can't find makes the claim unverified.
 The only shell commands you can run are \`qodo --version\` and \`qodo read …\`, each on its own (no pipes, no \`cd\`): anything else needs approval nobody can give. Write only .agent/wisdom.json: {"claims":[{"claim":"…","verdict":"holds|wrong|unverified","file":"web/x.js","line":12,"quote":"…","note":"…"}],"questions":["anything the ticket leaves open"]}. Change no other file and make no commits.`;
 function wisdomCheck(n, s) {
-  const before = head(s);
+  const before = head(s), ticket = agentFile(s, 'ticket.md');
   agent(n, s, 'wisdom', WISDOM_PROMPT(n), WISDOM);
+  putAgentFile(s, 'ticket.md', ticket);   // the work agent reads the ticket the runner wrote, whatever this run did (Qodo on #107)
   if (head(s) !== before) throw new Stop('The Wisdom check made commits. It may only read.');
   let result = null; try { result = JSON.parse(agentFile(s, 'wisdom.json')); } catch { /* invalid below */ }
   const root = realpathSync(s.dir);
@@ -318,7 +319,7 @@ function localReview(n, s) {
   const r = spawnSync(QODO_BIN, ['review', '--base', base, '--ticket', `https://github.com/${REPO}/issues/${n}`, '--json'], { cwd: s.dir, env: QODO_ENV, encoding: 'utf8', timeout: LIMITS.localReviewMin * 60000, killSignal: 'SIGKILL' });
   writeFileSync(join(HOME, 'logs', `${n}-${s.runs}-local-review.json`), `${r.stdout || ''}\n${r.stderr || ''}`);
   let out = null; try { out = JSON.parse(r.stdout); } catch { out = { readError: `qodo review exit ${r.status}${r.error ? ' ' + r.error.code : ''}` }; }
-  const g = gateVerdict(localRead(out, at), at);
+  const g = gateVerdict(localRead(out, at, { status: r.status }), at);
   event(n, `local review of ${base.slice(0, 7)}..${at.slice(0, 7)}: ${g.state}, ${g.blocking?.length ?? 0} High or Medium, ${g.lows?.length ?? 0} Low`);
   if (g.state === 'wait' || g.state === 'incomplete') throw new Stop(`Qodo's local review of the unpushed commits didn't give a complete result (${g.why}). Nothing was pushed.`);
   return { g };
@@ -380,6 +381,7 @@ function checkAndPush(n, s, why) {
   const localProof = `- Qodo's local review of the unpushed commits (${(s.head || s.base).slice(0, 7)}..${head(s).slice(0, 7)}): no open High or Medium${local.g.lows.length ? `, ${local.g.lows.length} Low flagged` : ''}${s.localRounds ? ` after ${s.localRounds} local fix round${s.localRounds > 1 ? 's' : ''}` : ''}.`;
   write(`push ${head(s).slice(0, 7)} to ${s.branch}`, () => sh('git', ['push', '-u', 'origin', `HEAD:refs/heads/${s.branch}`], { cwd: s.dir }));
   const pushed = head(s);
+  s.localRounds = 0;   // each push gets its own local fix rounds (Qodo on #107)
   const proof = `**Red → green, checked by the runner** (not the agent) for ${s.head ? s.head.slice(0, 7) : 'main'}..${pushed.slice(0, 7)}:\n${red.join('\n')}\n- \`${pushed.slice(0, 7)}\` (head): \`npm test\` **passes**, direct and relay.\n${localProof}`;
   s.head = pushed; s.pushedAt = s.waitFrom = Date.now(); s.proofs = [...(s.proofs || []), proof];
   if (!s.pr) {
@@ -476,8 +478,13 @@ function continueRun(n, s) {
       if (g.state === 'done') {
         // Gate 4: Qodo found nothing open, so a blind reviewer reviews the same head before it's green
         gate(n, s, prHead, { state: 'wait', why: `Qodo's gate is met on ${s.head.slice(0, 7)}; the blind review is running` });
+        write(`set blind-review on ${prHead.slice(0, 7)} to pending`, () => postBlind(prHead, { state: 'pending', description: 'The blind review is running' }));
         const b = blindReview(n, s);
+        write(`set blind-review on ${prHead.slice(0, 7)} to ${b.state === 'done' ? 'success' : 'failure'}`, () => postBlind(prHead, b.state === 'done'
+          ? { state: 'success', description: `No High or Medium reproduced, ${b.flagged.length} for the owner` }
+          : { state: 'failure', description: `${b.blocking.length} High or Medium reproduced by the runner` }));
         if (b.state === 'done') {
+          publish(n, s);   // the blind review's proof goes on the PR before the run ends (Qodo on #107)
           gate(n, s, prHead, g);
           event(n, `quality gate met on ${s.head.slice(0, 7)}: no open High or Medium findings from Qodo or the blind review, ${g.lows.length} Low flagged`);
           return stop(n, s, L.done, `Quality gate met on ${s.head.slice(0, 7)}: no open High or Medium findings from Qodo, and the blind review reproduced none. PR #${s.pr} is ready for you to review and merge.${lowsReport(g, findingTypes(q?.body))}${b.report}`);
