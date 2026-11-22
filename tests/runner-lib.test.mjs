@@ -273,3 +273,12 @@ test("#99 8829f7df: the local config can pass extra env names but can't replace 
   assert.deepEqual(env, { PATH: '/sandbox/bin:/usr/bin', HOME: '/h', AGENT_RUN: '1', REGION_X: 'r' });
   assert.deepEqual(lib.agentEnv?.(base, null, {}), base);
 });
+// Qodo on #99, second review (d5d3007): a machine that isn't set up stops before any agent work
+test('#99 40078388 and 89d294d4: an unset machine is refused before the agent starts, saying what is missing and no paths', () => {
+  assert.deepEqual(lib.machineReady?.({ localConfig: true, claude: true }), { ok: true });
+  const both = lib.machineReady?.({ localConfig: false, claude: false }) ?? {};
+  assert.equal(both.ok, false);
+  assert.equal(both.why, "This machine isn't set up: missing local config, claude not on PATH.");
+  assert.equal(lib.machineReady?.({ localConfig: false, claude: true })?.why, "This machine isn't set up: missing local config.");
+  assert.doesNotMatch(both.why, /\/|~/);
+});

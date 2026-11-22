@@ -1,0 +1,108 @@
+✖ no file in the repo names the sign-in setup or work tooling (58.497119ms)
+✔ a unit test name is found (3.106898ms)
+✔ a check() message on the next line is found (the #41 round 1 case) (0.713306ms)
+✔ a string inside the check() condition is not taken as its name (0.294604ms)
+✔ a template message counts up to its first ${…} (2.002192ms)
+✔ removed lines and short names are ignored (0.419776ms)
+✔ a named FAIL line counts as red, a crash in a named unit test does not (1.305999ms)
+✔ Qodo's escaped titles are decoded (0.698233ms)
+✔ /agent retry is told apart from an instruction (0.633214ms)
+✔ a regular expression with a bracket in the condition is skipped (0.728649ms)
+✔ a check() in one hunk is not closed by an unrelated hunk (0.777639ms)
+✔ a comment inside a wrapped check() is skipped (0.474779ms)
+✔ a retry pushes only when there is something new, otherwise it waits for Qodo again (0.264508ms)
+✔ an /agent instruction the agent makes no change for stops and asks the owner, retry or not (Qodo on 0191b36) (0.299387ms)
+✔ an old stop file is cleared before each agent run and when the owner reopens a run (#41 at 09:28) (0.204734ms)
+✔ what to publish is read from the PR itself, so old runs and half-finished posts are not repeated (Qodo on 829263e) (0.702634ms)
+✔ a comment over a limit is still marked read, so it cannot stop the run again on every tick (Qodo on 829263e) (0.582225ms)
+✔ every page is read, so a list past 100 is complete (0.315029ms)
+✔ a retry has its own limit, separate from instructions (0.179437ms)
+✔ every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66) (2.68219ms)
+✔ a list read with a page number but no allPages is still one page (Qodo on #67) (0.462072ms)
+✔ Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89) (0.275658ms)
+✔ #87 at its last commit: everything fixed or dismissed by the owner, so the gate is met (1.064555ms)
+✔ #89 at 696f158: 3 open Mediums block and the open Low is only flagged (0.404707ms)
+✔ #65: three open Highs block (0.283644ms)
+✔ #64: Qodo skipped its review of the head, so it isn't done even before counting findings (0.378083ms)
+✔ #86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too) (0.443981ms)
+✔ a review of an older commit, or one still running, means wait (0.404954ms)
+✔ an unknown label or status blocks: a label the gate cannot read is never treated as Low (0.455688ms)
+✔ a canary: one planted open Medium on a finished review means not done (0.398206ms)
+✔ a truncated read is not enough to call it done (0.259308ms)
+✔ a failed read of Qodo's review is never taken as clean: wait, and say why (0.244761ms)
+✔ #90 38d06043: a read that claims more findings than it returns is incomplete, never done (0.29629ms)
+✔ #90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done (0.320963ms)
+✔ #90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title (0.518554ms)
+✔ #90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met (0.202993ms)
+✔ #90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description (0.268681ms)
+✔ #90 6bc5fe96: Qodo's type for each finding is read from its PR comment (🐞, 📘, 📎) (0.91702ms)
+✔ #90 6bc5fe96: a Low flagged for the owner gives its type, place and reason (0.227635ms)
+✔ a crash message with a home path is posted with ~ and without the username or domain (0.531043ms)
+✔ a partial path or the username on its own is hidden too (0.22285ms)
+✔ ordinary text is left alone (0.149572ms)
+✔ #97 bc54c3e8: proofs shown with redaction are found again on the PR, so nothing is posted twice (0.304459ms)
+✔ #97 5d2b2594 (disputed): a short account name is already hidden wherever the home path appears (0.159633ms)
+✔ the agent's settings keep only env and model, plus the local config's sign-in keys and denied folders (0.49864ms)
+✔ #99 4074a5ef: the local config can't bring in control settings such as hooks or permissions (0.159026ms)
+✔ #99 2c5a216f: a malformed local config is ignored rather than crashing the runner (0.483122ms)
+✔ #99 8829f7df: the local config can pass extra env names but can't replace the sandbox PATH or the others the runner sets (0.302687ms)
+✖ #99 40078388 and 89d294d4: an unset machine is refused before the agent starts, saying what is missing and no paths (1.789833ms)
+ℹ tests 49
+ℹ suites 0
+ℹ pass 47
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 171.670487
+
+✖ failing tests:
+
+test at tests/no-local-details.test.mjs:19:1
+✖ no file in the repo names the sign-in setup or work tooling (58.497119ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   'evidence/day-07/raw/10-read-agent-watch-164-171.json:1: <the region variable>',
+  +   'evidence/local-config/pr-99-review-1.json:1: <the region variable>'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-scrub/tests/no-local-details.test.mjs:26:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.start (node:internal/test_runner/test:1003:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'evidence/day-07/raw/10-read-agent-watch-164-171.json:1: <the region variable>', 'evidence/local-config/pr-99-review-1.json:1: <the region variable>' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:277:1
+✖ #99 40078388 and 89d294d4: an unset machine is refused before the agent starts, saying what is missing and no paths (1.789833ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + undefined
+  - {
+  -   ok: true
+  - }
+  
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-scrub/tests/runner-lib.test.mjs:278:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { ok: true },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
