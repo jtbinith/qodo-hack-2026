@@ -480,3 +480,12 @@ test('blind review of #107: a blind review that reproduced a High is described a
   assert.doesNotMatch(description ?? "label the gate can't read", /label the gate can't read/, description);
   assert.match(description ?? '', /1 High or Medium/, description);
 });
+
+// The blind review of #107 (23fbc47), round 3: its repro, copied from .agent/blind/blind-gap.test.mjs
+test('blind review of #107 round 3: a head the runner pushed cannot be posted green before its blind review runs', () => {
+  const push = runnerSrc().match(/function checkAndPush[\s\S]*?\n\}/)?.[0] || '';
+  const statuses = /postBlind\(/.test(push)
+    ? [{ context: 'blind-review', state: 'pending' }, { context: 'qodo-gate', state: 'pending' }]
+    : [{ context: 'qodo-gate', state: 'pending' }];
+  assert.equal(lib.mayPostSuccess?.(statuses), false, 'a runner-pushed head with no blind review yet may be posted green by --post');
+});
