@@ -177,6 +177,18 @@ export function gateVerdict(read, head, { prHead } = {}) {
   return blocking.length ? { state: 'fix', blocking, lows } : { state: 'done', blocking, lows };
 }
 
+// The gate's verdict as a commit status on the PR head (context `qodo-gate`). The "protect main" ruleset
+// requires it, so only a met gate lets a PR merge. No finished review yet is pending: it blocks the
+// merge without being a verdict. GitHub cuts a status description at 140 characters.
+export function gateStatus(g) {
+  const n = (k) => `${k} Low${k === 1 ? '' : 's'} flagged`;
+  const [state, description] = g.state === 'done' ? ['success', `Quality gate met: no open High or Medium, ${n(g.lows.length)}`]
+    : g.state === 'fix' ? ['failure', `NOT DONE: ${g.blocking.length} High or Medium open, ${n(g.lows.length)}`]
+    : g.state === 'wait' ? ['pending', `Waiting: ${g.why}`]
+    : ['failure', `NOT DONE: ${g.why}`];
+  return { state, description: description.length > 140 ? description.slice(0, 139) + '…' : description };
+}
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {
