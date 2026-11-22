@@ -182,10 +182,15 @@ export function gateVerdict(read, head, { prHead } = {}) {
 // merge without being a verdict. GitHub cuts a status description at 140 characters.
 // It's public, so it goes through publicText like every comment (Qodo on #104: a failed read's error
 // can hold the home path).
+// what blocks: real High or Medium findings, and any the gate couldn't read, named apart (Qodo on #104)
+const blockingWhy = (bs) => {
+  const odd = bs.filter((f) => !OPEN.has(f.attribution_status) || severityOf(f) === 'unknown').length, real = bs.length - odd;
+  return [real || !odd ? `${real} High or Medium open` : '', odd ? `${odd} with a label the gate can't read` : ''].filter(Boolean).join(', ');
+};
 export function gateStatus(g, who) {
   const n = (k) => `${k} Low${k === 1 ? '' : 's'} flagged`;
   const [state, description] = g.state === 'done' ? ['success', `Quality gate met: no open High or Medium, ${n(g.lows.length)}`]
-    : g.state === 'fix' ? ['failure', `NOT DONE: ${g.blocking.length} High or Medium open, ${n(g.lows.length)}`]
+    : g.state === 'fix' ? ['failure', `NOT DONE: ${blockingWhy(g.blocking)}, ${n(g.lows.length)}`]
     : g.state === 'wait' ? ['pending', `Waiting: ${g.why}`]
     : ['failure', `NOT DONE: ${g.why}`];
   const shown = who ? publicText(description, who) : description;
