@@ -1,0 +1,2 @@
+{"results":{"5d2b2594-531c-4f45-b067-be6f85cbc2af":{"status":"dismissed","reconciled":true,"failed_effects":[],"retryable":false,"reason":"intentional","explanation":"By design: paths with a short username are already hidden (test '#97 5d2b2594' passes on the old code). Bare words of 1-2 letters aren't redacted, because hiding them would rewrite ordinary text.","detail":null}}}
+  trace f402ebf31a9acf23fade5228bad88ab5
