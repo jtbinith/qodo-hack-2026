@@ -17,8 +17,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes } from './runner-lib.mjs';
+import { homedir, userInfo } from 'node:os';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -79,7 +79,9 @@ function labelledByOwner(n) {
   return latest?.event === 'labeled' && latest.actor.login === OWNER;
 }
 const setLabels = (n, add, remove) => write(`label #${n}: +${add.join(', +') || '-'} −${remove.join(', −') || '-'}`, () => gh('issue', 'edit', String(n), '-R', REPO, ...add.flatMap((l) => ['--add-label', l]), ...remove.flatMap((l) => ['--remove-label', l])));
-const comment = (n, body) => write(`comment on #${n}: ${body.split('\n')[0].slice(0, 100)}`, () => gh('issue', 'comment', String(n), '-R', REPO, '--body', body));
+// everything the runner posts goes through publicText: no home path, username or domain on GitHub
+const WHO = { home: homedir(), user: userInfo().username }, shown = (t) => publicText(t, WHO);
+const comment = (n, body) => { body = shown(body); return write(`comment on #${n}: ${body.split('\n')[0].slice(0, 100)}`, () => gh('issue', 'comment', String(n), '-R', REPO, '--body', body)); };
 const LABEL_INFO = {
   [L.ready]: ['0e8a16', 'Owner only: the factory works this ticket unattended'], [L.working]: ['fbca04', 'The factory is working this ticket'],
   [L.done]: ['1d76db', 'The factory finished; waiting for the owner to merge'], [L.help]: ['d93f0b', 'The factory stopped and needs the owner'],
@@ -279,7 +281,7 @@ function checkAndPush(n, s, why) {
   s.head = pushed; s.pushedAt = s.waitFrom = Date.now(); s.proofs = [...(s.proofs || []), proof];
   if (!s.pr) {
     writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
-    const url = write(`open a PR from ${s.branch}`, () => gh('pr', 'create', '-R', REPO, '--head', s.branch, '--base', 'main', '--title', agentFile(s, 'pr-title.txt').trim() || `Ticket #${n}`, '--body-file', join(HOME, `${n}-pr-body.md`)), 'https://github.com/x/pull/0');
+    const url = write(`open a PR from ${s.branch}`, () => gh('pr', 'create', '-R', REPO, '--head', s.branch, '--base', 'main', '--title', shown(agentFile(s, 'pr-title.txt').trim()) || `Ticket #${n}`, '--body-file', join(HOME, `${n}-pr-body.md`)), 'https://github.com/x/pull/0');
     s.pr = Number(url.split('/').pop());
     event(n, `pushed ${pushed.slice(0, 7)} and opened PR #${s.pr} (${why})`);
   } else event(n, `pushed ${pushed.slice(0, 7)} to PR #${s.pr} (${why})`);
@@ -289,7 +291,7 @@ function checkAndPush(n, s, why) {
 
 // the PR description is always the agent's latest description plus every proof so far,
 // so the PR and the finished-run comment read from the same text
-const prBody = (n, s) => (agentFile(s, 'pr-body.md') || `Closes #${n}`) + '\n\n' + (s.proofs || []).join('\n\n');
+const prBody = (n, s) => shown((agentFile(s, 'pr-body.md') || `Closes #${n}`) + '\n\n' + (s.proofs || []).join('\n\n'));
 // Posts what's pushed but not yet on the PR: the description, and each new proof as a comment.
 // It's resumable: a crash between push and post is caught up on the next step or /agent retry.
 // (gh api, not gh pr edit: gh pr edit fails on this repo with a classic-projects error.)
