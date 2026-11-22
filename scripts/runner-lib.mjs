@@ -216,3 +216,14 @@ export function publicText(text, { home, user }) {
   for (const p of parts) out = out.replace(new RegExp(`(?<![\\w.-])${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'g'), '<redacted>');
   return out;
 }
+
+// The agent's Claude settings: only env and model from the user's settings, plus whatever sign-in
+// keys the machine's local config names, and a read ban on private folders (the local config can
+// add more). No permissions, plugins, hooks or MCP from the user's settings.
+const DENY_DIRS = ['.ssh', '.config', '.aws', '.claude', '.kiro', '.local', '.gnupg', 'Documents', 'Pictures'];
+export function agentSettings(user, local = {}) {
+  const keys = ['env', 'model', ...(local.settingsKeys || [])];
+  const keep = Object.fromEntries(keys.filter((k) => k in user).map((k) => [k, user[k]]));
+  keep.permissions = { deny: [...DENY_DIRS, ...(local.denyDirs || [])].map((d) => `Read(~/${d}/**)`) };
+  return keep;
+}

@@ -18,7 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -149,12 +149,10 @@ exec docker run --rm -i --init --network bridge --dns 1.1.1.1 --user "$(id -u):$
 `, { mode: 0o755 });
 mkdirSync(BIN, { recursive: true });
 for (const tool of ['node', 'npm', 'npx']) writeFileSync(join(BIN, tool), `#!/bin/sh\nexec ${SANDBOX} ${tool} "$@"\n`, { mode: 0o755 });
-{ // sign-in only (Bedrock). No permissions, plugins, hooks or MCP from the user's settings.
-  const user = JSON.parse(readFileSync(join(homedir(), '.claude/settings.json'), 'utf8'));
-  const keep = Object.fromEntries(['awsCredentialExport', 'env', 'model'].filter((k) => k in user).map((k) => [k, user[k]]));
-  keep.permissions = { deny: ['.ssh', '.config', '.aws', '.claude', '.kiro', '.local', '.midway', '.toolbox', '.gnupg', 'Documents', 'Pictures'].map((d) => `Read(~/${d}/**)`) };
-  writeFileSync(AGENT_SETTINGS, JSON.stringify(keep));
-}
+// This machine's sign-in setup lives in an uncommitted local config, not in the repo:
+// ~/.config/qodo-agent/local.json, for example { "settingsKeys": [...], "denyDirs": [...], "passEnv": [...] }
+const LOCAL = (() => { try { return JSON.parse(readFileSync(join(homedir(), '.config/qodo-agent/local.json'), 'utf8')); } catch { return {}; } })();
+writeFileSync(AGENT_SETTINGS, JSON.stringify(agentSettings(JSON.parse(readFileSync(join(homedir(), '.claude/settings.json'), 'utf8')), LOCAL)));
 const TOOLS = 'Read,Edit,Write,Glob,Grep,Bash,Skill';
 const ALLOW = ['Skill',   // Read, Glob, Grep and Edit are allowed only inside the worktree (in agent())
   // A prefix rule only matches when a space follows the prefix ("npm run test:*" never matched
@@ -177,7 +175,8 @@ function agent(n, s, what, prompt) {
     '--tools', TOOLS, '--allowedTools', ...ALLOW, `Read(/${s.dir}/**)`, `Edit(/${s.dir}/**)`, '--disallowedTools', ...DENY, '--output-format', 'text'],
     { cwd: s.dir, encoding: 'utf8', timeout: LIMITS.agentRunMin * 60000, stdio: ['ignore', 'pipe', 'pipe'],
       // a small environment: the agent's node and npm are the container ones in BIN
-      env: { PATH: `${BIN}:${process.env.PATH}`, HOME: homedir(), USER: process.env.USER || '', LANG: process.env.LANG || 'C.UTF-8', AWS_REGION: process.env.AWS_REGION || '', AGENT_RUN: '1' } });
+      env: { PATH: `${BIN}:${process.env.PATH}`, HOME: homedir(), USER: process.env.USER || '', LANG: process.env.LANG || 'C.UTF-8', AGENT_RUN: '1',
+        ...Object.fromEntries((LOCAL.passEnv || []).map((k) => [k, process.env[k] || ''])) } });
   writeFileSync(log, `$ claude -p ${JSON.stringify(prompt)}\n\n${r.stdout || ''}\n${r.stderr || ''}\nexit ${r.status}${r.error ? ' ' + r.error.message : ''}\n`);
   s.runs++; save(n, s);
   event(n, `agent run ${s.runs} (${what}) ended: exit ${r.status}${r.error ? ' (' + r.error.code + ')' : ''}`);
