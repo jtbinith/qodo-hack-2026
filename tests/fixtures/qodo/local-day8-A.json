@@ -1,0 +1,48 @@
+{
+ "findings": [
+  {
+   "id": "e5fa90a2-f25f-4c2d-9c2e-0aabc032907d",
+   "title": "A second push can receive no result",
+   "action_level": "remediation_recommended",
+   "attribution_status": "pending",
+   "git_sha": "1306dc9550075866fb556726e87e1526b70fe4b9",
+   "location": {
+    "file_path": "web/net.js",
+    "start_line": 132,
+    "end_line": 133,
+    "side": "right"
+   }
+  },
+  {
+   "id": "07c384af-9671-437a-83c4-3b427ff9f947",
+   "title": "A leader change hides a valid join result",
+   "action_level": "remediation_recommended",
+   "attribution_status": "pending",
+   "git_sha": "1306dc9550075866fb556726e87e1526b70fe4b9",
+   "location": {
+    "file_path": "web/net.js",
+    "start_line": 150,
+    "end_line": 151,
+    "side": "right"
+   }
+  }
+ ],
+ "finding_state": {
+  "complete": true,
+  "introduced": [
+   "07c384af-9671-437a-83c4-3b427ff9f947",
+   "e5fa90a2-f25f-4c2d-9c2e-0aabc032907d"
+  ],
+  "resolved": [],
+  "still_open": [],
+  "dismissed": []
+ },
+ "meta": {
+  "coverage": {
+   "complete": true
+  },
+  "checkpoint": {
+   "base_sha": "1306dc9550075866fb556726e87e1526b70fe4b9"
+  }
+ }
+}
