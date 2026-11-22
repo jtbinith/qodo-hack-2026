@@ -1,0 +1,73 @@
+<h3>Code Review by Qodo</h3>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" height="10%" alt="Grey Divider">
+
+<details><summary><strong>Resolved findings</strong></summary>
+
+<br/>
+
+<details>
+<summary>  1.  <s>Departed devices remain in kept results</s> <code>✓ Resolved</code> <code>Medium</code></summary>
+
+<br/>
+
+> <details>
+><summary>Resolution reason</summary>
+><br/>
+>
+><pre>
+>Replay of kept retry and nomatch results is now conditioned on every device they name still being in
+>the room (via namesOnlyHere and the here() helper using s.peers and own id), so results naming
+>departed devices are dropped and cannot stop a push&#x27;s wait; a regression test covers this.
+></pre>
+></details>
+
+<!-- qodo-finding-reference
+<code>↗ web/net.js[R209-210]</code> <code>●●● Strong</code>
+-->
+> <details>
+><summary>Description</summary>
+><br/>
+>
+><pre>
+><b><i>validResult</i></b> rechecks current room membership for cached <b><i>joined</i></b> messages, but its <b><i>retry</i></b> and
+><b><i>nomatch</i></b> validators only check payload shape. If another device named by a kept result leaves
+>before the sender takes over, replay still emits that result; a <b><i>retry</i></b> naming a local push can also
+>cancel its pending no-match timer.
+></pre>
+></details>
+
+<hr/>
+</details>
+
+
+</details>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" height="10%" alt="Grey Divider">
+
+<!-- qodo-self-review-slot -->
+
+
+
+<!-- qodo-daily-tip:start -->
+
+<details>
+<summary><strong>Tip of the day</strong></summary>
+
+<br/>
+
+<pre>💡 Did you know, you can route each severity your way: inline, summary, both, or drop</pre>
+
+<a href="https://docs.qodo.ai/tips-and-tricks">More tips ↗</a> | <a href="https://app.qodo.ai/configurations?tab=display-preferences">Customize Qodo ↗</a> | <a href="https://docs.qodo.ai">Qodo docs ↗</a>
+
+</details>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" height="10%" alt="Grey Divider">
+<!-- qodo-daily-tip:end -->
+
+Qodo could not verify all local findings on this PR.
+
+
+<!-- https://github.com/jtbinith/qodo-hack-2026/commit/f642be73200c807a70b843bc705e9e9286dff729 -->
+
+<a href="https://www.qodo.ai"><img src="https://www.qodo.ai/wp-content/uploads/2025/03/qodo-logo.svg" width="80" alt="Qodo Logo"></a>

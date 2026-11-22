@@ -511,3 +511,42 @@ test('blind review of #110: the red check runs the relay browser run even when t
   do { prev = expanded; expanded = expanded.replace(/npm run ([\w:]+)/g, (_, k) => `(${scripts[k]})`); } while (expanded !== prev);
   assert.doesNotMatch(expanded, /&&/, `a failing run still short-circuits the next one: ${expanded}`);
 });
+
+// Day 10: the factory survives a flaky test run and an incomplete Qodo review, and resumes before a push.
+// Measured that day: the first-transfer timeout (#100) stopped a run and turned CI red 3 times, and
+// 9 of 31 Qodo PR review runs on this repo were incomplete.
+const F = (fails) => ({ ok: false, out: fails.join('\n'), fails });
+test('a failed npm test that passes on an identical re-run is flaky: it goes on, and says so', () => {
+  const first = F(['FAIL timed out after 90 s at two-browser.mjs:212']), r = lib.testRetry?.(first, { ok: true, out: '', fails: [] }) ?? {};
+  assert.equal(r.ok, true); assert.equal(r.flaky, true); assert.match(r.note ?? '', /two-browser\.mjs:212/);
+});
+test('a failed npm test that fails again is a failure, with the second run\'s lines', () => {
+  const r = lib.testRetry?.(F(['FAIL a']), F(['FAIL b'])) ?? { ok: true };
+  assert.equal(r.ok, false); assert.deepEqual(r.fails, ['FAIL b']);
+});
+test('a passing npm test needs no re-run', () => {
+  const r = lib.testRetry?.({ ok: true, out: '', fails: [] }) ?? {};
+  assert.equal(r.ok, true); assert.equal(r.flaky, false);
+});
+test('an incomplete review: ask Qodo again once per head, wait for its new run, then stop', () => {
+  const plan = (o) => lib.reaskPlan?.(o);
+  assert.equal(plan({ head: 'h1', runId: 7 }), 'reask', 'first incomplete review of this head');
+  assert.equal(plan({ head: 'h1', runId: 7, asked: { head: 'h1', run: 7 } }), 'wait', 'still the run it saw before asking');
+  assert.equal(plan({ head: 'h1', runId: 8, asked: { head: 'h1', run: 7 } }), 'stop', 'the new run is incomplete too');
+  assert.equal(plan({ head: 'h2', runId: 9, asked: { head: 'h1', run: 7 } }), 'reask', 'a new head gets its own ask');
+});
+test("Qodo's stated reason for an incomplete review is quoted from its comment (#112)", () => {
+  const body = readFileSync(new URL('./fixtures/qodo/pr-112-comment.html', import.meta.url), 'utf8');
+  assert.equal(lib.qodoReason?.(body), 'Qodo could not verify all local findings on this PR.');
+  assert.equal(lib.qodoReason?.('<h3>PR Summary</h3> all good'), '');
+});
+test('an owner /agent retry on the ticket resumes a run that stopped before its first push', () => {
+  const plan = (s, asks) => lib.resumePlan?.(s, asks, { retryRounds: 5 });
+  const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', retryRounds: 0 };
+  assert.equal(plan(s, [{ retry: true }]), 'resume');
+  assert.equal(plan({ ...s, pr: 112 }, [{ retry: true }]), null, 'a run with a PR goes the PR way');
+  assert.equal(plan(s, [{ retry: false, text: 'do x' }]), null, 'only a retry: there is no PR to read instructions from');
+  assert.equal(plan(s, []), null);
+  assert.equal(plan({ ...s, retryRounds: 5 }, [{ retry: true }]), 'limit');
+  assert.equal(plan({ ...s, phase: 'done' }, [{ retry: true }]), null);
+});
