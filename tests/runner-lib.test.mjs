@@ -312,3 +312,24 @@ test("qodo-gate: the description fits GitHub's 140-character limit", () => {
   const long = { state: 'incomplete', why: 'x'.repeat(400) };
   assert.ok(status(long).description.length <= 140);
 });
+
+// Qodo's review of #104 (84e4f57), each finding as a test before its fix
+test('#104 978b8c13: a failed Qodo read never puts the home path or username in the public status', () => {
+  const who = { home: '/home/CORP.EXAMPLE.COM/someone', user: 'someone' };
+  const g = { state: 'wait', why: "Qodo's review couldn't be read (spawnSync /home/CORP.EXAMPLE.COM/someone/.local/bin/qodo ENOENT)" };
+  const d = lib.gateStatus?.(g, who)?.description ?? '/home/CORP.EXAMPLE.COM/someone';
+  assert.doesNotMatch(d, /CORP\.EXAMPLE|someone|\/home\//); assert.match(d, /~\/\.local\/bin\/qodo/);
+});
+test("#104 b72e885c: the runner posts a status whenever it changes, waits included, and doesn't repeat one", () => {
+  const ch = (...a) => lib.statusChange?.(...a);
+  const wait = { state: 'pending', description: 'Waiting' }, ok = { state: 'success', description: 'met' };
+  const k = ch(null, 'a'.repeat(40), ok);
+  assert.ok(k, 'first status is posted');
+  assert.equal(ch(k, 'a'.repeat(40), ok), null, 'the same status again is not reposted');
+  assert.ok(ch(k, 'a'.repeat(40), wait), 'a re-review of the same commit turns a green status back to pending');
+  assert.ok(ch(k, 'b'.repeat(40), ok), 'a new head gets its own status');
+});
+test('#104 2ea70199: the timer copies the whole scripts folder, so a new runner module never needs a unit change', () => {
+  const unit = readFileSync(new URL('../scripts/systemd/qodo-agent.service', import.meta.url), 'utf8');
+  assert.match(unit, /git -C %h\/qodo-hack-2026 archive origin\/main scripts/);
+});
