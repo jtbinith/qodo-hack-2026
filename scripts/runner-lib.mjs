@@ -234,6 +234,27 @@ export function localRead(out, head) {
     finding_count: Array.isArray(out.findings) ? out.findings.length : undefined };
 }
 
+// The blind review, after Qodo's gate is met: a reviewer that sees the ticket and the code, not Qodo's
+// review or the agent's report, writes .agent/blind/findings.json. A High or Medium (or a severity it
+// didn't give) blocks only when its repro, a .test.mjs file in .agent/blind/, fails on an assertion
+// when the runner runs it. Everything else goes to the owner, like a Low.
+const BLIND_REPRO = /^\.agent\/blind\/[\w.-]+\.test\.mjs$/;
+const blindFindings = (j) => (j && typeof j === 'object' && Array.isArray(j.findings) ? j.findings.filter((f) => f && typeof f === 'object') : null);
+const safeRepro = (f) => typeof f.repro === 'string' && BLIND_REPRO.test(f.repro) && !f.repro.includes('..');
+export const blindRepros = (j) => [...new Set((blindFindings(j) || []).filter(safeRepro).map((f) => f.repro))];
+export function blindVerdict(j, runs) {
+  const fs = blindFindings(j);
+  if (!fs) return { state: 'invalid', why: 'the blind review wrote no findings file', blocking: [], flagged: [] };
+  const red = (r) => !!r && !r.ok && /AssertionError|ERR_ASSERTION/.test(r.out || '') && !/SyntaxError|ERR_MODULE_NOT_FOUND|Cannot find module/.test(r.out || '');
+  const out = { blocking: [], flagged: [] };
+  for (const f of fs) {
+    const serious = f.severity !== 'Low';
+    if (serious && safeRepro(f) && red(runs[f.repro])) out.blocking.push(f);
+    else out.flagged.push({ ...f, why: f.why, unproven: serious });
+  }
+  return { state: out.blocking.length ? 'fix' : 'done', ...out };
+}
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {
