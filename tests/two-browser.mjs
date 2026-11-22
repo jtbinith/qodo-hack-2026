@@ -532,6 +532,9 @@ try {
   await quad.B.evaluate(() => window.__releasePresence());
   await until(quad.B, (b) => Object.keys(window.__t.net.peers).length === 3 && window.__t.net.leader === b, q.B.id, 45000);
   const cHeld = await net(quad.C);
+  // C's results, to see whether it showed B's "Joined" or gave up on its push by itself (#96)
+  await quad.C.evaluate(() => { window.__heard = []; window.__t.net.on((ev, d) => { if (['joined', 'retry', 'nomatch'].includes(ev)) window.__heard.push(ev + (d.timedOut ? ' (own timeout)' : '')); }); });
+  const cPushedAt = Date.now();
   await Promise.all([quad.B.evaluate(() => window.__t.net.push('R', 200)), quad.C.evaluate(() => window.__t.net.push('L', 200))]);
   const pairBC = ([b, c]) => window.__t.net.joins.some((j) => [j.a, j.b].sort().join() === [b, c].sort().join());
   await until(quad.B, pairBC, [q.B.id, q.C.id], 15000);
@@ -542,6 +545,12 @@ try {
   const [bNet, cNet, dNet] = [await net(quad.B), await net(quad.C), await net(quad.D)];
   check(cHeld.leader === q.A.id && cHeld.peers === 4 && cNet.leader === q.B.id && cNet.joins === bNet.joins && dNet.joins === bNet.joins && bNet.joins.includes(q.C.id) && !bNet.joins.includes(q.A.id),
     `after the time keeper left, C (which heard last) holds the new time keeper's layout, as D does (B ${bNet.joins}, C ${cNet.joins}, D ${dNet.joins}; C still counted A as time keeper: ${cHeld.leader === q.A.id})`);
+  // and C shows the join B sent it while it still counted A, not its own "No match" (#96). The
+  // wait outlasts C's own no-match timer (NO_MATCH_AFTER, 5.5 s), so a timeout would have shown
+  await new Promise((r) => setTimeout(r, Math.max(0, cPushedAt + 7000 - Date.now())));
+  const cSaw = await quad.C.evaluate(() => ({ toast: document.getElementById('toast').textContent, heard: window.__heard }));
+  check(cSaw.toast === `Joined with ${q.B.name}, ${SIDES.L}` && !cSaw.heard.includes('nomatch (own timeout)'),
+    `C, which heard late that B took over, shows B's join: "${cSaw.toast}" (heard: ${cSaw.heard.join(', ')})`);
   // the new time keeper leaves straight away: C takes over and C and D agree on a layout without A or B
   await quad.B.context().close();
   for (const k of 'CD') await until(quad[k], (c) => Object.keys(window.__t.net.peers).length === 2 && window.__t.net.leader === c, q.C.id, 45000);
