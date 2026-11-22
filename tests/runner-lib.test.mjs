@@ -243,3 +243,14 @@ test('#97 5d2b2594 (disputed): a short account name is already hidden wherever t
   assert.doesNotMatch(out, /\/home\/al/);
   assert.equal(out, 'cwd ~/x and ~');
 });
+
+// The agent's settings: sign-in keys and extra denied folders come from an uncommitted local config
+test("the agent's settings keep only env and model, plus the local config's sign-in keys and denied folders", () => {
+  const user = { env: { A: '1' }, model: 'm', signIn: 'x', permissions: { allow: ['Bash(*)'] }, hooks: {} };
+  const s = lib.agentSettings?.(user, { settingsKeys: ['signIn'], denyDirs: ['.work'] }) ?? {};
+  assert.deepEqual(Object.keys(s).sort(), ['env', 'model', 'permissions', 'signIn']);
+  assert.ok(s.permissions?.deny?.includes('Read(~/.ssh/**)') && s.permissions.deny.includes('Read(~/.work/**)'));
+  assert.equal(s.permissions.allow, undefined);
+  const plain = lib.agentSettings?.(user, {}) ?? {};
+  assert.deepEqual(Object.keys(plain).sort(), ['env', 'model', 'permissions']);
+});
