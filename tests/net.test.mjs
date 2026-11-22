@@ -232,3 +232,163 @@ test('results say whether they answer this device’s latest push', async () => 
   const mine = B.heard.filter(({ ev, d }) => ev === 'retry' || (ev === 'nomatch' && d.dev === 'B'));
   assert.deepEqual(mine.map(({ ev, d }) => [ev, d.latest]), [['retry', false], ['nomatch', true]], names(B).join('; '));
 });
+
+// The time keeper leaves and the others hear it at different times (C5, #61). `leaves` takes
+// devices out of the room without telling anyone. `hear` tells the devices it names
+function leaves(devs, ...gone) {
+  for (const id of gone) { delete presence[id]; devs[id].leave(); channels = channels.filter((c) => c.key !== id); }
+}
+const hear = (...ids) => { for (const id of ids) channels.find((c) => c.key === id).handlers['presence:sync'](); };
+
+test('a device that hears late that the time keeper left still ends up with the new time keeper’s layout', async () => {
+  const devs = await room(), { A, B, C } = devs;
+  leaves(devs, 'L');
+  hear('A');                       // A hears first and takes over. B and C still count L
+  await tick(100);
+  assert.equal(A.leader, 'A'); assert.equal(B.leader, 'L');
+  A.push('R', 400); B.push('L', 400);
+  await tick(3000);
+  assert.equal(A.joins.length, 1, 'A joined B');
+  assert.deepEqual([B.joins, C.joins], [[], []], 'B and C, still counting L, did not use it yet');
+  hear('C', 'B');                  // the two hear in the opposite order to the one they arrived in
+  await settle();
+  assert.deepEqual([B.leader, C.leader], ['A', 'A']);
+  assert.deepEqual(B.joins, A.joins, 'B holds A’s layout');
+  assert.deepEqual(C.joins, A.joins, 'C holds A’s layout');
+});
+
+test('a layout from a device that isn’t the time keeper is still dropped (Rule 1)', async () => {
+  const devs = await room(), { A, C } = devs;
+  const fromB = (joins) => channels.find((c) => c.key === 'B').send({ event: 'layout', payload: { from: 'B', joins } });
+  fromB([{ a: 'B', edgeA: 'R', alongA: 1, b: 'C', edgeB: 'L', alongB: 1 }]);
+  await tick(500);
+  assert.deepEqual([A.joins, C.joins], [[], []], 'not used while L is the time keeper');
+  // L's own layout comes after B's, so what B sent is out of date: when L and A leave and B
+  // takes over, C doesn't take up B's old layout
+  devs.L.push('R', 450); A.push('L', 400);
+  await tick(3000);
+  assert.equal(C.joins.length, 1, 'C holds L’s layout');
+  leaves(devs, 'L', 'A');
+  hear('C');
+  await settle();
+  assert.equal(C.leader, 'B');
+  assert.deepEqual(C.joins, [], 'B’s layout from before L’s was not used');
+});
+
+test('a layout kept from the next time keeper is checked again when it takes over', async () => {
+  const devs = await room(), { B } = devs;
+  // A sends a layout naming C while L is the time keeper. Then L and C leave together
+  channels.find((c) => c.key === 'A').send({ event: 'layout', payload: { from: 'A', joins: [{ a: 'B', edgeA: 'R', alongA: 1, b: 'C', edgeB: 'L', alongB: 1 }] } });
+  await tick(500);
+  leaves(devs, 'L', 'C');
+  hear('B');
+  await settle();
+  assert.equal(B.leader, 'A');
+  assert.deepEqual(B.joins, [], 'A’s kept layout names C, which has left, so it is not used');
+});
+
+// Qodo on #95: the old time keeper's layout can arrive late, after the new time keeper's and
+// before the presence update. It is used, as L is still the time keeper then, and clears what was
+// kept from A. When C then hears that L left, it asks A for its layout instead of keeping L's
+const deliver = (to, event, payload) => channels.find((c) => c.key === to).handlers['broadcast:' + event]?.({ payload });
+
+test('a late layout from the old time keeper doesn’t leave a device with stale joins', async () => {
+  const devs = await room(), { A, B, C } = devs;
+  leaves(devs, 'L');
+  hear('A');
+  await tick(100);
+  A.push('R', 400); B.push('L', 400);
+  await tick(3000);
+  assert.equal(A.joins.length, 1, 'A joined B');
+  deliver('C', 'layout', { from: 'L', joins: [] });   // L's layout, sent before it left, arrives now
+  assert.equal(C.leader, 'L');
+  hear('C');
+  await tick(2000);
+  assert.equal(C.leader, 'A');
+  assert.deepEqual(C.joins, A.joins, 'C asked A and holds its layout');
+});
+
+// Qodo on #95, round 2: the room server can drop the ask or its answer. C asks again, at a
+// capped number of tries, until A's layout arrives
+async function lateOldLayout() {
+  const devs = await room(), { A, B, C } = devs;
+  leaves(devs, 'L');
+  hear('A');
+  await tick(100);
+  A.push('R', 400); B.push('L', 400);
+  await tick(3000);
+  deliver('C', 'layout', { from: 'L', joins: [] });
+  return devs;
+}
+const asksFrom = (who) => { const asks = []; return { asks, count: (event, p) => event === 'layoutask' && p.from === who && asks.push(Date.now()) }; };
+
+test('a lost layout ask is sent again, and C still ends with the new time keeper’s layout', async () => {
+  const { A, C } = await lateOldLayout();
+  const { asks, count } = asksFrom('C');
+  bus.drop = (event, p) => count(event, p) && asks.length === 1;   // the first ask is lost
+  hear('C');
+  await tick(6000);
+  assert.ok(asks.length >= 2, `asks: ${asks.length}`);
+  assert.deepEqual(C.joins, A.joins, 'C holds A’s layout');
+});
+
+test('a lost answer to a layout ask is asked for again', async () => {
+  const { A, C } = await lateOldLayout();
+  let lost = 0;
+  bus.drop = (event, p) => event === 'layout' && p.from === 'A' && lost++ === 0;   // A's first answer is lost
+  hear('C');
+  await tick(6000);
+  assert.equal(lost >= 2, true, 'A answered again');
+  assert.deepEqual(C.joins, A.joins, 'C holds A’s layout');
+});
+
+test('C stops asking once the layout arrives', async () => {
+  const { A, C } = await lateOldLayout();
+  const answered = asksFrom('C');
+  bus.drop = (event, p) => { answered.count(event, p); return false; };
+  hear('C');
+  await tick(20000);
+  assert.deepEqual(C.joins, A.joins);
+  assert.equal(answered.asks.length, 1, 'answered at once: no more asks');
+});
+
+test('when no answer comes, C asks again a capped number of times, then gives up (Rule 3)', async () => {
+  const { C: C2 } = await lateOldLayout();
+  const ignored = asksFrom('C');
+  bus.drop = (event, p) => ignored.count(event, p);   // every ask is lost
+  hear('C');
+  await tick(30000);
+  const n = ignored.asks.length;
+  assert.ok(n >= 3 && n <= 6, `asks: ${n}`);
+  for (let i = 1; i < n; i++) assert.ok(ignored.asks[i] - ignored.asks[i - 1] >= 1000, 'asks are at least LAYOUT_GAP apart');
+  await tick(30000);
+  assert.equal(ignored.asks.length, n, 'no asks after giving up');
+  assert.equal(C2.leader, 'A');
+});
+
+test('only the time keeper answers a layout ask, and a malformed ask is dropped (Rule 1)', async () => {
+  await room();
+  const sent = [];
+  bus.drop = (event, p) => { if (event === 'layout') sent.push(p.from); return false; };
+  for (const bad of [null, {}, { from: 'C' }, { from: 'C', to: 7 }, { from: 'x'.repeat(41), to: 'L' }, { from: 'nobody', to: 'L' }])
+    deliver('L', 'layoutask', bad);
+  deliver('A', 'layoutask', { from: 'C', to: 'A' });   // A isn't the time keeper
+  deliver('A', 'layoutask', { from: 'C', to: 'L' });   // not addressed to A
+  await tick(3000);
+  assert.deepEqual(sent, [], 'nobody answered');
+  deliver('L', 'layoutask', { from: 'C', to: 'L' });
+  await tick(100);
+  assert.deepEqual(sent, ['L'], 'the time keeper answered a well-formed ask');
+});
+
+test('a flood of layout asks gets at most one answer per gap, and the last ask is still answered (Rule 3)', async () => {
+  await room();
+  const sent = [];
+  bus.drop = (event, p) => { if (event === 'layout') sent.push(Date.now()); return false; };
+  let last = 0;
+  for (let i = 0; i < 200; i++) { last = Date.now(); deliver('L', 'layoutask', { from: 'C', to: 'L' }); await tick(10); }   // 2 s of asks
+  await tick(2000);
+  assert.ok(sent.length >= 2 && sent.length <= 4, `answers: ${sent.length}`);
+  for (let i = 1; i < sent.length; i++) assert.ok(sent[i] - sent[i - 1] >= 1000, 'answers are at least 1 s apart');
+  assert.ok(sent[sent.length - 1] >= last, 'an answer went out after the last ask');
+});

@@ -408,6 +408,7 @@ try {
   const C = await device(390, 700);
   await until(C, () => window.__t && window.__t.prints.size >= 2, null, 45000);   // C has been told about the photos B still holds
   await until(B, () => Object.keys(window.__t.net.peers).length === 2, null, 45000);   // A has left B's view of the room
+  await until(C, (a) => !(a in window.__t.net.peers), a.id, 45000);                     // and C's: hearing it late is the #61 step below
   await Promise.all([B.evaluate(() => window.__t.net.push('R', 300)), C.evaluate(() => window.__t.net.push('L', 300))]);
   await until(C, () => window.__t.net.joins.length === 1, null, 30000);
   await drag(B, 'photo-0.jpg', 390 + 150);                                          // B drags its copy onto C
@@ -460,9 +461,29 @@ try {
   // group. Each "Joined with…" shows only on the two devices it names, all four hold the time
   // keeper's 3 joins, and a print A puts down reaches C, which is joined to A only through the group
   const four = code(), say = (page) => page.evaluate(() => document.getElementById('toast').textContent);
+  // B and C can hear about devices leaving late (C5, #61): runs in the page before the app. While
+  // window.__holdPresence is set, the room's "who is here" updates aren't passed to the app. Release
+  // hands it the latest one, read from the room at that moment, as a device that heard late would
+  const latePresence = () => {
+    let real;
+    Object.defineProperty(window, 'supabase', { configurable: true, get: () => real, set(v) {
+      real = { ...v, createClient: (...a) => {
+        const client = v.createClient(...a), channel = client.channel.bind(client);
+        client.channel = (...b) => {
+          const ch = channel(...b), on = ch.on.bind(ch);
+          ch.on = (type, filter, cb) => (type === 'presence' && filter?.event === 'sync'
+            ? on(type, filter, (...x) => { if (window.__holdPresence) window.__missed = () => cb(...x); else cb(...x); })
+            : on(type, filter, cb));
+          return ch;
+        };
+        return client;
+      } };
+    } });
+    window.__releasePresence = () => { window.__holdPresence = false; const f = window.__missed; window.__missed = null; f?.(); };
+  };
   const quad = {};
   for (const k of ['A', 'B', 'C', 'D']) {
-    quad[k] = await device(400, 400, { at: four });
+    quad[k] = await device(400, 400, { at: four, init: 'BC'.includes(k) ? `(${latePresence})()` : undefined });
     await until(quad[k], (n) => window.__t && Object.keys(window.__t.net.peers).length === n, Object.keys(quad).length);
   }
   for (const k of 'ABCD') await until(quad[k], () => Object.keys(window.__t.net.peers).length === 4);
@@ -499,7 +520,36 @@ try {
     return !!p && (t.layout.group[p.anchor] || p.anchor) === (t.layout.group[t.id] || t.id); }, quadPid, 30000).then(() => true, () => false);
   const cView = await quad.C.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); return p ? { anchor: p.anchor, group: t.layout.group[p.anchor], mine: t.layout.group[t.id] } : null; }, quadPid);
   check(seen && cView.anchor === q.A.id, `a print A puts down is visible on C, joined to A only through B and D (${JSON.stringify(cView)})`);
-  for (const k of 'ABCD') await quad[k].context().close();
+
+  // the time keeper leaves and the others hear it in different orders (C5, #61). D hears first,
+  // then B (the new time keeper), which sends its layout and joins C. C hears last, so B's
+  // layouts reach C while C still counts A as the time keeper. C must still end up with B's layout
+  const net = (page) => page.evaluate(() => { const n = window.__t.net; return { leader: n.leader, joins: JSON.stringify(n.joins), peers: Object.keys(n.peers).length }; });
+  await quad.B.evaluate(() => { window.__holdPresence = true; });
+  await quad.C.evaluate(() => { window.__holdPresence = true; });
+  await quad.A.context().close();
+  await until(quad.D, (b) => Object.keys(window.__t.net.peers).length === 3 && window.__t.net.leader === b, q.B.id, 45000);
+  await quad.B.evaluate(() => window.__releasePresence());
+  await until(quad.B, (b) => Object.keys(window.__t.net.peers).length === 3 && window.__t.net.leader === b, q.B.id, 45000);
+  const cHeld = await net(quad.C);
+  await Promise.all([quad.B.evaluate(() => window.__t.net.push('R', 200)), quad.C.evaluate(() => window.__t.net.push('L', 200))]);
+  const pairBC = ([b, c]) => window.__t.net.joins.some((j) => [j.a, j.b].sort().join() === [b, c].sort().join());
+  await until(quad.B, pairBC, [q.B.id, q.C.id], 15000);
+  await new Promise((r) => setTimeout(r, 1500));   // time for B's layout to reach C, which still drops or keeps it
+  await quad.C.evaluate(() => window.__releasePresence());
+  await until(quad.C, () => Object.keys(window.__t.net.peers).length === 3, null, 10000);
+  await until(quad.C, pairBC, [q.B.id, q.C.id], 10000).catch(() => {});
+  const [bNet, cNet, dNet] = [await net(quad.B), await net(quad.C), await net(quad.D)];
+  check(cHeld.leader === q.A.id && cHeld.peers === 4 && cNet.leader === q.B.id && cNet.joins === bNet.joins && dNet.joins === bNet.joins && bNet.joins.includes(q.C.id) && !bNet.joins.includes(q.A.id),
+    `after the time keeper left, C (which heard last) holds the new time keeper's layout, as D does (B ${bNet.joins}, C ${cNet.joins}, D ${dNet.joins}; C still counted A as time keeper: ${cHeld.leader === q.A.id})`);
+  // the new time keeper leaves straight away: C takes over and C and D agree on a layout without A or B
+  await quad.B.context().close();
+  for (const k of 'CD') await until(quad[k], (c) => Object.keys(window.__t.net.peers).length === 2 && window.__t.net.leader === c, q.C.id, 45000);
+  await new Promise((r) => setTimeout(r, 1500));
+  const [cAfter, dAfter] = [await net(quad.C), await net(quad.D)];
+  check(cAfter.joins === dAfter.joins && !cAfter.joins.includes(q.A.id) && !cAfter.joins.includes(q.B.id),
+    `when the new time keeper leaves straight away, C takes over and C and D hold the same layout (C ${cAfter.joins}, D ${dAfter.joins})`);
+  for (const k of 'CD') await quad[k].context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {

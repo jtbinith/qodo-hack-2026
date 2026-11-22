@@ -124,6 +124,8 @@ export const validPeerMeta = (m) => !!m && isStr(m.name, 40) && isNum(m.w, 20000
 // Clock sync with the time keeper.
 export const validPing = (p) => !!p && isDevId(p.from) && isDevId(p.to) && isNum(p.t0, 1e15);
 export const validPong = (p) => !!p && isDevId(p.to) && isNum(p.t0, 1e15) && isNum(p.t1, 1e15);
+// A device asking the new time keeper to send its layout again (#61).
+export const validLayoutAsk = (p) => !!p && isDevId(p.from) && isDevId(p.to);
 
 // Join results the time keeper announces. Each names the pushes it answers by the time the
 // device put on its push. (The join itself is checked by isValidJoins in web/layout.js.)
