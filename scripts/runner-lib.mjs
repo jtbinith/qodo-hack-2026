@@ -223,6 +223,17 @@ export function wisdomVerdict(result, lines) {
   return { state: out.wrong.length ? 'stop' : 'proceed', ...out };
 }
 
+// Qodo's local review of the unpushed commits (`qodo review --base <pushed> --json`), in the shape of a
+// PR read, so the one gate decides both. Complete only when Qodo says both its finding state and its
+// coverage are complete; a run that failed keeps its error (gateVerdict never takes that as clean).
+export function localRead(out, head) {
+  if (!out || typeof out !== 'object') return { readError: 'no output from qodo review' };
+  if (out.readError) return out;
+  const complete = out.finding_state?.complete === true && out.meta?.coverage?.complete === true;
+  return { review_session: { commit_sha: head, status: 'completed', review_complete: complete }, findings: out.findings,
+    finding_count: Array.isArray(out.findings) ? out.findings.length : undefined };
+}
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {

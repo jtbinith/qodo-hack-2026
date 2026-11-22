@@ -8,7 +8,8 @@
 //      runner checks each quote it cites, and a claim proven wrong stops the run before any code.
 //      A Claude Code subagent works it with the work-ticket skill in its own worktree.
 //   2. check and push: the script (not the agent) checks what the agent changed, runs `npm test`,
-//      proves every `test:` commit fails on its own, then pushes `agent/<N>-…` and opens the PR.
+//      proves every `test:` commit fails on its own, has Qodo review the unpushed commits locally
+//      (High or Medium findings go back to the agent first), then pushes `agent/<N>-…` and opens the PR.
 //   3. review loop: once Qodo has reviewed the pushed commit, its open findings (or a `/agent …`
 //      comment from jtbinith) go to a new subagent run, then step 2 again.
 //   4. stop: `agent-done` when Qodo has no open findings, `agent-needs-help` otherwise.
@@ -22,12 +23,14 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync, existsSync, appen
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
   testAttempts: 2,          // agent runs allowed to get `npm test` green per round
   reviewRounds: 3,          // Qodo review rounds the agent may answer
+  localRounds: 2,           // fix rounds from Qodo's local review before a push (then it stops: the loop stalled)
+  localReviewMin: 20,       // one `qodo review` of the unpushed commits
   commentRounds: 3,         // rounds started by an `/agent <instruction>` comment from the owner
   retryRounds: 5,           // `/agent retry` comments: they start no agent, so they have their own limit
   reviewWaitMin: 10,        // minutes to wait for Qodo after a push (about 3x the slowest seen)
@@ -298,6 +301,22 @@ function wisdomCheck(n, s) {
   s.proofs = [...(s.proofs || []), summary]; save(n, s);
 }
 
+// Qodo's local review of what's about to be pushed: the commits since the last push (or main), with
+// the ticket as context. It uploads only tracked changes (.agent/ and node_modules are gitignored, and
+// the tree is clean here): the code the push makes public a minute later. No complete result stops the run.
+// (On a detached HEAD Qodo can't keep a checkpoint and reports its finding inventory incomplete;
+// the factory's worktree is always on its agent/<N>-… branch, where it is complete.)
+function localReview(n, s) {
+  const base = s.head || s.base, at = head(s);
+  const r = spawnSync(QODO_BIN, ['review', '--base', base, '--ticket', `https://github.com/${REPO}/issues/${n}`, '--json'], { cwd: s.dir, env: QODO_ENV, encoding: 'utf8', timeout: LIMITS.localReviewMin * 60000, killSignal: 'SIGKILL' });
+  writeFileSync(join(HOME, 'logs', `${n}-${s.runs}-local-review.json`), `${r.stdout || ''}\n${r.stderr || ''}`);
+  let out = null; try { out = JSON.parse(r.stdout); } catch { out = { readError: `qodo review exit ${r.status}${r.error ? ' ' + r.error.code : ''}` }; }
+  const g = gateVerdict(localRead(out, at), at);
+  event(n, `local review of ${base.slice(0, 7)}..${at.slice(0, 7)}: ${g.state}, ${g.blocking?.length ?? 0} High or Medium, ${g.lows?.length ?? 0} Low`);
+  if (g.state === 'wait' || g.state === 'incomplete') throw new Stop(`Qodo's local review of the unpushed commits didn't give a complete result (${g.why}). Nothing was pushed.`);
+  return { g };
+}
+
 // Gets the agent's commits green, proves the red, then pushes. Throws Stop when it can't.
 function checkAndPush(n, s, why) {
   for (let attempt = 1; ; attempt++) {
@@ -313,9 +332,22 @@ function checkAndPush(n, s, why) {
     agent(n, s, 'fix-tests', `Unattended run. \`npm test\` fails on your branch for ticket #${n}. The last 150 lines of the runner's run are in .agent/test-output.txt. Fix the cause, not the test, following AGENTS.md and the work-ticket skill. Commit the fix. If it isn't caused by this branch, stop as the skill says and say why. The failing lines:\n${t.fails.join('\n')}`);
   }
   const red = proveRed(n, s, s.head || s.base);
+  // Gate 2, before the push: Qodo's local review of the unpushed commits, through the same gate as a PR
+  const local = localReview(n, s);
+  if (local.g.state === 'fix') {
+    if ((s.localRounds || 0) >= LIMITS.localRounds) throw new Stop(`${local.g.blocking.length} High or Medium findings from Qodo's local review still open after ${LIMITS.localRounds} local rounds: ${listed(local.g.blocking).join('; ')}. Nothing was pushed.${lowsReport(local.g)}`);
+    s.localRounds = (s.localRounds || 0) + 1; save(n, s);
+    event(n, `local review of ${head(s).slice(0, 7)}: round ${s.localRounds}, ${local.g.blocking.length} to fix (${listed(local.g.blocking).join('; ')}), ${local.g.lows.length} Low`);
+    putAgentFile(s, 'review.md', `# Qodo's local review of the unpushed commits at ${head(s).slice(0, 7)}\n\n${gateSection(local.g)}`);
+    const before = head(s);
+    agent(n, s, `local-${s.localRounds}`, `Unattended run. Qodo reviewed your unpushed commits for ticket #${n} before the push. Handle that review using step 7 of the skill at .claude/skills/work-ticket/SKILL.md: the findings are in .agent/review.md. Nothing is pushed yet.`);
+    if (head(s) === before) throw new Stop(`The agent judged none of the ${local.g.blocking.length} High or Medium findings from Qodo's local review valid (its evidence is in the report below). Nothing was pushed. A disputed finding stays open until you decide: dismiss it in Qodo, then label the ticket again.${lowsReport(local.g)}`);
+    return checkAndPush(n, s, why);   // tests, red check and local review again on the fixed commits
+  }
+  const localProof = `- Qodo's local review of the unpushed commits (${(s.head || s.base).slice(0, 7)}..${head(s).slice(0, 7)}): no open High or Medium${local.g.lows.length ? `, ${local.g.lows.length} Low flagged` : ''}${s.localRounds ? ` after ${s.localRounds} local fix round${s.localRounds > 1 ? 's' : ''}` : ''}.`;
   write(`push ${head(s).slice(0, 7)} to ${s.branch}`, () => sh('git', ['push', '-u', 'origin', `HEAD:refs/heads/${s.branch}`], { cwd: s.dir }));
   const pushed = head(s);
-  const proof = `**Red → green, checked by the runner** (not the agent) for ${s.head ? s.head.slice(0, 7) : 'main'}..${pushed.slice(0, 7)}:\n${red.join('\n')}\n- \`${pushed.slice(0, 7)}\` (head): \`npm test\` **passes**, direct and relay.`;
+  const proof = `**Red → green, checked by the runner** (not the agent) for ${s.head ? s.head.slice(0, 7) : 'main'}..${pushed.slice(0, 7)}:\n${red.join('\n')}\n- \`${pushed.slice(0, 7)}\` (head): \`npm test\` **passes**, direct and relay.\n${localProof}`;
   s.head = pushed; s.pushedAt = s.waitFrom = Date.now(); s.proofs = [...(s.proofs || []), proof];
   if (!s.pr) {
     writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
