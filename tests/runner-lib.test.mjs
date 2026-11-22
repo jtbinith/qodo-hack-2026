@@ -500,3 +500,14 @@ test('the red check runs the browser tests even when the unit tests fail', () =>
   const npm = src.match(/function npmTest[\s\S]*?\n\}/)?.[0] || '';
   assert.match(npm, /test:unit; u=\$\?; npm run test:browsers; b=\$\?/);
 });
+
+// The blind review of #110 (0c967b8): its repro, copied from .agent/blind/relay-hidden.test.mjs
+test('blind review of #110: the red check runs the relay browser run even when the direct run fails', () => {
+  const src = readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
+  const scripts = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).scripts;
+  const cmd = src.match(/bothSuites \? \['sh', '-c', '([^']+)'\]/)?.[1];
+  assert.ok(cmd, 'bothSuites command not found');
+  let expanded = cmd, prev;
+  do { prev = expanded; expanded = expanded.replace(/npm run ([\w:]+)/g, (_, k) => `(${scripts[k]})`); } while (expanded !== prev);
+  assert.doesNotMatch(expanded, /&&/, `a failing run still short-circuits the next one: ${expanded}`);
+});
