@@ -436,3 +436,38 @@ test('blind: a clean review is done; no result at all is invalid, never clean', 
   assert.equal(blind({ findings: [] }, {}).state, 'done');
   for (const j of [null, {}, { findings: 'x' }]) assert.equal(blind(j, {}).state, 'invalid', JSON.stringify(j));
 });
+
+// Qodo's review of #107 (6242b87), each finding as a test before its fix
+const runnerSrc = () => readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
+test('#107 7645d535: a local review that exits non-zero is never clean, whatever it printed', () => {
+  const clean = { ...fx('local-day8-A'), findings: [] };
+  assert.equal(lib.gateVerdict?.(lib.localRead?.(clean, 'h', { status: 0 }), 'h')?.state, 'done');
+  assert.notEqual(lib.gateVerdict?.(lib.localRead?.(clean, 'h', { status: 1 }), 'h')?.state ?? 'done', 'done');
+  assert.notEqual(lib.gateVerdict?.(lib.localRead?.(clean, 'h', { status: null }), 'h')?.state ?? 'done', 'done');
+});
+test("#107 db31190a: a local review's own finding count and truncation flag reach the gate", () => {
+  const r = fx('local-day8-A');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, finding_count: 5 }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, findings: [], qar_operation_result_truncated: true }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+});
+test('#107 9f37be8f: the Wisdom investigator may write only wisdom.json, and the runner puts the ticket back after it', () => {
+  const src = runnerSrc(), wisdom = src.match(/const WISDOM = \{[\s\S]*?\n/)?.[0] || '';
+  assert.match(wisdom, /Edit\(\/\$\{dir\}\/\.agent\/wisdom\.json\)/); assert.doesNotMatch(wisdom, /\.agent\/\*\*/);
+  assert.match(src.match(/function wisdomCheck[\s\S]*?\n\}/)?.[0] || '', /putAgentFile\(s, 'ticket\.md', ticket\)/);
+});
+test('#107 03259bcb: a manual --post never turns a head green while its blind review is pending or failed', () => {
+  const may = (st) => lib.mayPostSuccess?.(st);
+  assert.equal(may([]), true, 'no blind review on this head (a PR made by hand): Qodo decides');
+  assert.equal(may([{ context: 'blind-review', state: 'success' }]), true);
+  assert.equal(may([{ context: 'blind-review', state: 'pending' }]), false);
+  assert.equal(may([{ context: 'blind-review', state: 'failure' }, { context: 'blind-review', state: 'success' }]), false, 'the latest blind-review status counts');
+  assert.equal(may([{ context: 'qodo-gate', state: 'failure' }, { context: 'blind-review', state: 'success' }]), true);
+});
+test("#107 5713b871: the blind review's result is published on the PR before the run is marked done", () => {
+  const done = runnerSrc().match(/if \(b\.state === 'done'\) \{[\s\S]*?return stop\(n, s, L\.done/)?.[0] || '';
+  assert.match(done, /publish\(n, s\)/);
+});
+test('#107 fe1405c2: local fix rounds start again after each push', () => {
+  const push = runnerSrc().match(/const pushed = head\(s\);[\s\S]*?s\.phase = 'review'/)?.[0] || '';
+  assert.match(push, /s\.localRounds = 0/);
+});
