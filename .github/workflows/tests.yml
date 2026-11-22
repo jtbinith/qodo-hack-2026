@@ -1,0 +1,29 @@
+# Runs the unit tests and the two-browser test (direct and relay) on every PR into main.
+# The "protect main" ruleset makes the `npm test` job a required check, so a PR can't merge red (#34).
+# Read-only: it needs no secrets, so it runs the same for PRs from forks.
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: npm test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # the same image the factory's runner tests in (agent-watch.mjs), matching package.json's playwright
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm ci
+      - run: npm test
