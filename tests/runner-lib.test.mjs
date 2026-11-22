@@ -550,3 +550,35 @@ test('an owner /agent retry on the ticket resumes a run that stopped before its 
   assert.equal(plan({ ...s, retryRounds: 5 }, [{ retry: true }]), 'limit');
   assert.equal(plan({ ...s, phase: 'done' }, [{ retry: true }]), null);
 });
+
+// Qodo's review and the blind review of #113 (63bf29a), each finding as a test before its fix
+test('#113 355112c7: a re-run that fails with no failing lines keeps the first run\'s lines, and a note without lines falls back to the output', () => {
+  const r = lib.testRetry?.(F(['FAIL a']), { ok: false, out: '', fails: [] }) ?? {};
+  assert.deepEqual(r.fails, ['FAIL a']);
+  const n = lib.testRetry?.({ ok: false, out: 'x\nkilled after 15 min', fails: [] }, { ok: true, out: '', fails: [] }) ?? {};
+  assert.match(n.note ?? '', /killed after 15 min/);
+});
+test('blind review of #113: an /agent retry written before the run stopped never resumes it', () => {
+  const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', stoppedAt: '2026-11-22T22:00:00Z' };
+  assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T21:00:00Z' }], { retryRounds: 5 }), null);
+  assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }), 'resume');
+  assert.equal(lib.resumePlan?.({ ...s, stoppedAt: undefined }, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }), null, 'no stop time recorded: never resume');
+});
+test('#113 44689d11: a resume waits while another PR is open', () => {
+  const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', stoppedAt: '2026-11-22T22:00:00Z' };
+  assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }, { openPr: 113 }), 'wait');
+});
+test('#113 39277034 and the blind review: a dry run neither records a re-ask nor uses up a retry', () => {
+  const src = runnerSrc();
+  const reask = src.match(/if \(plan === 'reask'\) \{[\s\S]*?\n          \}/)?.[0] || '';
+  assert.match(reask, /if \(!DRY\) \{ s\.reasked/);
+  const resume = src.match(/for \(const \{ number: n \} of openTickets\(L\.help\)\) \{[\s\S]*?process\.exit\(0\);\n  \}/)?.[0] || '';
+  assert.match(resume, /if \(DRY\) \{ console\.log\(`DRY RUN would resume/);
+});
+test('#113 304ebe3f: a branch pushed without its PR gets the PR on retry, not "no new commits"', () => {
+  const push = runnerSrc().match(/function checkAndPush[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(push, /if \(!s\.pr && s\.head && head\(s\) === s\.head\) return openPr\(n, s, why\);/);
+});
+test("#113 3bc1eb25: the stop quotes Qodo's reason only from its comment on this head", () => {
+  assert.match(runnerSrc(), /const reason = q\?\.reviewed === s\.head \? qodoReason\(q\.body\) : '';/);
+});
