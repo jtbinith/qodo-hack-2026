@@ -392,6 +392,8 @@ function checkAndPush(n, s, why) {
   } else event(n, `pushed ${pushed.slice(0, 7)} to PR #${s.pr} (${why})`);
   s.phase = 'review'; save(n, s);
   gate(n, s, pushed, { state: 'wait', why: `Qodo hasn't finished a review of ${pushed.slice(0, 7)} yet` });
+  // every head the runner pushes owes a blind review, so a manual --post can't turn it green first (blind review on #107)
+  write(`set blind-review on ${pushed.slice(0, 7)} to pending`, () => postBlind(pushed, { state: 'pending', description: 'Waiting for Qodo, then the blind review' }));
   publish(n, s);
 }
 
