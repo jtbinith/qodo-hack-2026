@@ -153,18 +153,20 @@ test('a short message to a silent device is dropped after 10 s without an error'
 // key came late never saw the photo. The caller must learn the message was dropped, and when
 // the key arrives, so it can announce again.
 test('a short message says whether it was sent or dropped', async () => {
-  const { peers } = room();
+  const { peers, frames } = room();
   const lost = peers.send('c', { t: 'print', pid: '0123456789abcdef' });
   await settle(); await tick(TIMEOUT);
   assert.equal(await lost, false, 'a dropped message was reported as sent');
   await giveKey(peers, 'b');
   const sent = peers.send('b', { t: 'print', pid: '0123456789abcdef' });
-  await settle(); await tick(100);
+  // the relay seals with real WebCrypto before it sets its (mocked) gap timer: wait for the frame in
+  // real time, or the tick can run before that timer exists and the send never resolves (#105)
+  await waitFor(() => frames('b') === 1, 'the sent message never went out'); await tick(100);
   assert.equal(await sent, true, 'a sent message was reported as dropped');
   const late = peers.send('d', { t: 'print', pid: '0123456789abcdef' });
   await settle(); await tick(TIMEOUT - 1000);
   await giveKey(peers, 'd');
-  await settle(); await tick(100);
+  await waitFor(() => frames('d') === 1, 'the held message never went out once the key came'); await tick(100);
   assert.equal(await late, true, 'a message held until the key came was reported as dropped');
 });
 
