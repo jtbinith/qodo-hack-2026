@@ -1,0 +1,78 @@
+{
+ "findings": [
+  {
+   "id": "98ac0a5b-cc42-493c-868b-231c8e3506eb",
+   "title": "Final-state note says a broken repro harness is fixed",
+   "action_level": "informational",
+   "attribution_status": "pending",
+   "git_sha": "99f3d2d4895b35ad106661dfcef9aafce1b62b71",
+   "location": {
+    "file_path": "evidence/day-08/02-findings-and-verdicts.md",
+    "start_line": 67,
+    "end_line": 67,
+    "side": "right"
+   }
+  },
+  {
+   "id": "07c384af-9671-437a-83c4-3b427ff9f947",
+   "title": "A leader change hides a valid join result",
+   "action_level": "remediation_recommended",
+   "attribution_status": "pending",
+   "git_sha": "1306dc9550075866fb556726e87e1526b70fe4b9",
+   "location": {
+    "file_path": "web/net.js",
+    "start_line": 150,
+    "end_line": 151,
+    "side": "right"
+   }
+  },
+  {
+   "id": "240d001d-da71-4e84-b2be-a93978491717",
+   "title": "Clock correction blocks later joins",
+   "action_level": "action_required",
+   "attribution_status": "pending",
+   "git_sha": "696f15805d23e2c1a3bbc57e19abaa47b16a2240",
+   "location": {
+    "file_path": "web/net.js",
+    "start_line": 163,
+    "end_line": 163,
+    "side": "right"
+   }
+  },
+  {
+   "id": "4bf90ebe-18fb-43ef-8cbe-b845d9227735",
+   "title": "Join tests skip non-facing and edge taps",
+   "action_level": "remediation_recommended",
+   "attribution_status": "dismissed",
+   "git_sha": "696f15805d23e2c1a3bbc57e19abaa47b16a2240",
+   "location": {
+    "file_path": "tests/two-browser.mjs",
+    "start_line": 68,
+    "end_line": 70,
+    "side": "right"
+   }
+  }
+ ],
+ "finding_state": {
+  "complete": true,
+  "introduced": [
+   "98ac0a5b-cc42-493c-868b-231c8e3506eb"
+  ],
+  "resolved": [],
+  "still_open": [
+   "07c384af-9671-437a-83c4-3b427ff9f947",
+   "240d001d-da71-4e84-b2be-a93978491717"
+  ],
+  "dismissed": [
+   "4bf90ebe-18fb-43ef-8cbe-b845d9227735"
+  ]
+ },
+ "meta": {
+  "coverage": {
+   "complete": true
+  },
+  "checkpoint": {
+   "base_sha": "b757dd44e749664bf687e0bf16a38003df11c39a"
+  }
+ }
+}

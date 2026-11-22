@@ -338,3 +338,154 @@ test('#104 4cda905c: a finding blocking only because its label is unreadable is 
   const d = lib.gateStatus?.(gate(add, HEAD(r)))?.description ?? '';
   assert.match(d, /1 with a label the gate can't read/); assert.doesNotMatch(d, /1 High or Medium open/);
 });
+// Day 10: Codebase Wisdom checks the ticket's claims before any code is written. The runner doesn't
+// take the investigator's word: each claim must cite a file, a line and a quote, and the quote must
+// really be there (within 3 lines). A claim proven wrong stops the run; one it can't check goes on
+// to the agent as an assumption to test.
+const FILES = { 'web/peers.js': ['a', 'b', "  if (payload.from !== s.leader) return;   // fromLeader", 'd', 'e'] };
+const at = (file, line) => FILES[file] || null;
+const wisdom = (j) => lib.wisdomVerdict?.(j, at) ?? {};
+const claim = (o) => ({ claim: 'results from anyone but the time keeper are dropped', verdict: 'holds', file: 'web/peers.js', line: 3, quote: 'payload.from !== s.leader', ...o });
+test('wisdom: a cited claim that holds lets the work start', () => {
+  const w = wisdom({ claims: [claim()] });
+  assert.equal(w.state, 'proceed'); assert.equal(w.held.length, 1); assert.deepEqual(w.wrong, []);
+});
+test('wisdom: a claim proven wrong by a real quote stops the run before any code', () => {
+  const w = wisdom({ claims: [claim(), claim({ claim: 'the late device keeps join results', verdict: 'wrong' })] });
+  assert.equal(w.state, 'stop'); assert.equal(w.wrong.length, 1); assert.match(w.wrong[0].claim, /keeps join results/);
+});
+test("wisdom: a quote that isn't at the cited line isn't evidence, so the claim is only unverified", () => {
+  for (const bad of [{ quote: 'something the file never says' }, { line: 50 }, { file: 'web/nope.js' }, { quote: '' }, { quote: 'a' }]) {
+    const w = wisdom({ claims: [claim({ verdict: 'wrong', ...bad })] });
+    assert.equal(w.state, 'proceed', JSON.stringify(bad)); assert.equal(w.unverified.length, 1); assert.deepEqual(w.wrong, []);
+  }
+});
+test('wisdom: a quote 3 lines away still counts, 4 lines away does not', () => {
+  assert.equal(wisdom({ claims: [claim({ line: 6 })] }).held.length, 1);
+  assert.equal(wisdom({ claims: [claim({ line: 7 })] }).held.length, 0);
+});
+test('wisdom: paths outside the repo are never read', () => {
+  const seen = [];
+  lib.wisdomVerdict?.({ claims: [claim({ file: '../secret' }), claim({ file: '/etc/passwd' }), claim({ file: 'a/../../x' })] }, (f) => { seen.push(f); return null; });
+  assert.deepEqual(seen, []);
+});
+test("wisdom: no result, or a result that checks nothing, can't let the work start", () => {
+  for (const j of [null, {}, { claims: [] }, { claims: 'x' }, 'text']) assert.equal(wisdom(j).state, 'invalid', JSON.stringify(j));
+});
+test('wisdom: an unknown verdict is unverified, never holds', () => {
+  const w = wisdom({ claims: [claim({ verdict: 'probably' })] });
+  assert.equal(w.unverified.length, 1); assert.equal(w.held.length, 0);
+});
+
+// Day 10: Qodo's local review of the unpushed commits, run by the runner before every push. It goes
+// through the same gate as the PR review (localRead turns `qodo review --json` into the PR read's shape).
+const local = (name, head = 'h'.repeat(40)) => lib.gateVerdict?.(lib.localRead?.(fx(name), head, { status: 0 }), head) ?? {};
+test('local review, Day 8 run A: 2 open Mediums block the push', () => {
+  const g = local('local-day8-A');
+  assert.equal(g.state, 'fix'); assert.deepEqual(g.blocking.map((f) => f.id.slice(0, 8)).sort(), ['07c384af', 'e5fa90a2']);
+});
+test('local review, Day 8 run J: the dismissed Medium is closed, the High still blocks, the Low is only flagged', () => {
+  const g = local('local-day8-J');
+  assert.equal(g.state, 'fix'); assert.ok(!g.blocking.some((f) => f.id.startsWith('4bf90ebe')));
+  assert.ok(g.blocking.some((f) => f.id.startsWith('240d001d'))); assert.deepEqual(g.lows.map((f) => f.id.slice(0, 8)), ['98ac0a5b']);
+});
+test('local review: no findings and full coverage lets the push go ahead', () => {
+  const r = { ...fx('local-day8-A'), findings: [] };
+  assert.equal(lib.gateVerdict?.(lib.localRead?.(r, 'h', { status: 0 }), 'h')?.state, 'done');
+});
+test("local review: incomplete coverage or finding state is never clean", () => {
+  const r = { ...fx('local-day8-A'), findings: [] };
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, meta: { coverage: { complete: false } } }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, finding_state: { complete: false } }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, meta: {} }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+});
+test('local review: output that failed to run or parse is never clean', () => {
+  assert.notEqual(lib.gateVerdict?.(lib.localRead?.({ readError: 'boom' }, 'h'), 'h')?.state ?? 'x', 'done');
+  assert.notEqual(lib.gateVerdict?.(lib.localRead?.(null, 'h'), 'h')?.state ?? 'x', 'done');
+  assert.notEqual(lib.gateVerdict?.(lib.localRead?.({ finding_state: { complete: true }, meta: { coverage: { complete: true } } }, 'h'), 'h')?.state ?? 'x', 'done');
+});
+
+// Day 10: a blind reviewer (no Qodo review, no agent report) reviews the PR once Qodo's gate is met.
+// Its word isn't enough either: a High or Medium blocks only if its repro test, run by the runner,
+// fails on an assertion. Others go to the owner, like Lows. (Blind review found something Qodo
+// didn't on Days 7, 8 and 9.)
+const blind = (j, runs) => lib.blindVerdict?.(j, runs) ?? {};
+const bf = (o) => ({ title: 'late device shows No match', severity: 'Medium', file: 'web/net.js', line: 10, why: 'x', repro: '.agent/blind/late.test.mjs', ...o });
+const RED = { ok: false, out: 'not ok 1 - late\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal' };
+test('blind: a Medium whose repro fails on an assertion blocks', () => {
+  const b = blind({ findings: [bf()] }, { '.agent/blind/late.test.mjs': RED });
+  assert.equal(b.state, 'fix'); assert.equal(b.blocking.length, 1);
+});
+test("blind: a repro that passes, crashes or is missing doesn't block: it goes to the owner", () => {
+  for (const run of [{ ok: true, out: 'ok 1' }, { ok: false, out: 'SyntaxError: Unexpected token' }, { ok: false, out: "Error [ERR_MODULE_NOT_FOUND]: Cannot find module" }, undefined]) {
+    const b = blind({ findings: [bf()] }, run ? { '.agent/blind/late.test.mjs': run } : {});
+    assert.equal(b.state, 'done', JSON.stringify(run)); assert.equal(b.flagged.length, 1); assert.deepEqual(b.blocking, []);
+  }
+});
+test('blind: a repro outside .agent/blind/ or not a .test.mjs file is never run or trusted', () => {
+  for (const repro of ['tests/net.test.mjs', '.agent/blind/../../x.test.mjs', '/tmp/x.test.mjs', '.agent/blind/x.js']) {
+    const b = blind({ findings: [bf({ repro })] }, { [repro]: RED });
+    assert.equal(b.state, 'done', repro); assert.deepEqual(lib.blindRepros?.({ findings: [bf({ repro })] }) ?? ['x'], [], repro);
+  }
+});
+test('blind: Lows never block, and a finding with no severity counts as Medium', () => {
+  assert.equal(blind({ findings: [bf({ severity: 'Low' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'done');
+  assert.equal(blind({ findings: [bf({ severity: 'whatever' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'fix');
+});
+test('blind: a clean review is done; no result at all is invalid, never clean', () => {
+  assert.equal(blind({ findings: [] }, {}).state, 'done');
+  for (const j of [null, {}, { findings: 'x' }]) assert.equal(blind(j, {}).state, 'invalid', JSON.stringify(j));
+});
+
+// Qodo's review of #107 (6242b87), each finding as a test before its fix
+const runnerSrc = () => readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
+test('#107 7645d535: a local review that exits non-zero is never clean, whatever it printed', () => {
+  const clean = { ...fx('local-day8-A'), findings: [] };
+  assert.equal(lib.gateVerdict?.(lib.localRead?.(clean, 'h', { status: 0 }), 'h')?.state, 'done');
+  assert.notEqual(lib.gateVerdict?.(lib.localRead?.(clean, 'h', { status: 1 }), 'h')?.state ?? 'done', 'done');
+  assert.notEqual(lib.gateVerdict?.(lib.localRead?.(clean, 'h', { status: null }), 'h')?.state ?? 'done', 'done');
+});
+test("#107 db31190a: a local review's own finding count and truncation flag reach the gate", () => {
+  const r = fx('local-day8-A');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, finding_count: 5 }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+  assert.equal(lib.gateVerdict?.(lib.localRead?.({ ...r, findings: [], qar_operation_result_truncated: true }, 'h', { status: 0 }), 'h')?.state, 'incomplete');
+});
+test('#107 9f37be8f: the Wisdom investigator may write only wisdom.json, and the runner puts the ticket back after it', () => {
+  const src = runnerSrc(), wisdom = src.match(/const WISDOM = \{[\s\S]*?\n/)?.[0] || '';
+  assert.match(wisdom, /Edit\(\/\$\{dir\}\/\.agent\/wisdom\.json\)/); assert.doesNotMatch(wisdom, /\.agent\/\*\*/);
+  assert.match(src.match(/function wisdomCheck[\s\S]*?\n\}/)?.[0] || '', /putAgentFile\(s, 'ticket\.md', ticket\)/);
+});
+test('#107 03259bcb: a manual --post never turns a head green while its blind review is pending or failed', () => {
+  const may = (st) => lib.mayPostSuccess?.(st);
+  assert.equal(may([]), true, 'no blind review on this head (a PR made by hand): Qodo decides');
+  assert.equal(may([{ context: 'blind-review', state: 'success' }]), true);
+  assert.equal(may([{ context: 'blind-review', state: 'pending' }]), false);
+  assert.equal(may([{ context: 'blind-review', state: 'failure' }, { context: 'blind-review', state: 'success' }]), false, 'the latest blind-review status counts');
+  assert.equal(may([{ context: 'qodo-gate', state: 'failure' }, { context: 'blind-review', state: 'success' }]), true);
+});
+test("#107 5713b871: the blind review's result is published on the PR before the run is marked done", () => {
+  const done = runnerSrc().match(/if \(b\.state === 'done'\) \{[\s\S]*?return stop\(n, s, L\.done/)?.[0] || '';
+  assert.match(done, /publish\(n, s\)/);
+});
+test('#107 fe1405c2: local fix rounds start again after each push', () => {
+  const push = runnerSrc().match(/const pushed = head\(s\);[\s\S]*?s\.phase = 'review'/)?.[0] || '';
+  assert.match(push, /s\.localRounds = 0/);
+});
+
+// The blind review of #107 (d4ffccb): its repro, copied from .agent/blind/blind-status.test.mjs
+test('blind review of #107: a blind review that reproduced a High is described as a High or Medium, not an unreadable label', () => {
+  const blocking = [{ title: 'late device shows No match', severity: 'High', file: 'web/net.js', line: 10, why: 'x', repro: '.agent/blind/late.test.mjs' }];
+  const { state, description } = lib.gateStatus?.({ state: 'fix', blocking, lows: [] }) ?? {};
+  assert.equal(state, 'failure');
+  assert.doesNotMatch(description ?? "label the gate can't read", /label the gate can't read/, description);
+  assert.match(description ?? '', /1 High or Medium/, description);
+});
+
+// The blind review of #107 (23fbc47), round 3: its repro, copied from .agent/blind/blind-gap.test.mjs
+test('blind review of #107 round 3: a head the runner pushed cannot be posted green before its blind review runs', () => {
+  const push = runnerSrc().match(/function checkAndPush[\s\S]*?\n\}/)?.[0] || '';
+  const statuses = /postBlind\(/.test(push)
+    ? [{ context: 'blind-review', state: 'pending' }, { context: 'qodo-gate', state: 'pending' }]
+    : [{ context: 'qodo-gate', state: 'pending' }];
+  assert.equal(lib.mayPostSuccess?.(statuses), false, 'a runner-pushed head with no blind review yet may be posted green by --post');
+});

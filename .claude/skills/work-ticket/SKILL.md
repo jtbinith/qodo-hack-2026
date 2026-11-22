@@ -90,7 +90,7 @@ The gate is in this skill, not in AGENTS.md: Qodo reads AGENTS.md as review rule
 
 ## Unattended runs
 When the prompt says this is an unattended run, `scripts/agent-watch.mjs` started you from a `ready-for-agent` label. Nobody is watching, and you have no GitHub access, so:
-- The ticket is in `.agent/ticket.md`, written there by the script from jtbinith's issue. Read it instead of `gh` in step 1. The script has already checked who wrote it, its blockers and open PRs.
+- The ticket is in `.agent/ticket.md`, written there by the script from jtbinith's issue. Before you start, a read-only run checked it against main with Codebase Wisdom: `.agent/wisdom.md` lists the claims that held (each quote checked by the runner) and the ones it couldn't check. Treat those as assumptions: test them, and list them under **Assumptions** in your report. (A claim proven wrong stops the run before you start.) Read it instead of `gh` in step 1. The script has already checked who wrote it, its blockers and open PRs.
 - You're already on your branch (`agent/<N>-…`) in your own worktree, and the card is already In Progress. Skip step 2.
 - Don't push, open a PR, comment or change labels: you can't, and the script checks afterwards. It pushes after its own `npm test` and its own check that each `test:` commit fails on its own. A `test:` commit changes only `tests/`.
 - Never change `package.json`, `scripts/`, `.claude/`, `.github/`, `AGENTS.md` or `.gitignore`. The script stops the run if you do.

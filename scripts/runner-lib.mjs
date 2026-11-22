@@ -184,7 +184,8 @@ export function gateVerdict(read, head, { prHead } = {}) {
 // can hold the home path).
 // what blocks: real High or Medium findings, and any the gate couldn't read, named apart (Qodo on #104)
 const blockingWhy = (bs) => {
-  const odd = bs.filter((f) => !OPEN.has(f.attribution_status) || severityOf(f) === 'unknown').length, real = bs.length - odd;
+  // a blind review's finding has its own severity, not Qodo's labels: it's a real High or Medium (blind review on #107)
+  const odd = bs.filter((f) => !f.severity && (!OPEN.has(f.attribution_status) || severityOf(f) === 'unknown')).length, real = bs.length - odd;
   return [real || !odd ? `${real} High or Medium open` : '', odd ? `${odd} with a label the gate can't read` : ''].filter(Boolean).join(', ');
 };
 export function gateStatus(g, who) {
@@ -201,6 +202,70 @@ export function gateStatus(g, who) {
 export function statusChange(last, sha, { state, description }) {
   const key = `${sha}|${state}|${description}`;
   return key === last ? null : key;
+}
+
+// Codebase Wisdom's check of a ticket, before any code is written (.agent/wisdom.json from a read-only
+// investigator run). Its word isn't enough: a claim counts as held or wrong only if its quote is really
+// in the cited file within 3 lines of the cited line (`lines(file)` returns the file's lines, or null).
+// A claim proven wrong stops the run. One it couldn't prove goes on to the agent as an assumption.
+const VERDICTS = new Set(['holds', 'wrong']);
+const inRepo = (f) => typeof f === 'string' && f !== '' && !f.startsWith('/') && !f.split(/[\\/]/).includes('..');
+export function wisdomVerdict(result, lines) {
+  const claims = result && typeof result === 'object' && Array.isArray(result.claims) ? result.claims.filter((c) => c && typeof c === 'object') : [];
+  if (!claims.length) return { state: 'invalid', why: 'the Wisdom check returned no claims, so it checked nothing', held: [], wrong: [], unverified: [] };
+  const out = { held: [], wrong: [], unverified: [] };
+  for (const c of claims) {
+    const quote = typeof c.quote === 'string' ? c.quote.trim() : '', line = Number(c.line);
+    const text = inRepo(c.file) && Number.isInteger(line) && line > 0 && quote.length >= 8 ? lines(c.file) : null;
+    const proven = !!text && text.slice(Math.max(0, line - 4), line + 3).some((l) => l.includes(quote));
+    if (proven && VERDICTS.has(c.verdict)) (c.verdict === 'holds' ? out.held : out.wrong).push(c);
+    else out.unverified.push({ ...c, why: !VERDICTS.has(c.verdict) ? 'not checked' : 'its quote isn\'t at the cited line' });
+  }
+  return { state: out.wrong.length ? 'stop' : 'proceed', ...out };
+}
+
+// Qodo's local review of the unpushed commits (`qodo review --base <pushed> --json`), in the shape of a
+// PR read, so the one gate decides both. Complete only when Qodo says both its finding state and its
+// coverage are complete; a run that failed keeps its error (gateVerdict never takes that as clean).
+// A run that exited non-zero is a failed read, whatever it printed (Qodo on #107). Qodo's own finding
+// count and truncation flag go through, so a partial list is never taken as the whole (Qodo on #107).
+export function localRead(out, head, { status } = {}) {
+  if (status !== 0) return { readError: `qodo review exit ${status ?? 'unknown'}` };
+  if (!out || typeof out !== 'object') return { readError: 'no output from qodo review' };
+  if (out.readError) return out;
+  const complete = out.finding_state?.complete === true && out.meta?.coverage?.complete === true;
+  return { review_session: { commit_sha: head, status: 'completed', review_complete: complete }, findings: out.findings,
+    finding_count: Number.isInteger(out.finding_count) ? out.finding_count : Array.isArray(out.findings) ? out.findings.length : undefined,
+    qar_operation_result_truncated: out.qar_operation_result_truncated };
+}
+
+// The blind review, after Qodo's gate is met: a reviewer that sees the ticket and the code, not Qodo's
+// review or the agent's report, writes .agent/blind/findings.json. A High or Medium (or a severity it
+// didn't give) blocks only when its repro, a .test.mjs file in .agent/blind/, fails on an assertion
+// when the runner runs it. Everything else goes to the owner, like a Low.
+const BLIND_REPRO = /^\.agent\/blind\/[\w.-]+\.test\.mjs$/;
+const blindFindings = (j) => (j && typeof j === 'object' && Array.isArray(j.findings) ? j.findings.filter((f) => f && typeof f === 'object') : null);
+const safeRepro = (f) => typeof f.repro === 'string' && BLIND_REPRO.test(f.repro) && !f.repro.includes('..');
+export const blindRepros = (j) => [...new Set((blindFindings(j) || []).filter(safeRepro).map((f) => f.repro))];
+export function blindVerdict(j, runs) {
+  const fs = blindFindings(j);
+  if (!fs) return { state: 'invalid', why: 'the blind review wrote no findings file', blocking: [], flagged: [] };
+  const red = (r) => !!r && !r.ok && /AssertionError|ERR_ASSERTION/.test(r.out || '') && !/SyntaxError|ERR_MODULE_NOT_FOUND|Cannot find module/.test(r.out || '');
+  const out = { blocking: [], flagged: [] };
+  for (const f of fs) {
+    const serious = f.severity !== 'Low';
+    if (serious && safeRepro(f) && red(runs[f.repro])) out.blocking.push(f);
+    else out.flagged.push({ ...f, why: f.why, unproven: serious });
+  }
+  return { state: out.blocking.length ? 'fix' : 'done', ...out };
+}
+
+// May `qodo-gate` be posted green on a head? Not while the runner's blind review of that head is
+// pending or failed (its own `blind-review` status, newest first as GitHub lists them): a manual
+// --post can't skip it (Qodo on #107). A head with no blind review (a PR made by hand) is up to Qodo.
+export function mayPostSuccess(statuses) {
+  const blind = (statuses || []).find((x) => x && x.context === 'blind-review');
+  return !blind || blind.state === 'success';
 }
 
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review

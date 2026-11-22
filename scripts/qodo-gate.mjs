@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { gateVerdict, gateStatus } from './runner-lib.mjs';
+import { gateVerdict, gateStatus, mayPostSuccess } from './runner-lib.mjs';
 
 export const REPO = 'jtbinith/qodo-hack-2026', CONTEXT = 'qodo-gate';
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 5 * 60000, killSignal: 'SIGKILL', ...opts }).trim();
@@ -18,9 +18,9 @@ const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8',
 // Qodo's stored review of a PR, fresh from Qodo (a read: no code leaves the machine).
 // A failed read is reported, never taken as clean.
 // qodo lives in ~/.local/bin, which isn't on the systemd unit's PATH (scripts/systemd/)
-const QODO_BIN = process.env.QODO_BIN || join(homedir(), '.local/bin/qodo');
+export const QODO_BIN = process.env.QODO_BIN || join(homedir(), '.local/bin/qodo');
 // it also needs XDG_RUNTIME_DIR (its tool catalog lives there): without it `--pr-url` is "unknown"
-const QODO_ENV = { ...process.env, XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` };
+export const QODO_ENV = { ...process.env, XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` };
 export function qodoRead(pr, cwd = process.cwd()) {
   try { return JSON.parse(sh(QODO_BIN, ['read', 'pr-review-session', 'findings', '--pr-url', `https://github.com/${REPO}/pull/${pr}`, '--json'], { cwd, env: QODO_ENV }).split('\n')[0]); }
   catch (e) { return { readError: (e.stderr || e.message || '').toString().trim().split('\n')[0].slice(0, 200) }; }
@@ -34,14 +34,21 @@ export function checkGate(pr, { expected, cwd } = {}) {
   return { head, g, status: gateStatus(g, { home: homedir(), user: userInfo().username }) };   // public: no home path or username
 }
 
-export const postGate = (sha, { state, description }) =>
-  sh('gh', ['api', '-X', 'POST', `repos/${REPO}/statuses/${sha}`, '-f', `state=${state}`, '-f', `context=${CONTEXT}`, '-f', `description=${description}`, '--jq', '.state']);
+const post = (sha, context, { state, description }) =>
+  sh('gh', ['api', '-X', 'POST', `repos/${REPO}/statuses/${sha}`, '-f', `state=${state}`, '-f', `context=${context}`, '-f', `description=${description}`, '--jq', '.state']);
+export const postGate = (sha, st) => post(sha, CONTEXT, st);
+// the runner's blind review of a head, as its own status (not required by the ruleset: it holds qodo-gate back)
+export const postBlind = (sha, st) => post(sha, 'blind-review', st);
+const statusesOf = (sha) => JSON.parse(sh('gh', ['api', `repos/${REPO}/commits/${sha}/statuses?per_page=100`]));
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const pr = Number(process.argv[2]);
   if (!Number.isInteger(pr) || pr <= 0) { console.error('Usage: node scripts/qodo-gate.mjs <PR number> [--post]'); process.exit(64); }
   const { head, status } = checkGate(pr);
   console.log(`PR #${pr} at ${head.slice(0, 7)}: ${status.state}. ${status.description}`);
-  if (process.argv.includes('--post')) console.log(`posted ${CONTEXT} = ${postGate(head, status)} on ${head.slice(0, 7)}`);
+  if (process.argv.includes('--post')) {
+    if (status.state === 'success' && !mayPostSuccess(statusesOf(head))) { console.log(`not posted: the blind review of ${head.slice(0, 7)} hasn't passed (its blind-review status is pending or failed)`); process.exit(1); }
+    console.log(`posted ${CONTEXT} = ${postGate(head, status)} on ${head.slice(0, 7)}`);
+  }
   process.exit(status.state === 'success' ? 0 : status.state === 'pending' ? 2 : 1);
 }
