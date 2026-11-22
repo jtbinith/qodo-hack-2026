@@ -23,3 +23,11 @@ values; everything else in them is unchanged.
 | 40078388 Ticket runs cannot find the agent tool (Medium) | partly: the run already stops loudly ("didn't finish: exit …") | the stop now says where the machine setup goes |
 | 89d294d4 Missing local settings break agent sign-in (Medium) | partly: the same loud stop | same hint |
 Red: `03-red-round1.txt` (3 tests) and `02-guard-red-in-container.txt`.
+
+## Review 2 (d5d3007): 5 implemented, the 2 "partly" Mediums still open, nothing new
+Fix (round 2): before any agent work the runner checks the machine is set up (`machineReady`): the
+local config exists and `claude --version` runs (no sign-in, no model call). If not, the run stops with
+"This machine isn't set up: missing local config, claude not on PATH." (no paths). The old hint in the
+stop message is gone. Also: the region variable left in Day 7's `raw/10` copy of the runner and in the
+review copy is removed, and the guard now looks for it. Red: `06-red-round2.txt`. Check and mutation:
+`07-machine-check.txt`. On this machine `claude --version` with the unit's PATH: exit 0.

@@ -18,7 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -152,7 +152,11 @@ for (const tool of ['node', 'npm', 'npx']) writeFileSync(join(BIN, tool), `#!/bi
 // This machine's sign-in setup lives in an uncommitted local config, not in the repo:
 // ~/.config/qodo-agent/local.json, for example { "settingsKeys": [...], "denyDirs": [...], "passEnv": [...] }
 // A missing or malformed file counts as empty: then any run that needs it fails loudly at sign-in (see agent()).
-const LOCAL = (() => { try { return JSON.parse(readFileSync(join(homedir(), '.config/qodo-agent/local.json'), 'utf8')) || {}; } catch { return {}; } })();
+const LOCAL_FILE = join(homedir(), '.config/qodo-agent/local.json');
+const LOCAL = (() => { try { return JSON.parse(readFileSync(LOCAL_FILE, 'utf8')) || {}; } catch { return {}; } })();
+// claude --version needs no sign-in and makes no model call: it only shows the tool is on PATH
+let ready = null;
+const machineCheck = () => (ready ??= machineReady({ localConfig: existsSync(LOCAL_FILE), claude: spawnSync('claude', ['--version'], { stdio: 'ignore', timeout: 30000 }).status === 0 }));
 writeFileSync(AGENT_SETTINGS, JSON.stringify(agentSettings(JSON.parse(readFileSync(join(homedir(), '.claude/settings.json'), 'utf8')), LOCAL)));
 const TOOLS = 'Read,Edit,Write,Glob,Grep,Bash,Skill';
 const ALLOW = ['Skill',   // Read, Glob, Grep and Edit are allowed only inside the worktree (in agent())
@@ -170,6 +174,7 @@ class Refuse extends Error { constructor(label, msg) { super(msg); this.label = 
 function agent(n, s, what, prompt) {
   const log = join(HOME, 'logs', `${n}-${s.runs + 1}-${what}.log`), before = footprint(s), from = head(s);
   if (DRY) throw new Stop(`DRY RUN stops here: it would start agent run ${s.runs + 1} (${what}).`);
+  const m = machineCheck(); if (!m.ok) throw new Stop(m.why);   // before any agent work
   clearStale(s, 'agent-run');
   event(n, `agent run ${s.runs + 1} (${what}) started`);
   const r = spawnSync('claude', ['-p', prompt, '--setting-sources', 'project', '--settings', AGENT_SETTINGS, '--strict-mcp-config',
@@ -180,7 +185,7 @@ function agent(n, s, what, prompt) {
   writeFileSync(log, `$ claude -p ${JSON.stringify(prompt)}\n\n${r.stdout || ''}\n${r.stderr || ''}\nexit ${r.status}${r.error ? ' ' + r.error.message : ''}\n`);
   s.runs++; save(n, s);
   event(n, `agent run ${s.runs} (${what}) ended: exit ${r.status}${r.error ? ' (' + r.error.code + ')' : ''}`);
-  if (r.status !== 0) throw new Stop(`Agent run ${s.runs} (${what}) didn't finish: exit ${r.status}${r.error ? ', ' + r.error.code : ''}. Log: \`${log}\`. If \`claude\` or its sign-in isn't set up on this machine, see ~/.config/qodo-agent/ (local.json, env).`);
+  if (r.status !== 0) throw new Stop(`Agent run ${s.runs} (${what}) didn't finish: exit ${r.status}${r.error ? ', ' + r.error.code : ''}. Log: \`${log}\``);
   // don't take the agent's word for it: check what actually changed
   const after = footprint(s);
   if (after !== before) throw new Stop(`Something changed on GitHub during agent run ${s.runs} (${what}). The agent isn't allowed to touch GitHub.\n\n${fence(before + '\n→\n' + after)}`);

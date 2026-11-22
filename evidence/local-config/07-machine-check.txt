@@ -1,0 +1,4 @@
+{"localConfig":true,"claude":true} {"ok":true}
+{"localConfig":false,"claude":true} {"ok":false,"why":"This machine isn't set up: missing local config."}
+{"localConfig":true,"claude":false} {"ok":false,"why":"This machine isn't set up: claude not on PATH."}
+mutation, claude check removed: ['✖ #99 40078388 and 89d294d4: an unset machine is refused bef']

@@ -237,3 +237,9 @@ export function agentEnv(base, local, processEnv) {
   const extra = strings(local && typeof local === 'object' ? local.passEnv : null).filter((k) => !(k in base));
   return { ...base, ...Object.fromEntries(extra.map((k) => [k, (processEnv || {})[k] || ''])) };
 }
+// Is this machine set up to run the agent? Checked before any agent work, so a missing setup stops
+// the run at once rather than after the agent starts. The reason names no paths (it goes on GitHub).
+export function machineReady({ localConfig, claude }) {
+  const missing = [!localConfig && 'missing local config', !claude && 'claude not on PATH'].filter(Boolean);
+  return missing.length ? { ok: false, why: `This machine isn't set up: ${missing.join(', ')}.` } : { ok: true };
+}
