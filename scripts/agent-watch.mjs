@@ -216,8 +216,12 @@ function agent(n, s, what, prompt, profile = WORKER) {
 }
 
 const uncommitted = (s) => sh('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: s.dir }).split('\n').filter((l) => l && !/ \.agent\//.test(l) && !/ node_modules$/.test(l));
-function npmTest(dir) {
-  const r = spawnSync(SANDBOX, ['npm', 'test'], { cwd: dir, encoding: 'utf8', timeout: LIMITS.testRunMin * 60000 });
+// `npm test` is unit && browsers. The red check runs both suites whatever the first one does: a test:
+// commit's browser test can't be hidden by an earlier test: commit's unit tests, which still fail
+// there because the fix comes later (#96's first factory run)
+function npmTest(dir, { bothSuites = false } = {}) {
+  const args = bothSuites ? ['sh', '-c', 'npm run test:unit; u=$?; npm run test:browsers; b=$?; exit $((u | b))'] : ['npm', 'test'];
+  const r = spawnSync(SANDBOX, args, { cwd: dir, encoding: 'utf8', timeout: LIMITS.testRunMin * 60000 });
   const out = (r.stdout || '') + (r.stderr || '');
   return { ok: r.status === 0 && !/^FAIL /m.test(out), out, fails: out.split('\n').filter((l) => /^FAIL |^✖ |AssertionError/.test(l)) };
 }
@@ -241,7 +245,7 @@ function proveRed(n, s, base) {
     rmSync(dir, { recursive: true, force: true }); sh('git', ['worktree', 'prune'], { cwd: MAIN });
     sh('git', ['worktree', 'add', '--detach', dir, c.sha], { cwd: MAIN });
     symlinkSync(join(MAIN, 'node_modules'), join(dir, 'node_modules'));
-    const t = npmTest(dir);
+    const t = npmTest(dir, { bothSuites: true });
     writeFileSync(join(HOME, 'logs', `${n}-red-${c.sha.slice(0, 7)}.log`), t.out);
     sh('git', ['worktree', 'remove', '--force', dir], { cwd: MAIN });
     if (t.ok) throw new Stop(`\`${c.sha.slice(0, 7)} ${c.subject}\` passes on its own, so its tests don't prove anything.`);
