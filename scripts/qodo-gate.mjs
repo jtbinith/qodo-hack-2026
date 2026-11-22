@@ -18,9 +18,9 @@ const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8',
 // Qodo's stored review of a PR, fresh from Qodo (a read: no code leaves the machine).
 // A failed read is reported, never taken as clean.
 // qodo lives in ~/.local/bin, which isn't on the systemd unit's PATH (scripts/systemd/)
-const QODO_BIN = process.env.QODO_BIN || join(homedir(), '.local/bin/qodo');
+export const QODO_BIN = process.env.QODO_BIN || join(homedir(), '.local/bin/qodo');
 // it also needs XDG_RUNTIME_DIR (its tool catalog lives there): without it `--pr-url` is "unknown"
-const QODO_ENV = { ...process.env, XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` };
+export const QODO_ENV = { ...process.env, XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` };
 export function qodoRead(pr, cwd = process.cwd()) {
   try { return JSON.parse(sh(QODO_BIN, ['read', 'pr-review-session', 'findings', '--pr-url', `https://github.com/${REPO}/pull/${pr}`, '--json'], { cwd, env: QODO_ENV }).split('\n')[0]); }
   catch (e) { return { readError: (e.stderr || e.message || '').toString().trim().split('\n')[0].slice(0, 200) }; }

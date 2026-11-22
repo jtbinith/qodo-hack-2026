@@ -203,6 +203,26 @@ export function statusChange(last, sha, { state, description }) {
   return key === last ? null : key;
 }
 
+// Codebase Wisdom's check of a ticket, before any code is written (.agent/wisdom.json from a read-only
+// investigator run). Its word isn't enough: a claim counts as held or wrong only if its quote is really
+// in the cited file within 3 lines of the cited line (`lines(file)` returns the file's lines, or null).
+// A claim proven wrong stops the run. One it couldn't prove goes on to the agent as an assumption.
+const VERDICTS = new Set(['holds', 'wrong']);
+const inRepo = (f) => typeof f === 'string' && f !== '' && !f.startsWith('/') && !f.split(/[\\/]/).includes('..');
+export function wisdomVerdict(result, lines) {
+  const claims = result && typeof result === 'object' && Array.isArray(result.claims) ? result.claims.filter((c) => c && typeof c === 'object') : [];
+  if (!claims.length) return { state: 'invalid', why: 'the Wisdom check returned no claims, so it checked nothing', held: [], wrong: [], unverified: [] };
+  const out = { held: [], wrong: [], unverified: [] };
+  for (const c of claims) {
+    const quote = typeof c.quote === 'string' ? c.quote.trim() : '', line = Number(c.line);
+    const text = inRepo(c.file) && Number.isInteger(line) && line > 0 && quote.length >= 8 ? lines(c.file) : null;
+    const proven = !!text && text.slice(Math.max(0, line - 4), line + 3).some((l) => l.includes(quote));
+    if (proven && VERDICTS.has(c.verdict)) (c.verdict === 'holds' ? out.held : out.wrong).push(c);
+    else out.unverified.push({ ...c, why: !VERDICTS.has(c.verdict) ? 'not checked' : 'its quote isn\'t at the cited line' });
+  }
+  return { state: out.wrong.length ? 'stop' : 'proceed', ...out };
+}
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {
