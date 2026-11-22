@@ -308,6 +308,64 @@ test('a late layout from the old time keeper doesn’t leave a device with stale
   assert.deepEqual(C.joins, A.joins, 'C asked A and holds its layout');
 });
 
+// Qodo on #95, round 2: the room server can drop the ask or its answer. C asks again, at a
+// capped number of tries, until A's layout arrives
+async function lateOldLayout() {
+  const devs = await room(), { A, B, C } = devs;
+  leaves(devs, 'L');
+  hear('A');
+  await tick(100);
+  A.push('R', 400); B.push('L', 400);
+  await tick(3000);
+  deliver('C', 'layout', { from: 'L', joins: [] });
+  return devs;
+}
+const asksFrom = (who) => { const asks = []; return { asks, count: (event, p) => event === 'layoutask' && p.from === who && asks.push(Date.now()) }; };
+
+test('a lost layout ask is sent again, and C still ends with the new time keeper’s layout', async () => {
+  const { A, C } = await lateOldLayout();
+  const { asks, count } = asksFrom('C');
+  bus.drop = (event, p) => count(event, p) && asks.length === 1;   // the first ask is lost
+  hear('C');
+  await tick(6000);
+  assert.ok(asks.length >= 2, `asks: ${asks.length}`);
+  assert.deepEqual(C.joins, A.joins, 'C holds A’s layout');
+});
+
+test('a lost answer to a layout ask is asked for again', async () => {
+  const { A, C } = await lateOldLayout();
+  let lost = 0;
+  bus.drop = (event, p) => event === 'layout' && p.from === 'A' && lost++ === 0;   // A's first answer is lost
+  hear('C');
+  await tick(6000);
+  assert.equal(lost >= 2, true, 'A answered again');
+  assert.deepEqual(C.joins, A.joins, 'C holds A’s layout');
+});
+
+test('C stops asking once the layout arrives', async () => {
+  const { A, C } = await lateOldLayout();
+  const answered = asksFrom('C');
+  bus.drop = (event, p) => { answered.count(event, p); return false; };
+  hear('C');
+  await tick(20000);
+  assert.deepEqual(C.joins, A.joins);
+  assert.equal(answered.asks.length, 1, 'answered at once: no more asks');
+});
+
+test('when no answer comes, C asks again a capped number of times, then gives up (Rule 3)', async () => {
+  const { C: C2 } = await lateOldLayout();
+  const ignored = asksFrom('C');
+  bus.drop = (event, p) => ignored.count(event, p);   // every ask is lost
+  hear('C');
+  await tick(30000);
+  const n = ignored.asks.length;
+  assert.ok(n >= 3 && n <= 6, `asks: ${n}`);
+  for (let i = 1; i < n; i++) assert.ok(ignored.asks[i] - ignored.asks[i - 1] >= 1000, 'asks are at least LAYOUT_GAP apart');
+  await tick(30000);
+  assert.equal(ignored.asks.length, n, 'no asks after giving up');
+  assert.equal(C2.leader, 'A');
+});
+
 test('only the time keeper answers a layout ask, and a malformed ask is dropped (Rule 1)', async () => {
   await room();
   const sent = [];
