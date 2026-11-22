@@ -216,3 +216,30 @@ export function publicText(text, { home, user }) {
   for (const p of parts) out = out.replace(new RegExp(`(?<![\\w.-])${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'g'), '<redacted>');
   return out;
 }
+
+// The agent's Claude settings: only env and model from the user's settings, plus whatever sign-in
+// keys the machine's local config names, and a read ban on private folders (the local config can
+// add more). No permissions, plugins, hooks or MCP from the user's settings.
+const DENY_DIRS = ['.ssh', '.config', '.aws', '.claude', '.kiro', '.local', '.gnupg', 'Documents', 'Pictures'];
+// Keys the local config can never bring in: they control what the agent may do, not how it signs in
+const CONTROL = new Set(['permissions', 'hooks', 'enabledPlugins', 'mcpServers', 'enableAllProjectMcpServers', 'enabledMcpjsonServers', 'disableAllHooks', 'statusLine', 'apiKeyHelper', 'additionalDirectories']);
+const strings = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);   // a malformed list counts as empty
+export function agentSettings(user, local) {
+  const l = local && typeof local === 'object' ? local : {};
+  const keys = ['env', 'model', ...strings(l.settingsKeys).filter((k) => !CONTROL.has(k))];
+  const keep = Object.fromEntries(keys.filter((k) => user && k in user).map((k) => [k, user[k]]));
+  keep.permissions = { deny: [...DENY_DIRS, ...strings(l.denyDirs)].map((d) => `Read(~/${d}/**)`) };
+  return keep;
+}
+// The agent's environment: the runner's own (PATH with the sandbox wrappers first, HOME, ...), plus
+// the extra names the local config lists. A listed name can never replace one the runner sets.
+export function agentEnv(base, local, processEnv) {
+  const extra = strings(local && typeof local === 'object' ? local.passEnv : null).filter((k) => !(k in base));
+  return { ...base, ...Object.fromEntries(extra.map((k) => [k, (processEnv || {})[k] || ''])) };
+}
+// Is this machine set up to run the agent? Checked before any agent work, so a missing setup stops
+// the run at once rather than after the agent starts. The reason names no paths (it goes on GitHub).
+export function machineReady({ localConfig, claude }) {
+  const missing = [!localConfig && 'missing local config', !claude && 'claude not on PATH'].filter(Boolean);
+  return missing.length ? { ok: false, why: `This machine isn't set up: ${missing.join(', ')}.` } : { ok: true };
+}

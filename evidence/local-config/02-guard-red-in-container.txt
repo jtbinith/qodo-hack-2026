@@ -1,0 +1,4 @@
+fatal: not a git repository (the worktree's .git pointer isn't mounted in the test container)
+ℹ pass 0
+ℹ fail 1
+  Error: Command failed: git ls-files

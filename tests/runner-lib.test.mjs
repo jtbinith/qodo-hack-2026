@@ -243,3 +243,42 @@ test('#97 5d2b2594 (disputed): a short account name is already hidden wherever t
   assert.doesNotMatch(out, /\/home\/al/);
   assert.equal(out, 'cwd ~/x and ~');
 });
+
+// The agent's settings: sign-in keys and extra denied folders come from an uncommitted local config
+test("the agent's settings keep only env and model, plus the local config's sign-in keys and denied folders", () => {
+  const user = { env: { A: '1' }, model: 'm', signIn: 'x', permissions: { allow: ['Bash(*)'] }, hooks: {} };
+  const s = lib.agentSettings?.(user, { settingsKeys: ['signIn'], denyDirs: ['.work'] }) ?? {};
+  assert.deepEqual(Object.keys(s).sort(), ['env', 'model', 'permissions', 'signIn']);
+  assert.ok(s.permissions?.deny?.includes('Read(~/.ssh/**)') && s.permissions.deny.includes('Read(~/.work/**)'));
+  assert.equal(s.permissions.allow, undefined);
+  const plain = lib.agentSettings?.(user, {}) ?? {};
+  assert.deepEqual(Object.keys(plain).sort(), ['env', 'model', 'permissions']);
+});
+// Qodo on #99 (271128c)
+test("#99 4074a5ef: the local config can't bring in control settings such as hooks or permissions", () => {
+  const user = { env: {}, model: 'm', hooks: { x: 1 }, permissions: { allow: ['Bash(*)'] }, enabledPlugins: { p: true }, mcpServers: {}, signIn: 'x' };
+  const s = lib.agentSettings?.(user, { settingsKeys: ['hooks', 'permissions', 'enabledPlugins', 'mcpServers', 'signIn'] }) ?? {};
+  assert.deepEqual(Object.keys(s).sort(), ['env', 'model', 'permissions', 'signIn']);
+  assert.equal(s.permissions.allow, undefined);
+});
+test('#99 2c5a216f: a malformed local config is ignored rather than crashing the runner', () => {
+  const user = { env: {}, model: 'm' };
+  for (const local of [null, 'x', { settingsKeys: 'signIn', denyDirs: 7 }, { settingsKeys: [1, null], denyDirs: [{}] }])
+    assert.doesNotThrow(() => lib.agentSettings?.(user, local));
+  assert.deepEqual(Object.keys(lib.agentSettings?.(user, { settingsKeys: 'signIn' }) ?? {}).sort(), ['env', 'model', 'permissions']);
+});
+test("#99 8829f7df: the local config can pass extra env names but can't replace the sandbox PATH or the others the runner sets", () => {
+  const base = { PATH: '/sandbox/bin:/usr/bin', HOME: '/h', AGENT_RUN: '1' };
+  const env = lib.agentEnv?.(base, { passEnv: ['PATH', 'HOME', 'AGENT_RUN', 'REGION_X'] }, { PATH: '/host', HOME: '/x', AGENT_RUN: '0', REGION_X: 'r' }) ?? {};
+  assert.deepEqual(env, { PATH: '/sandbox/bin:/usr/bin', HOME: '/h', AGENT_RUN: '1', REGION_X: 'r' });
+  assert.deepEqual(lib.agentEnv?.(base, null, {}), base);
+});
+// Qodo on #99, second review (d5d3007): a machine that isn't set up stops before any agent work
+test('#99 40078388 and 89d294d4: an unset machine is refused before the agent starts, saying what is missing and no paths', () => {
+  assert.deepEqual(lib.machineReady?.({ localConfig: true, claude: true }), { ok: true });
+  const both = lib.machineReady?.({ localConfig: false, claude: false }) ?? {};
+  assert.equal(both.ok, false);
+  assert.equal(both.why, "This machine isn't set up: missing local config, claude not on PATH.");
+  assert.equal(lib.machineReady?.({ localConfig: false, claude: true })?.why, "This machine isn't set up: missing local config.");
+  assert.doesNotMatch(both.why, /\/|~/);
+});

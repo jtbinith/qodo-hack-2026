@@ -7,7 +7,7 @@
 
 **How it was checked:**
 - **Where:** fresh `claude -p` runs in `<checkout>`, the `qodo-toolbox` worktree at `2c9d9b8`. Claude Code `2.1.327.1766`.
-- **Settings:** `--setting-sources project` (only this project's skills and settings), `--strict-mcp-config` (no MCP servers), and a settings file carrying only sign-in (`awsCredentialExport`, `env`, `model`), as the factory does (`agent-watch.mjs:139-143`).
+- **Settings:** `--setting-sources project` (only this project's skills and settings), `--strict-mcp-config` (no MCP servers), and a settings file carrying only sign-in (the sign-in key, `env`, `model`), as the factory does (`agent-watch.mjs:139-143`).
 - **Safety:** runs A–D had **no Bash** (`--tools Skill,Read`, `--disallowedTools Bash`), so nothing could be uploaded even if the skill started. Run E used the factory's own tool flags.
 
 **Outputs:** `raw/35`–`40` (stream-json), and `raw/41-factory-run.mjs` for the script that built run E's flags. Paths are redacted to `<checkout>`, `<home>`, `<project>`, `<scratch>` and `<socket>`. No whoami.
