@@ -404,3 +404,35 @@ test('local review: output that failed to run or parse is never clean', () => {
   assert.notEqual(lib.gateVerdict?.(lib.localRead?.(null, 'h'), 'h')?.state ?? 'x', 'done');
   assert.notEqual(lib.gateVerdict?.(lib.localRead?.({ finding_state: { complete: true }, meta: { coverage: { complete: true } } }, 'h'), 'h')?.state ?? 'x', 'done');
 });
+
+// Day 10: a blind reviewer (no Qodo review, no agent report) reviews the PR once Qodo's gate is met.
+// Its word isn't enough either: a High or Medium blocks only if its repro test, run by the runner,
+// fails on an assertion. Others go to the owner, like Lows. (Blind review found something Qodo
+// didn't on Days 7, 8 and 9.)
+const blind = (j, runs) => lib.blindVerdict?.(j, runs) ?? {};
+const bf = (o) => ({ title: 'late device shows No match', severity: 'Medium', file: 'web/net.js', line: 10, why: 'x', repro: '.agent/blind/late.test.mjs', ...o });
+const RED = { ok: false, out: 'not ok 1 - late\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal' };
+test('blind: a Medium whose repro fails on an assertion blocks', () => {
+  const b = blind({ findings: [bf()] }, { '.agent/blind/late.test.mjs': RED });
+  assert.equal(b.state, 'fix'); assert.equal(b.blocking.length, 1);
+});
+test("blind: a repro that passes, crashes or is missing doesn't block: it goes to the owner", () => {
+  for (const run of [{ ok: true, out: 'ok 1' }, { ok: false, out: 'SyntaxError: Unexpected token' }, { ok: false, out: "Error [ERR_MODULE_NOT_FOUND]: Cannot find module" }, undefined]) {
+    const b = blind({ findings: [bf()] }, run ? { '.agent/blind/late.test.mjs': run } : {});
+    assert.equal(b.state, 'done', JSON.stringify(run)); assert.equal(b.flagged.length, 1); assert.deepEqual(b.blocking, []);
+  }
+});
+test('blind: a repro outside .agent/blind/ or not a .test.mjs file is never run or trusted', () => {
+  for (const repro of ['tests/net.test.mjs', '.agent/blind/../../x.test.mjs', '/tmp/x.test.mjs', '.agent/blind/x.js']) {
+    const b = blind({ findings: [bf({ repro })] }, { [repro]: RED });
+    assert.equal(b.state, 'done', repro); assert.deepEqual(lib.blindRepros?.({ findings: [bf({ repro })] }) ?? ['x'], [], repro);
+  }
+});
+test('blind: Lows never block, and a finding with no severity counts as Medium', () => {
+  assert.equal(blind({ findings: [bf({ severity: 'Low' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'done');
+  assert.equal(blind({ findings: [bf({ severity: 'whatever' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'fix');
+});
+test('blind: a clean review is done; no result at all is invalid, never clean', () => {
+  assert.equal(blind({ findings: [] }, {}).state, 'done');
+  for (const j of [null, {}, { findings: 'x' }]) assert.equal(blind(j, {}).state, 'invalid', JSON.stringify(j));
+});
