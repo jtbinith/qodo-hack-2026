@@ -392,3 +392,153 @@ test('a flood of layout asks gets at most one answer per gap, and the last ask i
   for (let i = 1; i < sent.length; i++) assert.ok(sent[i] - sent[i - 1] >= 1000, 'answers are at least 1 s apart');
   assert.ok(sent[sent.length - 1] >= last, 'an answer went out after the last ask');
 });
+
+// #96: the join results (joined, retry, nomatch) the new time keeper sends before a device hears
+// it took over are kept too, and shown once the device hears, instead of its own "No match"
+async function lateHearer() {
+  const devs = await room();
+  leaves(devs, 'L');
+  hear('A');                       // A hears first and takes over. B and C still count L
+  await tick(100);
+  return devs;
+}
+// X arrives claiming to have been in the room first, so it becomes B's time keeper
+function earliestArrival() {
+  const X = joinRoom({ room: 'r', id: 'X', name: 'x', size: { w: 400, h: 800 } });
+  presence.X = { ...presence.X, joinedAt: 0 };
+  hear('B');
+  return X;
+}
+
+test('a device that hears late still shows the new time keeper’s "Joined", not its own timeout (#96)', async () => {
+  const { A, B } = await lateHearer();
+  A.push('R', 400); B.push('L', 400);
+  await tick(1500);
+  assert.deepEqual(names(B), [], 'A’s joined reached B while B still counted L');
+  hear('B');
+  await tick(6000);
+  assert.equal(B.leader, 'A');
+  assert.deepEqual(names(B), ['joined A-B'], names(B).join('; '));
+  assert.equal(B.heard[0].d.latest, true, 'it answers B’s latest push');
+  assert.deepEqual(ownNoMatch(B), [], 'B’s own timeout was stopped');
+});
+
+test('a late device still shows the new time keeper’s "Try again" and "No match", in either order (#96)', async () => {
+  const { A, B, C } = await lateHearer();
+  A.push('R', 400); B.push('L', 400); C.push('L', 400);   // one push from A, two phones on its right: retry
+  await tick(1500);
+  B.push('T', 100);                                         // a lone push: nomatch
+  await tick(3000);
+  hear('C', 'B');                  // in the opposite order to the one they arrived in
+  await tick(6000);
+  assert.deepEqual(names(B), ['retry A,B,C', 'nomatch B'], names(B).join('; '));
+  assert.deepEqual(B.heard.map(({ d }) => [d.latest, !!d.timedOut]), [[false, false], [true, false]], 'the nomatch is A’s, not B’s own');
+  assert.deepEqual(names(C), ['retry A,B,C', 'nomatch B'], names(C).join('; '));
+  assert.deepEqual([ownNoMatch(B), ownNoMatch(C)], [[], []]);
+});
+
+test('results from a device that isn’t the time keeper, and stays not, are still dropped (#96, Rule 1)', async () => {
+  const devs = await room(), { A, C } = devs;
+  const fromB = channels.find((c) => c.key === 'B');
+  fromB.send({ event: 'joined', payload: { ...joinedAB(1, 2), from: 'B' } });
+  fromB.send({ event: 'nomatch', payload: { dev: 'C', t: 2, from: 'B' } });
+  await tick(500);
+  leaves(devs, 'L');
+  hear('A', 'C');                  // A takes over, not B
+  await tick(6000);
+  assert.deepEqual([A.leader, C.leader], ['A', 'A']);
+  assert.deepEqual([names(A), names(C)], [[], []], 'B’s results were never used');
+});
+
+test('a kept joined is checked again when its sender takes over (#96)', async () => {
+  const devs = await room(), { B } = devs;
+  // A sends a joined naming C while L is the time keeper. Then L and C leave together
+  channels.find((c) => c.key === 'A').send({ event: 'joined', payload: { a: 'B', edgeA: 'R', alongA: 1, tA: 1, b: 'C', edgeB: 'L', alongB: 1, tB: 2, from: 'A' } });
+  await tick(500);
+  leaves(devs, 'L', 'C');
+  hear('B');
+  await tick(100);
+  assert.equal(B.leader, 'A');
+  assert.deepEqual(names(B), [], 'A’s kept joined names C, which has left, so it is dropped');
+});
+
+test('a result from a device not in the room is never kept (#96, Rule 1)', async () => {
+  const { B } = await room();
+  channels.find((c) => c.key === 'A').send({ event: 'nomatch', payload: { dev: 'B', t: 2, from: 'X' } });
+  await tick(500);
+  const X = earliestArrival();
+  await tick(100);
+  assert.equal(B.leader, 'X');
+  assert.deepEqual(names(B), [], 'what came from X before it was in the room was not kept');
+  X.leave();
+});
+
+test('kept results are capped per device, and the newest are kept (#96, Rule 3)', async () => {
+  const devs = await room(), { B } = devs;
+  const fromA = channels.find((c) => c.key === 'A');
+  for (let i = 1; i <= 100; i++) fromA.send({ event: 'nomatch', payload: { dev: 'C', t: i, from: 'A' } });
+  await tick(500);
+  leaves(devs, 'L');
+  hear('B');
+  await tick(100);
+  assert.equal(B.leader, 'A');
+  const n = names(B).length;
+  assert.ok(n >= 1 && n <= 16, `replayed: ${n}`);
+  assert.equal(B.heard[n - 1].d.t, 100, 'the newest are kept');
+});
+
+// Test gaps from the blind review of #95: each of these fails with #95's fix removed
+test('a layout kept from the next time keeper is used when it still holds (#95)', async () => {
+  const devs = await room(), { B } = devs;
+  const joins = [{ a: 'A', edgeA: 'R', alongA: 1, b: 'B', edgeB: 'L', alongB: 1 }];
+  channels.find((c) => c.key === 'A').send({ event: 'layout', payload: { from: 'A', joins } });
+  await tick(500);
+  leaves(devs, 'L');
+  hear('B');
+  await settle();
+  assert.equal(B.leader, 'A');
+  assert.deepEqual(B.joins, joins, 'B used A’s kept layout at once');
+});
+
+test('a layout from a device not in the room is never kept (#95, Rule 1)', async () => {
+  const { B } = await room();
+  channels.find((c) => c.key === 'A').send({ event: 'layout', payload: { from: 'X', joins: [{ a: 'A', edgeA: 'R', alongA: 1, b: 'B', edgeB: 'L', alongB: 1 }] } });
+  await tick(500);
+  const X = earliestArrival();
+  await settle();
+  assert.equal(B.leader, 'X');
+  assert.deepEqual(B.joins, [], 'what came from X before it was in the room was not used');
+  X.leave();
+});
+
+test('when no usable layout was kept, the device asks the new time keeper for it (#95)', async () => {
+  const devs = await room(), { C } = devs;
+  const asks = [];
+  bus.drop = (event, p) => { if (event === 'layoutask') asks.push([p.from, p.to]); return false; };
+  leaves(devs, 'L', 'A');
+  hear('C');
+  await tick(100);
+  assert.equal(C.leader, 'B');
+  assert.deepEqual(asks[0], ['C', 'B'], 'C asked B');
+});
+
+// The new time keeper leaves straight away, and B and C hear it in either order
+async function newKeeperLeaves(first, second) {
+  const devs = await lateHearer(), { A, B, C } = devs;
+  hear('B', 'C');
+  A.push('R', 400); B.push('L', 400);
+  await tick(3000);
+  C.push('L', 400); B.push('R', 400);
+  await tick(3000);
+  assert.equal(A.joins.length, 2, 'A joined A-B and B-C');
+  leaves(devs, 'A');
+  hear(first);
+  await tick(1000);
+  hear(second);
+  await tick(3000);
+  assert.deepEqual([B.leader, C.leader], ['B', 'B']);
+  assert.deepEqual(C.joins, B.joins, 'C holds B’s layout');
+  assert.deepEqual(B.joins.map((j) => [j.a, j.b].sort().join()), ['B,C'], 'only B-C is left, nothing names A');
+}
+test('the new time keeper leaves straight away: B hears first, takes over and C agrees', () => newKeeperLeaves('B', 'C'));
+test('the new time keeper leaves straight away: C hears first and still ends with B’s layout', () => newKeeperLeaves('C', 'B'));
