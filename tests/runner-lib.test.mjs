@@ -282,3 +282,59 @@ test('#99 40078388 and 89d294d4: an unset machine is refused before the agent st
   assert.equal(lib.machineReady?.({ localConfig: false, claude: true })?.why, "This machine isn't set up: missing local config.");
   assert.doesNotMatch(both.why, /\/|~/);
 });
+
+// Day 10: the gate's verdict as a `qodo-gate` commit status on the PR head, which the ruleset
+// requires, so a PR merges only when the gate says done (or the owner bypasses it on GitHub).
+const status = (g) => lib.gateStatus?.(g) ?? {};
+test('qodo-gate: only a met gate is green, and it says how many Lows were flagged', () => {
+  const r = fx('pr-87'), s = status(gate(r, HEAD(r)));
+  assert.equal(s.state, 'success'); assert.match(s.description, /no open High or Medium/);
+  const low = { ...r, finding_count: r.findings.length + 1, findings: [...r.findings, { id: 'low00001', title: 'a Low', action_level: 'informational', attribution_status: 'pending', git_sha: HEAD(r) }] };
+  assert.match(status(gate(low, HEAD(r))).description, /1 Low flagged/);
+});
+test('qodo-gate: open High or Medium findings are red and counted', () => {
+  const r = fx('pr-89-at-696f158'), s = status(gate(r, HEAD(r)));
+  assert.equal(s.state, 'failure'); assert.match(s.description, /3 High or Medium open/);
+});
+test("qodo-gate: an incomplete or skipped review is red, never green", () => {
+  for (const name of ['pr-64', 'pr-86']) { const r = fx(name); assert.equal(status(gate(r, HEAD(r))).state, 'failure', name); }
+});
+test("qodo-gate: no finished review of the head yet is pending, so it can't merge but isn't a verdict", () => {
+  const r = fx('pr-87');
+  assert.equal(status(gate(r, 'f'.repeat(40))).state, 'pending');
+  assert.equal(status(gate({ readError: 'boom' }, 'a'.repeat(40))).state, 'pending');
+});
+test('qodo-gate: a head that moved is red', () => {
+  const r = fx('pr-87');
+  assert.equal(status(gate(r, HEAD(r), { prHead: 'e'.repeat(40) })).state, 'failure');
+});
+test("qodo-gate: the description fits GitHub's 140-character limit", () => {
+  const long = { state: 'incomplete', why: 'x'.repeat(400) };
+  assert.ok(status(long).description.length <= 140);
+});
+
+// Qodo's review of #104 (84e4f57), each finding as a test before its fix
+test('#104 978b8c13: a failed Qodo read never puts the home path or username in the public status', () => {
+  const who = { home: '/home/CORP.EXAMPLE.COM/someone', user: 'someone' };
+  const g = { state: 'wait', why: "Qodo's review couldn't be read (spawnSync /home/CORP.EXAMPLE.COM/someone/.local/bin/qodo ENOENT)" };
+  const d = lib.gateStatus?.(g, who)?.description ?? '/home/CORP.EXAMPLE.COM/someone';
+  assert.doesNotMatch(d, /CORP\.EXAMPLE|someone|\/home\//); assert.match(d, /~\/\.local\/bin\/qodo/);
+});
+test("#104 b72e885c: the runner posts a status whenever it changes, waits included, and doesn't repeat one", () => {
+  const ch = (...a) => lib.statusChange?.(...a);
+  const wait = { state: 'pending', description: 'Waiting' }, ok = { state: 'success', description: 'met' };
+  const k = ch(null, 'a'.repeat(40), ok);
+  assert.ok(k, 'first status is posted');
+  assert.equal(ch(k, 'a'.repeat(40), ok), null, 'the same status again is not reposted');
+  assert.ok(ch(k, 'a'.repeat(40), wait), 'a re-review of the same commit turns a green status back to pending');
+  assert.ok(ch(k, 'b'.repeat(40), ok), 'a new head gets its own status');
+});
+test('#104 2ea70199: the timer copies the whole scripts folder, so a new runner module never needs a unit change', () => {
+  const unit = readFileSync(new URL('../scripts/systemd/qodo-agent.service', import.meta.url), 'utf8');
+  assert.match(unit, /git -C %h\/qodo-hack-2026 archive -o \S+ origin\/main scripts && tar -x/);   // a failed archive stops the tick, never runs an old copy
+});
+test('#104 4cda905c: a finding blocking only because its label is unreadable is named as that, not as a High or Medium', () => {
+  const r = fx('pr-87'), add = { ...r, finding_count: r.findings.length + 1, findings: [...r.findings, { id: 'canary02', title: 'odd', action_level: 'critical', attribution_status: 'pending', git_sha: HEAD(r) }] };
+  const d = lib.gateStatus?.(gate(add, HEAD(r)))?.description ?? '';
+  assert.match(d, /1 with a label the gate can't read/); assert.doesNotMatch(d, /1 High or Medium open/);
+});

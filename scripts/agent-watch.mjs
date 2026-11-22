@@ -10,15 +10,17 @@
 //   3. review loop: once Qodo has reviewed the pushed commit, its open findings (or a `/agent …`
 //      comment from jtbinith) go to a new subagent run, then step 2 again.
 //   4. stop: `agent-done` when Qodo has no open findings, `agent-needs-help` otherwise.
-// Nothing merges. Only jtbinith merges, and main is protected by a ruleset.
+//   It posts each verdict as the `qodo-gate` commit status on the PR head (scripts/qodo-gate.mjs).
+// Nothing merges. Only jtbinith merges, and the `protect main` ruleset requires `qodo-gate` and CI's `npm test`.
 //
 // The agent never sees GitHub. The script writes the ticket and the review to .agent/ for it,
 // from text written by jtbinith and qodo-code-review only (the repo is public).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { qodoRead, postGate } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -115,15 +117,13 @@ function qodoReview(pr) {
     .filter((t) => !t.startsWith('<s>') && !/Resolved/.test(t)).map((t) => decodeEntities(t.replace(/<[^>]+>/g, '').trim()));
   return { reviewed, open, body: c.body, at: Date.parse(c.updated_at) };   // when Qodo last updated its review
 }
-// Qodo's stored review of a PR, fresh from Qodo (a read: no code leaves the machine). The quality
-// gate decides from this, not from the agent's report. A failed read is reported, never taken as clean.
-// qodo lives in ~/.local/bin, which isn't on the systemd unit's PATH (scripts/systemd/)
-const QODO_BIN = process.env.QODO_BIN || join(homedir(), '.local/bin/qodo');
-// it also needs XDG_RUNTIME_DIR (its tool catalog lives there): without it `--pr-url` is "unknown"
-const QODO_ENV = { ...process.env, XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` };
-function qodoRead(pr) {
-  try { return JSON.parse(sh(QODO_BIN, ['read', 'pr-review-session', 'findings', '--pr-url', `https://github.com/${REPO}/pull/${pr}`, '--json'], { cwd: MAIN, env: QODO_ENV }).split('\n')[0]); }
-  catch (e) { return { readError: (e.stderr || e.message || '').toString().trim().split('\n')[0].slice(0, 200) }; }
+// Qodo's stored review, read fresh: the quality gate decides from it, not from the agent's report (qodo-gate.mjs).
+// the gate's verdict as the `qodo-gate` commit status on the PR head (scripts/qodo-gate.mjs)
+function gate(n, s, sha, g) {
+  const st = gateStatus(g, WHO), key = statusChange(s.gateShown, sha, st);
+  if (!key) return;
+  write(`set qodo-gate on ${sha.slice(0, 7)} to ${st.state}`, () => postGate(sha, st));
+  s.gateShown = key; save(n, s); event(n, `qodo-gate ${st.state} on ${sha.slice(0, 7)}: ${st.description}`);
 }
 const listed = (fs) => fs.map((f) => `${severityOf(f)}: ${decodeEntities(f.title)}`);
 const ownerAsks = (s) => issueComments(s.pr).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
@@ -290,6 +290,7 @@ function checkAndPush(n, s, why) {
     event(n, `pushed ${pushed.slice(0, 7)} and opened PR #${s.pr} (${why})`);
   } else event(n, `pushed ${pushed.slice(0, 7)} to PR #${s.pr} (${why})`);
   s.phase = 'review'; save(n, s);
+  gate(n, s, pushed, { state: 'wait', why: `Qodo hasn't finished a review of ${pushed.slice(0, 7)} yet` });
   publish(n, s);
 }
 
@@ -364,7 +365,8 @@ function continueRun(n, s) {
       // the quality gate (work-ticket skill): every High and Medium fixed, Lows flagged for the owner.
       // It reads Qodo's stored review and the PR's head fresh, not Qodo's rendered comment (which can lag).
       const prHead = ghJson('api', `repos/${REPO}/pulls/${s.pr}`).head.sha;
-      const g = gateVerdict(qodoRead(s.pr), s.head, { prHead });
+      const g = gateVerdict(qodoRead(s.pr, MAIN), s.head, { prHead });
+      gate(n, s, prHead, g);   // the ruleset requires it: only a met gate lets the PR merge
       if (g.state === 'moved') throw new Stop(`${g.why}. Someone pushed to the branch outside the run, so the runner won't mark it done.`);
       if (g.state === 'wait') {
         if ((Date.now() - (s.waitFrom || s.pushedAt)) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why} after ${LIMITS.reviewWaitMin} min.`);
