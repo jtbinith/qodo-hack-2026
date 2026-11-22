@@ -338,3 +338,41 @@ test('#104 4cda905c: a finding blocking only because its label is unreadable is 
   const d = lib.gateStatus?.(gate(add, HEAD(r)))?.description ?? '';
   assert.match(d, /1 with a label the gate can't read/); assert.doesNotMatch(d, /1 High or Medium open/);
 });
+// Day 10: Codebase Wisdom checks the ticket's claims before any code is written. The runner doesn't
+// take the investigator's word: each claim must cite a file, a line and a quote, and the quote must
+// really be there (within 3 lines). A claim proven wrong stops the run; one it can't check goes on
+// to the agent as an assumption to test.
+const FILES = { 'web/peers.js': ['a', 'b', "  if (payload.from !== s.leader) return;   // fromLeader", 'd', 'e'] };
+const at = (file, line) => FILES[file] || null;
+const wisdom = (j) => lib.wisdomVerdict?.(j, at) ?? {};
+const claim = (o) => ({ claim: 'results from anyone but the time keeper are dropped', verdict: 'holds', file: 'web/peers.js', line: 3, quote: 'payload.from !== s.leader', ...o });
+test('wisdom: a cited claim that holds lets the work start', () => {
+  const w = wisdom({ claims: [claim()] });
+  assert.equal(w.state, 'proceed'); assert.equal(w.held.length, 1); assert.deepEqual(w.wrong, []);
+});
+test('wisdom: a claim proven wrong by a real quote stops the run before any code', () => {
+  const w = wisdom({ claims: [claim(), claim({ claim: 'the late device keeps join results', verdict: 'wrong' })] });
+  assert.equal(w.state, 'stop'); assert.equal(w.wrong.length, 1); assert.match(w.wrong[0].claim, /keeps join results/);
+});
+test("wisdom: a quote that isn't at the cited line isn't evidence, so the claim is only unverified", () => {
+  for (const bad of [{ quote: 'something the file never says' }, { line: 50 }, { file: 'web/nope.js' }, { quote: '' }, { quote: 'a' }]) {
+    const w = wisdom({ claims: [claim({ verdict: 'wrong', ...bad })] });
+    assert.equal(w.state, 'proceed', JSON.stringify(bad)); assert.equal(w.unverified.length, 1); assert.deepEqual(w.wrong, []);
+  }
+});
+test('wisdom: a quote 3 lines away still counts, 4 lines away does not', () => {
+  assert.equal(wisdom({ claims: [claim({ line: 6 })] }).held.length, 1);
+  assert.equal(wisdom({ claims: [claim({ line: 7 })] }).held.length, 0);
+});
+test('wisdom: paths outside the repo are never read', () => {
+  const seen = [];
+  lib.wisdomVerdict?.({ claims: [claim({ file: '../secret' }), claim({ file: '/etc/passwd' }), claim({ file: 'a/../../x' })] }, (f) => { seen.push(f); return null; });
+  assert.deepEqual(seen, []);
+});
+test("wisdom: no result, or a result that checks nothing, can't let the work start", () => {
+  for (const j of [null, {}, { claims: [] }, { claims: 'x' }, 'text']) assert.equal(wisdom(j).state, 'invalid', JSON.stringify(j));
+});
+test('wisdom: an unknown verdict is unverified, never holds', () => {
+  const w = wisdom({ claims: [claim({ verdict: 'probably' })] });
+  assert.equal(w.unverified.length, 1); assert.equal(w.held.length, 0);
+});
