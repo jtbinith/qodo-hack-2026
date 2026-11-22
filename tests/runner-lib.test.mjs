@@ -254,3 +254,22 @@ test("the agent's settings keep only env and model, plus the local config's sign
   const plain = lib.agentSettings?.(user, {}) ?? {};
   assert.deepEqual(Object.keys(plain).sort(), ['env', 'model', 'permissions']);
 });
+// Qodo on #99 (271128c)
+test("#99 4074a5ef: the local config can't bring in control settings such as hooks or permissions", () => {
+  const user = { env: {}, model: 'm', hooks: { x: 1 }, permissions: { allow: ['Bash(*)'] }, enabledPlugins: { p: true }, mcpServers: {}, signIn: 'x' };
+  const s = lib.agentSettings?.(user, { settingsKeys: ['hooks', 'permissions', 'enabledPlugins', 'mcpServers', 'signIn'] }) ?? {};
+  assert.deepEqual(Object.keys(s).sort(), ['env', 'model', 'permissions', 'signIn']);
+  assert.equal(s.permissions.allow, undefined);
+});
+test('#99 2c5a216f: a malformed local config is ignored rather than crashing the runner', () => {
+  const user = { env: {}, model: 'm' };
+  for (const local of [null, 'x', { settingsKeys: 'signIn', denyDirs: 7 }, { settingsKeys: [1, null], denyDirs: [{}] }])
+    assert.doesNotThrow(() => lib.agentSettings?.(user, local));
+  assert.deepEqual(Object.keys(lib.agentSettings?.(user, { settingsKeys: 'signIn' }) ?? {}).sort(), ['env', 'model', 'permissions']);
+});
+test("#99 8829f7df: the local config can pass extra env names but can't replace the sandbox PATH or the others the runner sets", () => {
+  const base = { PATH: '/sandbox/bin:/usr/bin', HOME: '/h', AGENT_RUN: '1' };
+  const env = lib.agentEnv?.(base, { passEnv: ['PATH', 'HOME', 'AGENT_RUN', 'REGION_X'] }, { PATH: '/host', HOME: '/x', AGENT_RUN: '0', REGION_X: 'r' }) ?? {};
+  assert.deepEqual(env, { PATH: '/sandbox/bin:/usr/bin', HOME: '/h', AGENT_RUN: '1', REGION_X: 'r' });
+  assert.deepEqual(lib.agentEnv?.(base, null, {}), base);
+});

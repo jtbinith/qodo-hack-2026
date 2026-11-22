@@ -1,0 +1,144 @@
+✔ a unit test name is found (1.227476ms)
+✔ a check() message on the next line is found (the #41 round 1 case) (0.28812ms)
+✔ a string inside the check() condition is not taken as its name (0.122009ms)
+✔ a template message counts up to its first ${…} (0.089822ms)
+✔ removed lines and short names are ignored (1.028974ms)
+✔ a named FAIL line counts as red, a crash in a named unit test does not (0.296264ms)
+✔ Qodo's escaped titles are decoded (0.14126ms)
+✔ /agent retry is told apart from an instruction (0.150471ms)
+✔ a regular expression with a bracket in the condition is skipped (0.15336ms)
+✔ a check() in one hunk is not closed by an unrelated hunk (0.132971ms)
+✔ a comment inside a wrapped check() is skipped (0.105323ms)
+✔ a retry pushes only when there is something new, otherwise it waits for Qodo again (0.060724ms)
+✔ an /agent instruction the agent makes no change for stops and asks the owner, retry or not (Qodo on 0191b36) (0.078013ms)
+✔ an old stop file is cleared before each agent run and when the owner reopens a run (#41 at 09:28) (0.057094ms)
+✔ what to publish is read from the PR itself, so old runs and half-finished posts are not repeated (Qodo on 829263e) (0.174524ms)
+✔ a comment over a limit is still marked read, so it cannot stop the run again on every tick (Qodo on 829263e) (0.144549ms)
+✔ every page is read, so a list past 100 is complete (0.068603ms)
+✔ a retry has its own limit, separate from instructions (0.033592ms)
+✔ every GitHub list the runner reads is read to the end, or capped on purpose with --limit (Rule 7, #66) (0.684212ms)
+✔ a list read with a page number but no allPages is still one page (Qodo on #67) (0.094899ms)
+✔ Qodo's action levels map to High, Medium and Low, as its PR comments show them (#87, #89) (0.038362ms)
+✔ #87 at its last commit: everything fixed or dismissed by the owner, so the gate is met (0.263871ms)
+✔ #89 at 696f158: 3 open Mediums block and the open Low is only flagged (0.176521ms)
+✔ #65: three open Highs block (0.111094ms)
+✔ #64: Qodo skipped its review of the head, so it isn't done even before counting findings (0.145351ms)
+✔ #86: Qodo's review of the head isn't complete, so it isn't done (2 Mediums were open too) (0.120825ms)
+✔ a review of an older commit, or one still running, means wait (0.119217ms)
+✔ an unknown label or status blocks: a label the gate cannot read is never treated as Low (0.163658ms)
+✔ a canary: one planted open Medium on a finished review means not done (0.1437ms)
+✔ a truncated read is not enough to call it done (0.115454ms)
+✔ a failed read of Qodo's review is never taken as clean: wait, and say why (0.088155ms)
+✔ #90 38d06043: a read that claims more findings than it returns is incomplete, never done (0.118233ms)
+✔ #90 bf2430c8: when the PR's head on GitHub isn't the commit the runner pushed, it isn't done (0.116043ms)
+✔ #90 6bc5fe96: the Lows flagged for the owner say what each one is, not just its title (0.181134ms)
+✔ #90 470fbdf1: a stopped run says NOT DONE first, a finished one says the gate was met (0.083417ms)
+✔ #90 3be5f0ac: the agent's gate list carries each finding's place and Qodo's full description (0.116857ms)
+✔ #90 6bc5fe96: Qodo's type for each finding is read from its PR comment (🐞, 📘, 📎) (0.379788ms)
+✔ #90 6bc5fe96: a Low flagged for the owner gives its type, place and reason (0.083279ms)
+✔ a crash message with a home path is posted with ~ and without the username or domain (0.189918ms)
+✔ a partial path or the username on its own is hidden too (0.097098ms)
+✔ ordinary text is left alone (0.065793ms)
+✔ #97 bc54c3e8: proofs shown with redaction are found again on the PR, so nothing is posted twice (0.121143ms)
+✔ #97 5d2b2594 (disputed): a short account name is already hidden wherever the home path appears (0.052809ms)
+✔ the agent's settings keep only env and model, plus the local config's sign-in keys and denied folders (0.175697ms)
+✖ #99 4074a5ef: the local config can't bring in control settings such as hooks or permissions (0.805394ms)
+✖ #99 2c5a216f: a malformed local config is ignored rather than crashing the runner (0.222175ms)
+✖ #99 8829f7df: the local config can pass extra env names but can't replace the sandbox PATH or the others the runner sets (0.523686ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 44
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 63.674465
+
+✖ failing tests:
+
+test at tests/runner-lib.test.mjs:258:1
+✖ #99 4074a5ef: the local config can't bring in control settings such as hooks or permissions (0.805394ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'enabledPlugins',
+      'env',
+  +   'hooks',
+  +   'mcpServers',
+      'model',
+      'permissions',
+      'signIn'
+    ]
+  
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-scrub/tests/runner-lib.test.mjs:261:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'enabledPlugins', 'env', 'hooks', 'mcpServers', 'model', 'permissions', 'signIn' ],
+    expected: [ 'env', 'model', 'permissions', 'signIn' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:264:1
+✖ #99 2c5a216f: a malformed local config is ignored rather than crashing the runner (0.222175ms)
+  AssertionError [ERR_ASSERTION]: Got unwanted exception.
+  Actual message: "Cannot read properties of null (reading 'settingsKeys')"
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-scrub/tests/runner-lib.test.mjs:267:12)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: TypeError: Cannot read properties of null (reading 'settingsKeys')
+        at Module.agentSettings (file://~/qodo-hack-2026-scrub/scripts/runner-lib.mjs:225:43)
+        at file://~/qodo-hack-2026-scrub/tests/runner-lib.test.mjs:267:50
+        at getActual (node:assert:586:5)
+        at strict.doesNotThrow (node:assert:754:32)
+        at TestContext.<anonymous> (file://~/qodo-hack-2026-scrub/tests/runner-lib.test.mjs:267:12)
+        at Test.runInAsyncScope (node:async_hooks:213:14)
+        at Test.run (node:internal/test_runner/test:1106:25)
+        at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+        at Test.postRun (node:internal/test_runner/test:1235:19)
+        at Test.run (node:internal/test_runner/test:1163:12),
+    expected: undefined,
+    operator: 'doesNotThrow',
+    diff: 'simple'
+  }
+
+test at tests/runner-lib.test.mjs:270:1
+✖ #99 8829f7df: the local config can pass extra env names but can't replace the sandbox PATH or the others the runner sets (0.523686ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + {}
+  - {
+  -   AGENT_RUN: '1',
+  -   HOME: '/h',
+  -   PATH: '/sandbox/bin:/usr/bin',
+  -   REGION_X: 'r'
+  - }
+  
+      at TestContext.<anonymous> (file://~/qodo-hack-2026-scrub/tests/runner-lib.test.mjs:273:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: {},
+    expected: { PATH: '/sandbox/bin:/usr/bin', HOME: '/h', AGENT_RUN: '1', REGION_X: 'r' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
