@@ -184,7 +184,8 @@ export function gateVerdict(read, head, { prHead } = {}) {
 // can hold the home path).
 // what blocks: real High or Medium findings, and any the gate couldn't read, named apart (Qodo on #104)
 const blockingWhy = (bs) => {
-  const odd = bs.filter((f) => !OPEN.has(f.attribution_status) || severityOf(f) === 'unknown').length, real = bs.length - odd;
+  // a blind review's finding has its own severity, not Qodo's labels: it's a real High or Medium (blind review on #107)
+  const odd = bs.filter((f) => !f.severity && (!OPEN.has(f.attribution_status) || severityOf(f) === 'unknown')).length, real = bs.length - odd;
   return [real || !odd ? `${real} High or Medium open` : '', odd ? `${odd} with a label the gate can't read` : ''].filter(Boolean).join(', ');
 };
 export function gateStatus(g, who) {
