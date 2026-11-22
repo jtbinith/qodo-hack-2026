@@ -333,3 +333,8 @@ test('#104 2ea70199: the timer copies the whole scripts folder, so a new runner 
   const unit = readFileSync(new URL('../scripts/systemd/qodo-agent.service', import.meta.url), 'utf8');
   assert.match(unit, /git -C %h\/qodo-hack-2026 archive -o \S+ origin\/main scripts && tar -x/);   // a failed archive stops the tick, never runs an old copy
 });
+test('#104 4cda905c: a finding blocking only because its label is unreadable is named as that, not as a High or Medium', () => {
+  const r = fx('pr-87'), add = { ...r, finding_count: r.findings.length + 1, findings: [...r.findings, { id: 'canary02', title: 'odd', action_level: 'critical', attribution_status: 'pending', git_sha: HEAD(r) }] };
+  const d = lib.gateStatus?.(gate(add, HEAD(r)))?.description ?? '';
+  assert.match(d, /1 with a label the gate can't read/); assert.doesNotMatch(d, /1 High or Medium open/);
+});
