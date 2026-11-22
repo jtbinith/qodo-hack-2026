@@ -9,6 +9,9 @@ const SUPABASE_KEY = 'sb_publishable_D8DGNTiXWHRFaoE2ae3ACg_8G8Y_yDS'; // public
 
 const WINDOW = 2000; // two pushes this close in time can pair (ms)
 const LAYOUT_GAP = 1000; // the time keeper answers layout asks at most once in this long (ms)
+// A device that asked for the layout asks again about every ASK_EVERY (jittered, never sooner
+// than LAYOUT_GAP) until the time keeper's layout arrives, at most ASK_TRIES asks in all
+const ASK_EVERY = 2000, ASK_TRIES = 5;
 const wall = () => performance.timeOrigin + performance.now();
 
 // `onSignal` (optional) receives messages sent with s.signal(to, data): a lane for
@@ -37,6 +40,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     if (s.leader === id) { s.offset = 0; s.rtt = 0; }
     if (prev !== s.leader) {
       s.samples = []; emit('leader', s.leader);
+      stopAsking();   // an ask to the old time keeper is over
       // a layout the new time keeper sent before this device heard it took over (#61). It is
       // checked again against who is here now, and used only if it still passes
       const early = earlyLayouts.get(s.leader);
@@ -46,8 +50,19 @@ export function joinRoom({ room, id, name, size, onSignal }) {
       // Nothing usable was kept: a late layout from the old time keeper may have replaced it
       // (Qodo on #95). Ask the new time keeper to send its layout again. On a first election
       // there's no need: the time keeper sends its layout when it hears this device arrive
-      else if (prev !== null) send('layoutask', { from: id, to: s.leader });
+      else if (prev !== null) ask(s.leader, ASK_TRIES);
     }
+  }
+  // The room server can drop the ask or its answer (Qodo on #95), so the ask is sent again until
+  // the time keeper's layout arrives, the time keeper changes or this device leaves. It gives up
+  // after ASK_TRIES: the time keeper still sends its layout on its next presence update or join
+  let askTimer = null;
+  function stopAsking() { clearTimeout(askTimer); askTimer = null; }
+  function ask(to, tries) {
+    stopAsking();
+    send('layoutask', { from: id, to });
+    if (tries > 1) askTimer = setTimeout(() => { askTimer = null; if (s.leader === to) ask(to, tries - 1); },
+      Math.max(LAYOUT_GAP, ASK_EVERY * (0.75 + Math.random() / 2)));   // not a secret: Math.random is fine (Rule 2)
   }
 
   ch.on('presence', { event: 'sync' }, () => {
@@ -162,7 +177,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   ch.on('broadcast', { event: 'layout' }, ({ payload }) => {
     // only the current leader's layout counts, and only if it is well-formed
     if (s.leader === id || !isValidJoins(payload?.joins, [...Object.keys(s.peers), id])) return;
-    if (payload.from === s.leader) { s.joins = payload.joins; earlyLayouts.clear(); emit('layout'); return; }
+    if (payload.from === s.leader) { s.joins = payload.joins; earlyLayouts.clear(); stopAsking(); emit('layout'); return; }
     // From another device in the room, it isn't used. It is kept, one per device, in case this
     // device hasn't yet heard that the sender took over (#61): electLeader uses it if so. A layout
     // from the current time keeper replaces them all, and any change of time keeper clears them
@@ -197,7 +212,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => { if (validSignal(payload) && payload.to === id) onSignal(payload.from, payload.data); });
   s.signal = (to, data) => send('sig', { from: id, to, data });
   s.on = (f) => s.listeners.add(f);
-  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer);waits.forEach(clearTimeout); waits.clear(); client.removeChannel(ch); };
+  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer); stopAsking(); waits.forEach(clearTimeout); waits.clear(); client.removeChannel(ch); };
 
   ch.subscribe(async (st) => {
     if (st === 'SUBSCRIBED') {
