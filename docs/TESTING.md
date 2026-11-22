@@ -87,4 +87,4 @@ npm run test:browsers   # two-browser test, direct then relay (needs internet)
 npm test                # both
 ```
 
-On every PR into main, GitHub Actions runs `npm test` in the same Playwright image the factory uses (`.github/workflows/tests.yml`). The `protect main` ruleset makes that `npm test` job a required check, so a red PR can't merge (Q1, #34).
+On every PR into main, GitHub Actions runs `npm test` in the same Playwright image the factory uses (`.github/workflows/tests.yml`). The `protect main` ruleset makes that `npm test` job a required check, so a red PR can't merge (Q1, #34). The two-browser run is retried once with a warning, because of a known flaky step (#100).

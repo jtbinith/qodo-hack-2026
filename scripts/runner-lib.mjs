@@ -268,6 +268,33 @@ export function mayPostSuccess(statuses) {
   return !blind || blind.state === 'success';
 }
 
+// A failed `npm test` is run once more on the same commit before the agent is told the branch broke
+// it. If the second run passes, the first was flaky: the run goes on and the PR says so, with the
+// lines that failed (Day 10: the first-transfer timeout, #100, stopped a run and failed CI 3 times).
+export function testRetry(first, second) {
+  if (first.ok) return { ok: true, flaky: false };
+  if (second?.ok) return { ok: true, flaky: true, note: `\`npm test\` failed once, then passed on an identical re-run of the same commit (flaky, see #100):\n${first.fails.slice(0, 5).join('\n')}` };
+  return { ok: false, flaky: false, fails: second?.fails || first.fails, out: second?.out || first.out };
+}
+// An incomplete Qodo review of the head: ask Qodo to review again once per head, wait for a new
+// review run, and stop only if that one is incomplete too (Day 10: 9 of 31 runs were incomplete).
+export function reaskPlan({ head, runId, asked }) {
+  if (!asked || asked.head !== head) return 'reask';
+  return runId === asked.run ? 'wait' : 'stop';
+}
+// The line where Qodo says why its review isn't complete, if it gives one (#112: "Qodo could not
+// verify all local findings on this PR.")
+export function qodoReason(body) {
+  const text = decodeEntities((body || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, '\n'));
+  return text.split('\n').map((l) => l.trim()).find((l) => /^Qodo (could not|couldn't|did not|was unable)/i.test(l)) || '';
+}
+// An owner's `/agent retry` on the ticket after a stop before the first push (no PR yet): the
+// runner checks the stopped branch again from where it stopped, under the same retry limit (#111).
+export function resumePlan(s, asks, limits) {
+  if (!s || s.pr || s.phase !== 'help' || !s.branch || !s.dir || !asks.some((a) => a.retry)) return null;
+  return (s.retryRounds || 0) >= limits.retryRounds ? 'limit' : 'resume';
+}
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {

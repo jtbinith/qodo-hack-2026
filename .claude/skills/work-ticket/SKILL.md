@@ -84,6 +84,8 @@ then **Low findings for jtbinith**, then **Gate met: yes / no**, and why.
 
 In an unattended run the runner checks this gate itself, from Qodo's stored review of the PR head (not from your report). It marks the run done only when no High or Medium is open and the review of the head is complete.
 
+If `npm test` fails, the runner runs it once more on the same commit before telling the agent: a second pass is recorded on the PR as flaky (#100). An incomplete Qodo review is asked for again once per head before the run stops. A run that stopped before its first push resumes on the owner's `/agent retry` on the ticket.
+
 The same check is a command for any PR: `node scripts/qodo-gate.mjs <PR> --post` posts it as the `qodo-gate` commit status on the head. The `protect main` ruleset requires `qodo-gate` and `npm test` (CI) to pass before a PR merges. A new push has no status yet, so it's blocked until the gate is checked again.
 
 The gate is in this skill, not in AGENTS.md: Qodo reads AGENTS.md as review rules, so a gate there would change what the reviewer flags.

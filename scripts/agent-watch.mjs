@@ -25,7 +25,7 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync, existsSync, appen
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, qodoReason, resumePlan } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -362,9 +362,15 @@ function checkAndPush(n, s, why) {
     if (agentFile(s, 'stop.md')) throw new Stop('The agent stopped instead of guessing:\n\n' + agentFile(s, 'stop.md'));
     if (head(s) === (s.head || s.base)) throw new Stop('The agent made no new commits.');
     if (uncommitted(s).length) throw new Stop(`Uncommitted changes before testing: ${uncommitted(s).join(', ')}`);
-    const t = npmTest(s.dir);
-    writeFileSync(join(HOME, 'logs', `${n}-${s.runs}-npm-test.log`), t.out);
-    event(n, `npm test ${t.ok ? 'passed' : 'FAILED'} on ${head(s).slice(0, 7)}`);
+    const first = npmTest(s.dir);
+    writeFileSync(join(HOME, 'logs', `${n}-${s.runs}-npm-test.log`), first.out);
+    event(n, `npm test ${first.ok ? 'passed' : 'FAILED'} on ${head(s).slice(0, 7)}`);
+    // a failure is run once more on the same commit before the agent is told: a flaky step that
+    // passes the second time is recorded on the PR, not blamed on the branch (#100)
+    const again = first.ok ? null : npmTest(s.dir);
+    if (again) { writeFileSync(join(HOME, 'logs', `${n}-${s.runs}-npm-test-rerun.log`), again.out); event(n, `npm test re-run ${again.ok ? 'passed' : 'FAILED'} on ${head(s).slice(0, 7)}`); }
+    const t = testRetry(first, again);
+    if (t.flaky) { s.flakes = [...(s.flakes || []), `- \`${head(s).slice(0, 7)}\`: ${t.note.replace(/\n/g, '\n  ')}`]; save(n, s); }
     if (t.ok) break;
     if (attempt >= LIMITS.testAttempts) throw new Stop(`\`npm test\` still fails after ${attempt} attempts:\n\n${fence(t.fails.join('\n'))}`);
     putAgentFile(s, 'test-output.txt', t.out.split('\n').slice(-150).join('\n'));
@@ -387,7 +393,8 @@ function checkAndPush(n, s, why) {
   write(`push ${head(s).slice(0, 7)} to ${s.branch}`, () => sh('git', ['push', '-u', 'origin', `HEAD:refs/heads/${s.branch}`], { cwd: s.dir }));
   const pushed = head(s);
   s.localRounds = 0;   // each push gets its own local fix rounds (Qodo on #107)
-  const proof = `**Red → green, checked by the runner** (not the agent) for ${s.head ? s.head.slice(0, 7) : 'main'}..${pushed.slice(0, 7)}:\n${red.join('\n')}\n- \`${pushed.slice(0, 7)}\` (head): \`npm test\` **passes**, direct and relay.\n${localProof}`;
+  const flakes = s.flakes || []; s.flakes = [];   // shown once, in this push's proof
+  const proof = `**Red → green, checked by the runner** (not the agent) for ${s.head ? s.head.slice(0, 7) : 'main'}..${pushed.slice(0, 7)}:\n${red.join('\n')}\n- \`${pushed.slice(0, 7)}\` (head): \`npm test\` **passes**, direct and relay.\n${localProof}${flakes.length ? `\n${flakes.join('\n')}` : ''}`;
   s.head = pushed; s.pushedAt = s.waitFrom = Date.now(); s.proofs = [...(s.proofs || []), proof];
   if (!s.pr) {
     writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
@@ -473,7 +480,7 @@ function continueRun(n, s) {
       // the quality gate (work-ticket skill): every High and Medium fixed, Lows flagged for the owner.
       // It reads Qodo's stored review and the PR's head fresh, not Qodo's rendered comment (which can lag).
       const prHead = ghJson('api', `repos/${REPO}/pulls/${s.pr}`).head.sha;
-      const g = gateVerdict(qodoRead(s.pr, MAIN), s.head, { prHead });
+      const read = qodoRead(s.pr, MAIN), g = gateVerdict(read, s.head, { prHead });
       if (g.state !== 'done') gate(n, s, prHead, g);   // the ruleset requires it: only a met gate lets the PR merge
       if (g.state === 'moved') throw new Stop(`${g.why}. Someone pushed to the branch outside the run, so the runner won't mark it done.`);
       if (g.state === 'wait') {
@@ -481,7 +488,22 @@ function continueRun(n, s) {
         if (DRY) { console.log(`DRY RUN would wait: ${g.why}`); process.exit(0); }
         sleep(LIMITS.reviewPollSec * 1000); continue;
       }
-      if (g.state === 'incomplete') throw new Stop(`${g.why}, so the gate can't be checked. Ask Qodo to review it again, then \`/agent retry\`.`);
+      if (g.state === 'incomplete') {
+        // Qodo's review runs are sometimes incomplete (9 of 31 on this repo by Day 10): ask once more
+        // per head and wait for the new run before stopping
+        const plan = reaskPlan({ head: s.head, runId: read?.review_session?.run_id, asked: s.reasked });
+        if (plan !== 'stop') {
+          if (plan === 'reask') {
+            write(`ask Qodo to review PR #${s.pr} again`, () => gh('pr', 'comment', String(s.pr), '-R', REPO, '--body', '/review'));
+            s.reasked = { head: s.head, run: read?.review_session?.run_id }; s.waitFrom = Date.now(); save(n, s);
+            event(n, `${g.why}: asked Qodo to review ${s.head.slice(0, 7)} again`);
+          } else if ((Date.now() - s.waitFrom) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why}, and Qodo hadn't started a new review ${LIMITS.reviewWaitMin} min after it was asked again.`);
+          if (DRY) { console.log(`DRY RUN would wait for Qodo's new review`); process.exit(0); }
+          sleep(LIMITS.reviewPollSec * 1000); continue;
+        }
+        const reason = qodoReason(q?.body);
+        throw new Stop(`${g.why}, twice: the runner asked Qodo to review again and the new run was incomplete too${reason ? `. Qodo says: "${reason}"` : ''}. Ask Qodo to review it again, then \`/agent retry\`.`);
+      }
       if (g.state === 'done') {
         // Gate 4: Qodo found nothing open, so a blind reviewer reviews the same head before it's green
         gate(n, s, prHead, { state: 'wait', why: `Qodo's gate is met on ${s.head.slice(0, 7)}; the blind review is running` });
@@ -546,6 +568,26 @@ try {
     setLabels(n, [L.working], [L.done, L.help, L.manual].filter((l) => has.includes(l)));
     s.phase = 'review'; save(n, s); clearStale(s, 'reopen');   // the owner's comment overrides the last stop
     event(n, `reopened by an /agent comment on PR #${s.pr}`); notify(`#${n}: working on your /agent comment`);
+    continueRun(n, s);
+    process.exit(0);
+  }
+
+  // a run that stopped before its first push (no PR yet): the owner's `/agent retry` on the ticket
+  // checks the stopped branch again from where it stopped (#111)
+  for (const { number: n } of openTickets(L.help)) {
+    const s = load(n);
+    if (!s || s.pr || !existsSync(s.dir)) continue;
+    const asks = issueComments(n).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
+    const plan = resumePlan(s, asks.map((a) => parseAsk(a.body)), LIMITS);
+    if (!plan) continue;
+    current = { n, s };
+    s.lastAsk = asks.at(-1).id; save(n, s);
+    if (plan === 'limit') throw new Stop(`\`/agent retry\` was used ${LIMITS.retryRounds} times on this run. Label the ticket \`${L.ready}\` again for a fresh run.`);
+    s.retryRounds = (s.retryRounds || 0) + 1; s.phase = 'work'; save(n, s); clearStale(s, 'reopen');
+    const has = issue(n).labels.map((l) => l.name);
+    setLabels(n, [L.working], [L.help, L.manual].filter((l) => has.includes(l)));
+    event(n, `resumed by /agent retry on the ticket: checking ${s.branch} again from where it stopped`); notify(`#${n}: resuming on your /agent retry`);
+    checkAndPush(n, s, 'owner retry on the ticket');
     continueRun(n, s);
     process.exit(0);
   }
