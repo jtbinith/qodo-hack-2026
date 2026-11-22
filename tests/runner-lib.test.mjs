@@ -489,3 +489,25 @@ test('blind review of #107 round 3: a head the runner pushed cannot be posted gr
     : [{ context: 'qodo-gate', state: 'pending' }];
   assert.equal(lib.mayPostSuccess?.(statuses), false, 'a runner-pushed head with no blind review yet may be posted green by --post');
 });
+
+// #96's first factory run (Day 10): its second test: commit added a browser test, but at that commit
+// the first test: commit's unit tests still failed, so `npm test` (unit && browsers) never reached the
+// browser test and the red check stopped the run for the wrong reason.
+test('the red check runs the browser tests even when the unit tests fail', () => {
+  const src = readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
+  const red = src.match(/function proveRed[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(red, /npmTest\(dir, \{ bothSuites: true \}\)/);
+  const npm = src.match(/function npmTest[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(npm, /test:unit; u=\$\?; node tests\/two-browser\.mjs; d=\$\?; node tests\/two-browser\.mjs --relay; r=\$\?/);
+});
+
+// The blind review of #110 (0c967b8): its repro, copied from .agent/blind/relay-hidden.test.mjs
+test('blind review of #110: the red check runs the relay browser run even when the direct run fails', () => {
+  const src = readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
+  const scripts = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).scripts;
+  const cmd = src.match(/bothSuites \? \['sh', '-c', '([^']+)'\]/)?.[1];
+  assert.ok(cmd, 'bothSuites command not found');
+  let expanded = cmd, prev;
+  do { prev = expanded; expanded = expanded.replace(/npm run ([\w:]+)/g, (_, k) => `(${scripts[k]})`); } while (expanded !== prev);
+  assert.doesNotMatch(expanded, /&&/, `a failing run still short-circuits the next one: ${expanded}`);
+});
