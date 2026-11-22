@@ -20,7 +20,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, sym
 import { join } from 'node:path';
 import { qodoRead, postGate } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -119,7 +119,12 @@ function qodoReview(pr) {
 }
 // Qodo's stored review, read fresh: the quality gate decides from it, not from the agent's report (qodo-gate.mjs).
 // the gate's verdict as the `qodo-gate` commit status on the PR head (scripts/qodo-gate.mjs)
-const gate = (n, sha, g) => { const st = gateStatus(g); write(`set qodo-gate on ${sha.slice(0, 7)} to ${st.state}`, () => postGate(sha, st)); event(n, `qodo-gate ${st.state} on ${sha.slice(0, 7)}: ${st.description}`); };
+function gate(n, s, sha, g) {
+  const st = gateStatus(g, WHO), key = statusChange(s.gateShown, sha, st);
+  if (!key) return;
+  write(`set qodo-gate on ${sha.slice(0, 7)} to ${st.state}`, () => postGate(sha, st));
+  s.gateShown = key; save(n, s); event(n, `qodo-gate ${st.state} on ${sha.slice(0, 7)}: ${st.description}`);
+}
 const listed = (fs) => fs.map((f) => `${severityOf(f)}: ${decodeEntities(f.title)}`);
 const ownerAsks = (s) => issueComments(s.pr).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
 // what the owner's account did on GitHub: compared before and after every agent run
@@ -285,7 +290,7 @@ function checkAndPush(n, s, why) {
     event(n, `pushed ${pushed.slice(0, 7)} and opened PR #${s.pr} (${why})`);
   } else event(n, `pushed ${pushed.slice(0, 7)} to PR #${s.pr} (${why})`);
   s.phase = 'review'; save(n, s);
-  gate(n, pushed, { state: 'wait', why: `Qodo hasn't finished a review of ${pushed.slice(0, 7)} yet` });
+  gate(n, s, pushed, { state: 'wait', why: `Qodo hasn't finished a review of ${pushed.slice(0, 7)} yet` });
   publish(n, s);
 }
 
@@ -361,7 +366,7 @@ function continueRun(n, s) {
       // It reads Qodo's stored review and the PR's head fresh, not Qodo's rendered comment (which can lag).
       const prHead = ghJson('api', `repos/${REPO}/pulls/${s.pr}`).head.sha;
       const g = gateVerdict(qodoRead(s.pr, MAIN), s.head, { prHead });
-      if (g.state !== 'wait') gate(n, prHead, g);   // the ruleset requires it: only a met gate lets the PR merge
+      gate(n, s, prHead, g);   // the ruleset requires it: only a met gate lets the PR merge
       if (g.state === 'moved') throw new Stop(`${g.why}. Someone pushed to the branch outside the run, so the runner won't mark it done.`);
       if (g.state === 'wait') {
         if ((Date.now() - (s.waitFrom || s.pushedAt)) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why} after ${LIMITS.reviewWaitMin} min.`);

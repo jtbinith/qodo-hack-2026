@@ -331,5 +331,5 @@ test("#104 b72e885c: the runner posts a status whenever it changes, waits includ
 });
 test('#104 2ea70199: the timer copies the whole scripts folder, so a new runner module never needs a unit change', () => {
   const unit = readFileSync(new URL('../scripts/systemd/qodo-agent.service', import.meta.url), 'utf8');
-  assert.match(unit, /git -C %h\/qodo-hack-2026 archive origin\/main scripts/);
+  assert.match(unit, /git -C %h\/qodo-hack-2026 archive -o \S+ origin\/main scripts && tar -x/);   // a failed archive stops the tick, never runs an old copy
 });

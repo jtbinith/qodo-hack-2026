@@ -7,7 +7,7 @@
 // (or the owner bypasses the ruleset on GitHub, which GitHub records). A new push is a new head
 // with no status, so it's blocked again until the gate is checked again.
 import { execFileSync } from 'node:child_process';
-import { homedir } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gateVerdict, gateStatus } from './runner-lib.mjs';
@@ -31,7 +31,7 @@ export function qodoRead(pr, cwd = process.cwd()) {
 export function checkGate(pr, { expected, cwd } = {}) {
   const head = JSON.parse(sh('gh', ['api', `repos/${REPO}/pulls/${pr}`])).head.sha;
   const g = gateVerdict(qodoRead(pr, cwd), expected || head, { prHead: head });
-  return { head, g, status: gateStatus(g) };
+  return { head, g, status: gateStatus(g, { home: homedir(), user: userInfo().username }) };   // public: no home path or username
 }
 
 export const postGate = (sha, { state, description }) =>

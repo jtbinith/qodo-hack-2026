@@ -14,5 +14,6 @@ Environment=PATH=%h/.nvm/versions/node/v25.2.1/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=-%h/.config/qodo-agent/env
 # run the merged copy from origin/main, not whatever branch the working checkout is on
 ExecStartPre=/usr/bin/git -C %h/qodo-hack-2026 fetch -q origin main
-ExecStartPre=/bin/sh -c 'mkdir -p %h/.local/state/qodo-agent && for f in agent-watch.mjs runner-lib.mjs qodo-gate.mjs; do git -C %h/qodo-hack-2026 show origin/main:scripts/$f > %h/.local/state/qodo-agent/$f || exit 1; done'
+# the whole scripts folder, so a new runner module never needs a unit change (Qodo on #104)
+ExecStartPre=/bin/sh -c 'S=%h/.local/state/qodo-agent && mkdir -p $$S && git -C %h/qodo-hack-2026 archive -o $$S/scripts.tar origin/main scripts && tar -x -f $$S/scripts.tar -C $$S --strip-components=1'
 ExecStart=%h/.nvm/versions/node/v25.2.1/bin/node %h/.local/state/qodo-agent/agent-watch.mjs

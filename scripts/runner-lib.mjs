@@ -180,13 +180,22 @@ export function gateVerdict(read, head, { prHead } = {}) {
 // The gate's verdict as a commit status on the PR head (context `qodo-gate`). The "protect main" ruleset
 // requires it, so only a met gate lets a PR merge. No finished review yet is pending: it blocks the
 // merge without being a verdict. GitHub cuts a status description at 140 characters.
-export function gateStatus(g) {
+// It's public, so it goes through publicText like every comment (Qodo on #104: a failed read's error
+// can hold the home path).
+export function gateStatus(g, who) {
   const n = (k) => `${k} Low${k === 1 ? '' : 's'} flagged`;
   const [state, description] = g.state === 'done' ? ['success', `Quality gate met: no open High or Medium, ${n(g.lows.length)}`]
     : g.state === 'fix' ? ['failure', `NOT DONE: ${g.blocking.length} High or Medium open, ${n(g.lows.length)}`]
     : g.state === 'wait' ? ['pending', `Waiting: ${g.why}`]
     : ['failure', `NOT DONE: ${g.why}`];
-  return { state, description: description.length > 140 ? description.slice(0, 139) + '…' : description };
+  const shown = who ? publicText(description, who) : description;
+  return { state, description: shown.length > 140 ? shown.slice(0, 139) + '…' : shown };
+}
+// The key of the last status the runner posted: post again only when it changes, a wait included, so
+// a re-review of the same commit turns an old green back to pending (Qodo on #104), without a post every poll.
+export function statusChange(last, sha, { state, description }) {
+  const key = `${sha}|${state}|${description}`;
+  return key === last ? null : key;
 }
 
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
