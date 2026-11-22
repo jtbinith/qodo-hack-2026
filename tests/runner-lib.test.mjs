@@ -471,3 +471,12 @@ test('#107 fe1405c2: local fix rounds start again after each push', () => {
   const push = runnerSrc().match(/const pushed = head\(s\);[\s\S]*?s\.phase = 'review'/)?.[0] || '';
   assert.match(push, /s\.localRounds = 0/);
 });
+
+// The blind review of #107 (d4ffccb): its repro, copied from .agent/blind/blind-status.test.mjs
+test('blind review of #107: a blind review that reproduced a High is described as a High or Medium, not an unreadable label', () => {
+  const blocking = [{ title: 'late device shows No match', severity: 'High', file: 'web/net.js', line: 10, why: 'x', repro: '.agent/blind/late.test.mjs' }];
+  const { state, description } = lib.gateStatus?.({ state: 'fix', blocking, lows: [] }) ?? {};
+  assert.equal(state, 'failure');
+  assert.doesNotMatch(description ?? "label the gate can't read", /label the gate can't read/, description);
+  assert.match(description ?? '', /1 High or Medium/, description);
+});
