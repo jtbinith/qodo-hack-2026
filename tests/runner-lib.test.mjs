@@ -749,3 +749,12 @@ test('#120 f35d5586: the review-round limit is checked after the scope check', (
 test('#120 fe9292c1: each deferral proof names its head and titles in its first line', () => {
   assert.match(runnerSrc(), /\*\*Deferred by the scope rule\*\* \(\$\{kind\}, \$\{s\.head\.slice\(0, 7\)\}\): \$\{plan\.defer\.map/);
 });
+// Qodo's review of #120 (6c87d91), round 2
+test('#120 98f185aa: the deferral asks Qodo for JSON', () => {
+  assert.match(runnerSrc(), /'pr-review-session', 'dismiss', '--json', '--finding-ids'/);
+});
+test("#120 b5119c30: the owner's /agent rounds skip the local scope check", () => {
+  const src = runnerSrc();
+  assert.match(src, /if \(local\.g\.state === 'fix' && !ownerRound\) \{/);
+  assert.match(src, /checkAndPush\(n, s, 'owner comment', \{ ownerRound: true \}\)/);
+});
