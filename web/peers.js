@@ -75,13 +75,13 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     };
     return L;
   }
-  // Once per link, so a device's keys can't make us repeat it. It runs when either half arrives
-  // (our offer, or any key from the other device) and sends again only the offer that was
-  // waiting then, if it is still waiting
+  // Once per offer, so a device's keys can't make us repeat it (only our own negotiations make
+  // new offers). It runs when either half arrives (our offer, or any key from the other device)
+  // and sends again only the offer that was waiting then, if it is still waiting
   function resendLater(peer, L) {
     const pc = L.pc, n = L.offerNo;
-    if (L.offerResent || !L.heard || !n || pc.signalingState !== 'have-local-offer') return;
-    L.offerResent = true;
+    if (L.resentOffer === n || !L.heard || !n || pc.signalingState !== 'have-local-offer') return;
+    L.resentOffer = n;
     setTimeout(() => {
       if (L.offerNo === n && pc.signalingState === 'have-local-offer' && pc.localDescription) signal(peer, { desc: pc.localDescription.toJSON() });
     }, OFFER_RESEND);
