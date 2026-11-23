@@ -616,7 +616,7 @@ test("an incomplete-review stop links to Qodo's latest comment instead of quotin
 const LINE = 'Qodo could not verify all local findings on this PR.';
 const acc = (o) => lib.acceptLocalOnly?.(o) ?? { ok: true };
 const incomplete = (r) => ({ ...r, review_session: { ...r.review_session, review_complete: false } });
-const reviewOf = (head, extra = '') => ({ reviewed: head, body: `<h3>Code Review by Qodo</h3>${extra}\n\n${LINE}\n<!-- https://github.com/x/commit/${head} -->` });
+const reviewOf = (head, extra = '', at = Date.parse('2099-01-01')) => ({ reviewed: head, at, body: `<h3>Code Review by Qodo</h3>${extra}\n\n${LINE}\n<!-- https://github.com/x/commit/${head} -->` });
 test('an incomplete review whose only stated reason is the local findings is accepted when everything else holds', () => {
   const r = incomplete(fx('pr-87')), h = HEAD(r), a = acc({ read: r, head: h, review: reviewOf(h), ciOk: true });
   assert.equal(a.ok, true); assert.equal(a.g?.state, 'done');
@@ -644,4 +644,21 @@ test("the GitHub footprint watches the run's own branch and the branch names, no
 test("a review round with no commit says the agent made no change and points to its report, without claiming why", () => {
   assert.doesNotMatch(runnerSrc(), /The agent judged none of the/);
   assert.match(runnerSrc(), /The agent made no commit for the/);
+});
+
+// Qodo's review and the blind review of #117 (afa986c), each finding as a test before its fix
+test('#117 70c0b9f1 and the blind review: the local-findings reason must be the only one, in a comment updated after this review run started', () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r);
+  assert.equal(acc({ read: r, head: h, review: reviewOf(h, '\n\nQodo could not complete the security review on this PR.'), ciOk: true }).ok, false, 'a second stated reason');
+  assert.equal(acc({ read: r, head: h, review: reviewOf(h, '\n\nSorry, something went wrong'), ciOk: true }).ok, false, 'an error alongside it');
+  assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, started_at: '2026-11-23T10:00:00Z' } }, head: h, review: reviewOf(h, '', Date.parse('2026-11-23T09:00:00Z')), ciOk: true }).ok, false, 'the comment is older than this review run');
+});
+test('#117 ba2f8c9a: qodo-gate.mjs applies the same rule, so a manual --post agrees with the runner', () => {
+  const g = readFileSync(new URL('../scripts/qodo-gate.mjs', import.meta.url), 'utf8');
+  assert.match(g, /acceptLocalOnly\(/); assert.match(g, /export function ciPassed/); assert.match(g, /export function reviewComment/);
+  assert.match(runnerSrc(), /import \{[^}]*ciPassed[^}]*reviewComment[^}]*\} from '\.\/qodo-gate\.mjs'/);
+});
+test("#117 8186b50b and 489b96bb: CI counts only GitHub's latest npm test run, and only when it finished green", () => {
+  const g = readFileSync(new URL('../scripts/qodo-gate.mjs', import.meta.url), 'utf8');
+  assert.match(g, /filter=latest/); assert.match(g, /runs\.length > 0 && runs\.every\(\(c\) => c\.status === 'completed' && c\.conclusion === 'success'\)/);
 });
