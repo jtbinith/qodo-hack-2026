@@ -98,6 +98,19 @@ try {
   await stranger(a.id);
   const forgedHeard = await until(B, () => window.__t.heard.length === 3, null, 10000).then(() => true, () => false);
   check(strangerHeard === 0 && forgedHeard, `results from a device that isn't the time keeper are ignored (heard ${strangerHeard}; with a forged time keeper id: ${forgedHeard})`);
+  // connection setup from a device that isn't in the room opens no connection (S1.6)
+  await B.evaluate(async ([url, key, room, b]) => {
+    const client = window.supabase.createClient(url, key), ch = client.channel('stitch:photo-' + room, { config: { broadcast: { self: false } } });
+    await new Promise((ok) => ch.subscribe((st) => st === 'SUBSCRIBED' && ok()));
+    const from = 'zzzzsetupstranger';
+    await ch.send({ type: 'broadcast', event: 'sig', payload: { from, to: b, data: { pub: btoa('x'.repeat(65)) } } });
+    await ch.send({ type: 'broadcast', event: 'sig', payload: { from, to: b, data: { desc: { type: 'offer', sdp: 'v=0\r\n' } } } });
+    await ch.send({ type: 'broadcast', event: 'sig', payload: { from, to: b, data: { cand: { candidate: 'candidate:1 1 udp 1 127.0.0.1 9 typ host' } } } });
+    await client.removeChannel(ch);
+  }, [url, key, room, b.id]);
+  await new Promise((r) => setTimeout(r, 6000));   // past the time net.js holds early setup (EARLY_SIG_TTL)
+  const setupLink = await B.evaluate(() => { const t = window.__t; return [t.peers.path('zzzzsetupstranger'), t.peers.state('zzzzsetupstranger')]; });
+  check(setupLink[0] === 'none' && setupLink[1] === 'none', `setup from a device not in the room opens no connection (path ${setupLink[0]}, state ${setupLink[1]})`);
   // what the page shows for each result: "Try again" isn't replaced by this device's own
   // "No match" until it pushes again, "Joined" always wins, results for other devices show nothing
   const shows = await B.evaluate((a) => { const t = window.__t, out = [], said = () => document.getElementById('toast').textContent;

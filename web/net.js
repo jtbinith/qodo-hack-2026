@@ -2,7 +2,7 @@
 // The server only relays messages. One device (the earliest to arrive) is the "time
 // keeper": everyone syncs their clock to it, and it decides which orb pushes pair up.
 import { addJoins, matchPushes, isValidJoins } from './layout.js';
-import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk } from './check.js';
+import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk, inRoom } from './check.js';
 
 const SUPABASE_URL = 'https://aimoujzdcaxkejraattw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_D8DGNTiXWHRFaoE2ae3ACg_8G8Y_yDS'; // public by design
@@ -12,11 +12,24 @@ const LAYOUT_GAP = 1000; // the time keeper answers layout asks at most once in 
 // A device that asked for the layout asks again about every ASK_EVERY (jittered, never sooner
 // than LAYOUT_GAP) until the time keeper's layout arrives, at most ASK_TRIES asks in all
 const ASK_EVERY = 2000, ASK_TRIES = 5;
+// Connection setup is used only from devices in the room (S1.6). A device that has just joined
+// can send setup before this device's presence lists it, so setup from an id not in the room is
+// held: at most EARLY_SIG_HOLD messages and EARLY_SIG_BYTES (as UTF-8 JSON) from each of at most
+// EARLY_SIG_SENDERS ids, for at most EARLY_SIG_TTL ms. It's passed on if presence lists the sender
+// in time and dropped otherwise. A message that doesn't fit is dropped and takes no slot. Real
+// early setup is a key, an offer and a few candidates; a relay frame can't be early (S1.6)
+export const EARLY_SIG_HOLD = 30, EARLY_SIG_SENDERS = 8, EARLY_SIG_TTL = 5000, EARLY_SIG_BYTES = 32 * 1024;
+const utf8 = new TextEncoder();
 const wall = () => performance.timeOrigin + performance.now();
 
 // `onSignal` (optional) receives messages sent with s.signal(to, data): a lane for
 // pages that set up direct device-to-device connections. Only the addressee handles them.
-export function joinRoom({ room, id, name, size, onSignal }) {
+// `linked(from)` (optional) says whether this device already holds a key for `from`. A device
+// it holds a key for can drop out of presence for a moment mid-transfer (its socket rejoins).
+// Its relay frames are then passed on as onSignal(from, data, true): "away", not to be used
+// yet. Only peers.js can tell a real frame from a forged one, so it opens each, holds the real
+// ones and uses none until `onReturn(from)` says presence lists that device again.
+export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, linked = () => false }) {
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   const ch = client.channel('stitch:' + room, { config: { broadcast: { self: false }, presence: { key: id } } });
   const joinedAt = wall();
@@ -32,6 +45,8 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   const emit = (ev, data) => s.listeners.forEach((f) => f(ev, data));
   const send = (event, payload) => ch.send({ type: 'broadcast', event, payload });
   const earlyLayouts = new Map();   // device id -> the latest layout it sent while it wasn't this device's time keeper (#61)
+  const earlySigs = new Map();      // id not yet in the room -> { list: setup it sent, bytes, timer } (S1.6)
+  const away = new Set();           // linked ids not in the room whose relay frames were passed on marked away
 
   function electLeader() {
     const all = Object.entries(s.peers).sort(([a, p], [b, q]) => (p.joinedAt - q.joinedAt) || (a < b ? -1 : 1));
@@ -79,6 +94,14 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     electLeader();
     if (s.leader === id) sendLayout();
     emit('peers', s.peers);
+    // setup held from a device that has now arrived is passed on, in the order it came (S1.6)
+    for (const [from, held] of earlySigs) {
+      if (!inRoom(s.peers, from) || from === id) continue;
+      clearTimeout(held.timer); earlySigs.delete(from);
+      for (const data of held.list) onSignal(from, data);
+    }
+    // a linked device whose relay frames were marked away is back: peers.js may use them now
+    for (const from of away) if (inRoom(s.peers, from)) { away.delete(from); onReturn(from); }
   });
 
   // --- clock sync: NTP-style ping/pong with the time keeper ---
@@ -209,10 +232,32 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     onPush(p);
   };
   s.resize = (w, h) => { if (s.status === 'live') ch.track({ name, w, h, joinedAt }); };
-  if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => { if (validSignal(payload) && payload.to === id) onSignal(payload.from, payload.data); });
+  if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => {
+    if (!validSignal(payload) || payload.to !== id || payload.from === id) return;
+    if (inRoom(s.peers, payload.from)) { onSignal(payload.from, payload.data); return; }
+    // A relay frame from a device this one already shares a key with, while presence doesn't
+    // list it (a phone's socket rejoins mid-transfer, or it has left). It is passed on marked
+    // away (see joinRoom above); setup from an absent device waits in the early hold below
+    if (payload.data.r && linked(payload.from)) { away.add(payload.from); onSignal(payload.from, payload.data, true); return; }
+    hold(payload.from, payload.data, utf8.encode(JSON.stringify(payload.data)).length);   // bytes, not UTF-16 code units
+  });
+  // Holds setup from an absent `from` until presence lists it, for at most EARLY_SIG_TTL. A
+  // message that doesn't fit is dropped and takes no slot
+  function hold(from, data, size) {
+    let held = earlySigs.get(from);
+    if (held ? held.list.length >= EARLY_SIG_HOLD || held.bytes + size > EARLY_SIG_BYTES : size > EARLY_SIG_BYTES) return;
+    if (!held) {
+      if (earlySigs.size >= EARLY_SIG_SENDERS) return;
+      held = { list: [], bytes: 0, timer: setTimeout(() => earlySigs.delete(from), EARLY_SIG_TTL) };
+      earlySigs.set(from, held);
+    }
+    held.list.push(data); held.bytes += size;
+  }
   s.signal = (to, data) => send('sig', { from: id, to, data });
   s.on = (f) => s.listeners.add(f);
-  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer); stopAsking(); waits.forEach(clearTimeout); waits.clear(); client.removeChannel(ch); };
+  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer); stopAsking(); waits.forEach(clearTimeout); waits.clear();
+    earlySigs.forEach((h) => clearTimeout(h.timer)); earlySigs.clear(); away.clear();
+    client.removeChannel(ch); };
 
   ch.subscribe(async (st) => {
     if (st === 'SUBSCRIBED') {

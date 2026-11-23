@@ -392,3 +392,210 @@ test('a flood of layout asks gets at most one answer per gap, and the last ask i
   for (let i = 1; i < sent.length; i++) assert.ok(sent[i] - sent[i - 1] >= 1000, 'answers are at least 1 s apart');
   assert.ok(sent[sent.length - 1] >= last, 'an answer went out after the last ask');
 });
+
+// --- S1.6 (#21): connection setup from devices not in the room opens no connection ---
+// Each device here records the setup messages net.js hands to its onSignal.
+const net = await import('../web/net.js');
+// `linked(from)` stands in for peers.js: whether this device already holds a key for `from`.
+// `got` records [from, data] for each message passed on, plus `true` if it was marked away.
+// `back` records each id whose return onReturn announced.
+async function sigRoom(ids = ['L', 'A'], linked = () => false) {
+  const devs = {};
+  for (const id of ids) {
+    const got = [], back = [];
+    devs[id] = joinRoom({ room: 'r', id, name: id.toLowerCase(), size: { w: 400, h: 800 },
+      onSignal: (from, data, away) => got.push(away === undefined ? [from, data] : [from, data, away]), onReturn: (from) => back.push(from), linked });
+    devs[id].got = got; devs[id].back = back;
+    await tick(1);
+  }
+  await settle();
+  return devs;
+}
+const pub = (n = 0) => ({ pub: 'AAAA' + n });
+const offer = { desc: { type: 'offer', sdp: 'v=0' } };
+const sig = (from, to, data = pub()) => ({ from, to, data });
+const sync = () => { for (const c of channels) c.handlers['presence:sync']?.(); };
+// A device joins the room the way a real one does, so every device hears its presence
+const arrive = async (id) => { presence[id] = { name: id.toLowerCase(), w: 400, h: 800, joinedAt: Date.now() }; sync(); await settle(); };
+
+test('setup from a device in the room is passed on', async () => {
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('L', 'A'));
+  await settle();
+  assert.deepEqual(A.got, [['L', pub()]]);
+});
+
+test('setup from a device not in the room is never passed on (S1.6)', async () => {
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('stranger', 'A'));
+  deliver('A', 'sig', sig('stranger', 'A', offer));
+  await tick(60_000);
+  assert.deepEqual(A.got, [], 'nothing from the stranger reached onSignal');
+});
+
+test('setup that claims to come from this device itself is dropped (S1.6)', async () => {
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('A', 'A'));
+  await tick(60_000);
+  assert.deepEqual(A.got, []);
+});
+
+test('setup that arrives just before its sender’s presence is passed on, in order, once presence lists it', async () => {
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('N', 'A', pub(1)));
+  deliver('A', 'sig', sig('N', 'A', offer));
+  await tick(500);
+  assert.deepEqual(A.got, [], 'held until N is in the room');
+  await arrive('N');
+  assert.deepEqual(A.got, [['N', pub(1)], ['N', offer]]);
+  deliver('A', 'sig', sig('N', 'A', pub(2)));
+  await settle();
+  assert.equal(A.got.length, 3, 'later setup from N goes straight through');
+});
+
+test('held setup is dropped after EARLY_SIG_TTL if its sender doesn’t arrive in time (Rule 3)', async () => {
+  assert.equal(typeof net.EARLY_SIG_TTL, 'number', 'EARLY_SIG_TTL is a named constant');
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('N', 'A'));
+  await tick(net.EARLY_SIG_TTL + 100);
+  await arrive('N');
+  assert.deepEqual(A.got, [], 'nothing held past its time is passed on');
+});
+
+test('setup held for one sender is capped at EARLY_SIG_HOLD messages (Rule 3)', async () => {
+  assert.equal(typeof net.EARLY_SIG_HOLD, 'number', 'EARLY_SIG_HOLD is a named constant');
+  const { A } = await sigRoom();
+  for (let i = 0; i < net.EARLY_SIG_HOLD + 50; i++) deliver('A', 'sig', sig('N', 'A', pub(i)));
+  await arrive('N');
+  assert.equal(A.got.length, net.EARLY_SIG_HOLD);
+  assert.deepEqual(A.got[0], ['N', pub(0)], 'the first ones are kept');
+});
+
+test('setup is held for at most EARLY_SIG_SENDERS unknown senders at once (Rule 3)', async () => {
+  assert.equal(typeof net.EARLY_SIG_SENDERS, 'number', 'EARLY_SIG_SENDERS is a named constant');
+  const { A } = await sigRoom();
+  const n = net.EARLY_SIG_SENDERS + 20;
+  for (let i = 0; i < n; i++) deliver('A', 'sig', sig('S' + i, 'A'));
+  for (let i = 0; i < n; i++) await arrive('S' + i);
+  assert.equal(new Set(A.got.map(([from]) => from)).size, net.EARLY_SIG_SENDERS);
+});
+
+test('once a device has left, its setup is dropped again', async () => {
+  const { A } = await sigRoom();
+  await arrive('N');
+  delete presence.N; sync(); await settle();
+  deliver('A', 'sig', sig('N', 'A'));
+  await tick(60_000);
+  assert.deepEqual(A.got, []);
+});
+
+test('malformed or misaddressed setup is still dropped', async () => {
+  const { A } = await sigRoom();
+  for (const bad of [null, {}, sig('L', 'A', {}), sig('L', 'A', { pub: 'AA', r: 'AA' }), sig('L', 'B')]) deliver('A', 'sig', bad);
+  await tick(10_000);
+  assert.deepEqual(A.got, []);
+});
+
+// Qodo's local review of c65f992: held setup also has a byte cap. A relay frame can be 128 KiB, so
+// a count cap alone let eight absent ids pin about 30 MiB on a receiver
+test('setup held for one sender is capped at EARLY_SIG_BYTES, and a frame too big to hold takes no slot (Rule 3)', async () => {
+  assert.equal(typeof net.EARLY_SIG_BYTES, 'number', 'EARLY_SIG_BYTES is a named constant');
+  const { A } = await sigRoom();
+  const big = { r: 'A'.repeat(128 * 1024) };                       // the biggest relay frame validSignal accepts
+  for (let s = 0; s < net.EARLY_SIG_SENDERS; s++) for (let i = 0; i < net.EARLY_SIG_HOLD; i++) deliver('A', 'sig', sig('S' + s, 'A', big));
+  deliver('A', 'sig', sig('N', 'A', offer));                       // a real newcomer, just after
+  await settle();
+  for (let s = 0; s < net.EARLY_SIG_SENDERS; s++) await arrive('S' + s);
+  await arrive('N');
+  const held = A.got.filter(([from]) => from !== 'N').reduce((n, [, d]) => n + JSON.stringify(d).length, 0);
+  assert.equal(held, 0, 'frames bigger than the cap were held');
+  assert.deepEqual(A.got.filter(([from]) => from === 'N'), [['N', offer]], 'the oversized frames took the slots');
+});
+
+test('setup that fits is held up to EARLY_SIG_BYTES for each sender and the rest is dropped (Rule 3)', async () => {
+  const { A } = await sigRoom();
+  const cand = (i) => ({ cand: { candidate: String(i).padEnd(1900, 'x') } });
+  for (let i = 0; i < net.EARLY_SIG_HOLD; i++) deliver('A', 'sig', sig('N', 'A', cand(i)));
+  await settle();
+  await arrive('N');
+  const bytes = A.got.reduce((n, [, d]) => n + JSON.stringify(d).length, 0);
+  assert.ok(A.got.length > 0 && bytes <= net.EARLY_SIG_BYTES, `held ${bytes} bytes in ${A.got.length} messages`);
+  assert.ok(bytes + JSON.stringify(cand(0)).length > net.EARLY_SIG_BYTES, 'stopped before the cap was reached');
+  assert.deepEqual(A.got[0], ['N', cand(0)], 'the first ones are kept');
+});
+
+// Qodo's local review of 3a2ba3a: the cap counted UTF-16 code units, not bytes, so setup in
+// non-ASCII text let one absent sender pin about three times EARLY_SIG_BYTES
+test('setup held for one sender is capped at EARLY_SIG_BYTES encoded bytes, even in non-ASCII text (Rule 3)', async () => {
+  const { A } = await sigRoom();
+  const utf8 = (d) => new TextEncoder().encode(JSON.stringify(d)).length;
+  const cand = (i) => ({ cand: { candidate: String(i).padEnd(1900, '€') } });   // '€' is 3 bytes in UTF-8
+  for (let i = 0; i < net.EARLY_SIG_HOLD; i++) deliver('A', 'sig', sig('N', 'A', cand(i)));
+  await settle();
+  await arrive('N');
+  const bytes = A.got.reduce((n, [, d]) => n + utf8(d), 0);
+  assert.ok(A.got.length > 0 && bytes <= net.EARLY_SIG_BYTES, `held ${bytes} bytes in ${A.got.length} messages`);
+  assert.ok(bytes + utf8(cand(0)) > net.EARLY_SIG_BYTES, 'stopped before the cap was reached');
+});
+
+// Qodo's review of d264fe6 on #116: a device can drop out of presence for a moment (a phone's
+// Wi-Fi blips, its socket rejoins) while a relay transfer to this device is under way. A full
+// relay chunk is bigger than EARLY_SIG_BYTES, so it was dropped instead of held.
+const chunk = { r: 'A'.repeat(40 * 1024) };                          // a full relay chunk, sealed and base64'd
+// Qodo's review of cc2cc80 on #116: passing those frames straight on let a room member replay a
+// departed device's recorded frames under its id. Qodo's local review of e006f6c: holding them
+// here, before anything checked them, let a member forge the id and fill the hold. So net.js now
+// passes them on marked away: peers.js opens each one, holds only the real ones and uses none
+// until net.js says presence lists the device again (tests/peers.test.mjs).
+const chunks = (n) => Array.from({ length: n }, (_, i) => ({ r: String(i).padStart(4, '0') + 'A'.repeat(chunk.r.length - 4) }));
+test('relay frames from a linked device presence doesn’t list are passed on marked away, in order, and its return is announced', async () => {
+  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
+  delete presence.L; sync(); await settle();                        // L drops out of presence for a moment
+  for (const c of chunks(3)) deliver('A', 'sig', sig('L', 'A', c));
+  await settle();
+  assert.deepEqual(A.got.map(([from, d, away]) => [from, d.r.slice(0, 4), away]), [['L', '0000', true], ['L', '0001', true], ['L', '0002', true]], 'not passed on marked away, in order');
+  assert.deepEqual(A.back, [], 'announced a return before presence listed L');
+  await arrive('L');
+  assert.deepEqual(A.back, ['L'], 'L’s return was not announced');
+  sync(); await settle();
+  assert.deepEqual(A.back, ['L'], 'announced again with nothing marked away since');
+  deliver('A', 'sig', sig('L', 'A', chunk));
+  await settle();
+  assert.equal(A.got.at(-1).length, 2, 'a frame from L once it is back was still marked away');
+});
+
+test('a relay frame under the id of a linked device that has left is only ever passed on marked away (replay)', async () => {
+  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
+  delete presence.L; sync(); await settle();                        // L has left; a member replays its frame
+  deliver('A', 'sig', sig('L', 'A', { r: 'cmVjb3JkZWQgbW92ZQ==' }));
+  await tick(net.EARLY_SIG_TTL + 100);
+  assert.ok(A.got.length > 0 && A.got.every((g) => g[2] === true), 'a departed device’s relay frame was passed on as if it were here');
+  assert.deepEqual(A.back, [], 'a return was announced for a device that never came back');
+});
+
+test('no return is announced for a device that sent nothing while away', async () => {
+  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
+  delete presence.L; sync(); await settle();
+  await arrive('L'); await arrive('B');
+  assert.deepEqual(A.back, []);
+});
+
+test('a relay chunk from an absent device this one holds no key for is still dropped (S1.6)', async () => {
+  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
+  deliver('A', 'sig', sig('stranger', 'A', chunk));
+  deliver('A', 'sig', sig('stranger', 'A', { r: 'AAAA' }));
+  await tick(60_000);
+  await arrive('stranger');
+  assert.deepEqual(A.got, [], 'a relay frame from an unlinked absent id got through');
+});
+
+test('setup from a linked device that is briefly absent is still held, not passed straight on (S1.6)', async () => {
+  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
+  delete presence.L; sync(); await settle();
+  deliver('A', 'sig', sig('L', 'A', offer));
+  deliver('A', 'sig', sig('L', 'A', pub(1)));
+  await settle();
+  assert.deepEqual(A.got, [], 'setup from an absent device went straight through');
+  await arrive('L');
+  assert.deepEqual(A.got, [['L', offer], ['L', pub(1)]], 'held setup is passed on once L is back');
+});
