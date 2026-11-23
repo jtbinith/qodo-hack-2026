@@ -289,14 +289,6 @@ export function reaskPlan({ head, runId, asked }) {
   if (!asked || asked.head !== head) return 'reask';
   return runId === asked.run ? 'wait' : 'stop';
 }
-// The line where Qodo says why its review isn't complete, if it gives one (#112: "Qodo could not
-// verify all local findings on this PR.")
-export function qodoReason(body) {
-  // inline tags (a command in <code>) stay in their line; other tags end it (Qodo on #115)
-  const text = decodeEntities((body || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<\/?(code|b|strong|em|i|a)\b[^>]*>/gi, '').replace(/<[^>]+>/g, '\n'));
-  const lines = text.split('\n').map((l) => l.trim());
-  return lines.find((l) => /^Qodo (could not|couldn't|did not|was unable)/i.test(l)) || lines.find((l) => /^We weren['’]t able to complete the code review/i.test(l)) || '';
-}
 // An owner's `/agent retry` on the ticket after a stop before the first push (no PR yet): the
 // runner checks the stopped branch again from where it stopped, under the same retry limit (#111).
 // Only a retry written after this run stopped counts: an old one from an earlier run of the same

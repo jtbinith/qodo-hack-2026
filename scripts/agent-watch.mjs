@@ -25,7 +25,7 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync, existsSync, appen
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, qodoReason, resumePlan, roundCounts } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -132,10 +132,9 @@ function gate(n, s, sha, g) {
   write(`set qodo-gate on ${sha.slice(0, 7)} to ${st.state}`, () => postGate(sha, st));
   s.gateShown = key; save(n, s); event(n, `qodo-gate ${st.state} on ${sha.slice(0, 7)}: ${st.description}`);
 }
-// Qodo's stated reason from any of its comments posted since this head was pushed, newest first: its
-// "something went wrong" reply carries no commit marker (Qodo on #115), and older comments are older heads'
-const qodoReasonSince = (pr, since) => issueComments(pr).filter((c) => c.user.login === QODO && Date.parse(c.updated_at) >= (since || 0))
-  .reverse().map((c) => qodoReason(c.body)).find(Boolean) || '';
+// where Qodo says why its review isn't complete: a link to its newest comment on the PR, not a quote
+// (quoting picked the wrong comment: Qodo edits its comments in place for later heads, Qodo on #115)
+const qodoLatest = (pr) => { const c = issueComments(pr).filter((x) => x.user.login === QODO).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0]; return c ? `Qodo's latest comment: ${c.html_url}` : `Qodo hasn't commented on PR #${pr}`; };
 const listed = (fs) => fs.map((f) => `${severityOf(f)}: ${decodeEntities(f.title)}`);
 const ownerAsks = (s) => issueComments(s.pr).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
 // what the owner's account did on GitHub: compared before and after every agent run
@@ -518,12 +517,11 @@ function continueRun(n, s) {
             write(`ask Qodo to review PR #${s.pr} again`, () => gh('pr', 'comment', String(s.pr), '-R', REPO, '--body', '/agentic_review'));
             if (!DRY) { s.reasked = { head: s.head, run: read?.review_session?.run_id }; s.waitFrom = Date.now(); save(n, s); }   // a rehearsal never records an ask it didn't make (Qodo on #113)
             event(n, `${g.why}: asked Qodo to review ${s.head.slice(0, 7)} again`);
-          } else if ((Date.now() - s.waitFrom) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why}, and Qodo hadn't started a new review ${LIMITS.reviewWaitMin} min after it was asked again.`);
+          } else if ((Date.now() - s.waitFrom) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why}, and Qodo hadn't started a new review ${LIMITS.reviewWaitMin} min after it was asked again (${qodoLatest(s.pr)}).`);
           if (DRY) { console.log(`DRY RUN would wait for Qodo's new review`); process.exit(0); }
           sleep(LIMITS.reviewPollSec * 1000); continue;
         }
-        const reason = qodoReasonSince(s.pr, s.pushedAt);
-        throw new Stop(`${g.why}, twice: the runner asked Qodo to review again and the new run was incomplete too${reason ? `. Qodo says: "${reason}"` : ''}. Ask Qodo to review it again, then \`/agent retry\`.`);
+        throw new Stop(`${g.why}, twice: the runner asked Qodo to review again and the new run was incomplete too (${qodoLatest(s.pr)}). Ask Qodo to review it again, then \`/agent retry\`.`);
       }
       if (g.state === 'done') {
         // Gate 4: Qodo found nothing open, so a blind reviewer reviews the same head before it's green
