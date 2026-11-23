@@ -608,3 +608,27 @@ test("an incomplete-review stop links to Qodo's latest comment instead of quotin
   assert.doesNotMatch(src, /qodoReason/);
   assert.equal((src.match(/\$\{qodoLatest\(s\.pr\)\}/g) || []).length, 2, 'both stops, the second incomplete review and the timeout');
 });
+
+// Day 10: every Qodo PR review of a factory branch that had local findings came back incomplete,
+// "Qodo could not verify all local findings on this PR." (8 of 8 runs on #112 and #116; 0 of 18 on
+// PRs without). The gate accepts that one stated reason, and only when everything else holds.
+const LINE = 'Qodo could not verify all local findings on this PR.';
+const acc = (o) => lib.acceptLocalOnly?.(o) ?? { ok: true };
+const incomplete = (r) => ({ ...r, review_session: { ...r.review_session, review_complete: false } });
+const reviewOf = (head, extra = '') => ({ reviewed: head, body: `<h3>Code Review by Qodo</h3>${extra}\n\n${LINE}\n<!-- https://github.com/x/commit/${head} -->` });
+test('an incomplete review whose only stated reason is the local findings is accepted when everything else holds', () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r), a = acc({ read: r, head: h, review: reviewOf(h), ciOk: true });
+  assert.equal(a.ok, true); assert.equal(a.g?.state, 'done');
+});
+test('it is never accepted without that exact reason on this head, with CI red or not finished, or with a High or Medium open', () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r);
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, body: 'no reason given' }, ciOk: true }).ok, false, 'no reason');
+  assert.equal(acc({ read: r, head: h, review: reviewOf('f'.repeat(40)), ciOk: true }).ok, false, 'the reason is for another head');
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, body: 'Qodo could not verify all findings on this PR.' }, ciOk: true }).ok, false, 'another reason');
+  assert.equal(acc({ read: r, head: h, review: reviewOf(h), ciOk: false }).ok, false, 'CI not green');
+  const med = { ...r, finding_count: r.findings.length + 1, findings: [...r.findings, { id: 'med00001', title: 'm', action_level: 'remediation_recommended', attribution_status: 'pending', git_sha: h }] };
+  assert.equal(acc({ read: med, head: h, review: reviewOf(h), ciOk: true }).ok, false, 'a Medium is open');
+  assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, status: 'started' } }, head: h, review: reviewOf(h), ciOk: true }).ok, false, 'still running');
+  assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, commit_sha: 'e'.repeat(40) } }, head: h, review: reviewOf(h), ciOk: true }).ok, false, 'a review of another commit');
+  assert.equal(acc({ read: fx('pr-87'), head: h, review: reviewOf(h), ciOk: true }).ok, false, 'a complete review needs no exception');
+});
