@@ -3,7 +3,8 @@
 // back, and the clock is mocked so 10 seconds pass instantly.
 import { test, mock, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPeers } from '../web/peers.js';
+import * as peersMod from '../web/peers.js';
+const { createPeers } = peersMod, OFFER_RESEND = peersMod.OFFER_RESEND ?? 3000;
 import { makeKeyPair, b64 } from '../web/seal.js';
 
 const TIMEOUT = 10_000;              // the ticket: a send gives up after 10 s with no progress
@@ -16,9 +17,24 @@ class FakeChannel extends EventTarget {
   send() { this.sent++; }
   drainTo(n) { this.bufferedAmount = n; if (n <= this.bufferedAmountLowThreshold) this.dispatchEvent(new Event('bufferedamountlow')); }
 }
+// Signalling is modelled only as far as an offer and its answer: like a browser, an answer is
+// refused unless an offer of ours is waiting for one
+const pcs = [];
 class FakePC {
-  connectionState = 'new';
+  connectionState = 'new'; signalingState = 'stable'; localDescription = null; remoteDescription = null;
+  constructor() { pcs.push(this); }
   createDataChannel() { const dc = new FakeChannel(); channels.push(dc); return dc; }
+  async setLocalDescription() {
+    const type = this.signalingState === 'have-remote-offer' ? 'answer' : 'offer';
+    this.localDescription = { type, sdp: type + ' sdp', toJSON() { return { type: this.type, sdp: this.sdp }; } };
+    this.signalingState = type === 'offer' ? 'have-local-offer' : 'stable';
+  }
+  async setRemoteDescription(d) {
+    if (d.type === 'answer' && this.signalingState !== 'have-local-offer') throw new Error('InvalidStateError: no offer waiting for an answer');
+    this.remoteDescription = d;
+    this.signalingState = d.type === 'offer' ? 'have-remote-offer' : 'stable';
+  }
+  async addIceCandidate() {}
 }
 globalThis.RTCPeerConnection = FakePC;
 
@@ -250,3 +266,48 @@ test('an error another send already marked gives unknown counts, so nothing is g
   assert.equal(s.error.sent, null);
 });
 
+
+// Qodo's local review of c65f992: net.js may drop setup that arrives before its sender's presence
+// (S1.6). If the offer was dropped, the device that made it hears the other device's first key
+// once that device sees it in the room, but no answer. It sends the offer again after
+// OFFER_RESEND, so the pair still gets a direct link instead of staying on the relay.
+async function offering() {
+  const sent = [];
+  const peers = createPeers({ myId: 'a', table: 'T', signal: (to, d) => sent.push([to, d]) });
+  peers.connect('b');                                  // a < b: a makes the offer
+  const pc = pcs.at(-1);
+  await pc.onnegotiationneeded(); await settle();
+  const offers = () => sent.filter(([to, d]) => to === 'b' && d.desc?.type === 'offer').length;
+  assert.equal(offers(), 1);
+  return { peers, pc, offers };
+}
+const firstKey = async () => { const { pub } = await makeKeyPair(); return { pub: b64(pub) }; };
+
+test('an offer the other device never answered is sent again once its first key arrives', async () => {
+  assert.equal(typeof peersMod.OFFER_RESEND, 'number', 'OFFER_RESEND is a named constant');
+  const { peers, offers } = await offering();
+  await peers.onSignal('b', await firstKey());        // b now sees a in the room, but lost the offer
+  await settle();
+  await tick(OFFER_RESEND - 1);
+  assert.equal(offers(), 1, 'sent again too early');
+  await tick(1);
+  assert.equal(offers(), 2, 'the offer was never sent again');
+  await tick(10 * OFFER_RESEND);
+  assert.equal(offers(), 2, 'sent again more than once for one key');
+});
+
+test('an offer that is answered in time is not sent again', async () => {
+  const { peers, pc, offers } = await offering();
+  await peers.onSignal('b', await firstKey());
+  await peers.onSignal('b', { desc: { type: 'answer', sdp: 'answer sdp' } });
+  assert.equal(pc.signalingState, 'stable');
+  await tick(10 * OFFER_RESEND);
+  assert.equal(offers(), 1);
+});
+
+test('a second answer to an offer sent twice is ignored, not an error', async () => {
+  const { peers, pc } = await offering();
+  await peers.onSignal('b', { desc: { type: 'answer', sdp: 'answer sdp' } });
+  await assert.doesNotReject(peers.onSignal('b', { desc: { type: 'answer', sdp: 'answer sdp' } }));
+  assert.equal(pc.signalingState, 'stable');
+});
