@@ -132,6 +132,10 @@ function gate(n, s, sha, g) {
   write(`set qodo-gate on ${sha.slice(0, 7)} to ${st.state}`, () => postGate(sha, st));
   s.gateShown = key; save(n, s); event(n, `qodo-gate ${st.state} on ${sha.slice(0, 7)}: ${st.description}`);
 }
+// Qodo's stated reason from any of its comments posted since this head was pushed, newest first: its
+// "something went wrong" reply carries no commit marker (Qodo on #115), and older comments are older heads'
+const qodoReasonSince = (pr, since) => issueComments(pr).filter((c) => c.user.login === QODO && Date.parse(c.updated_at) >= (since || 0))
+  .reverse().map((c) => qodoReason(c.body)).find(Boolean) || '';
 const listed = (fs) => fs.map((f) => `${severityOf(f)}: ${decodeEntities(f.title)}`);
 const ownerAsks = (s) => issueComments(s.pr).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
 // what the owner's account did on GitHub: compared before and after every agent run
@@ -193,7 +197,7 @@ class Refuse extends Error { constructor(label, msg) { super(msg); this.label = 
 function agent(n, s, what, prompt, profile = WORKER) {
   const log = join(HOME, 'logs', `${n}-${s.runs + 1}-${what}.log`), before = footprint(s), from = head(s);
   if (DRY) throw new Stop(`DRY RUN stops here: it would start agent run ${s.runs + 1} (${what}).`);
-  const m = machineCheck(); if (!m.ok) throw new Stop(m.why);   // before any agent work
+  const m = machineCheck(); if (!m.ok) { const e = new Stop(m.why); e.unfinished = true; throw e; }   // before any agent work; it never started (Qodo on #115)
   clearStale(s, 'agent-run');
   event(n, `agent run ${s.runs + 1} (${what}) started`);
   const r = spawnSync('claude', ['-p', prompt, '--setting-sources', 'project', '--settings', AGENT_SETTINGS, '--strict-mcp-config',
@@ -518,7 +522,7 @@ function continueRun(n, s) {
           if (DRY) { console.log(`DRY RUN would wait for Qodo's new review`); process.exit(0); }
           sleep(LIMITS.reviewPollSec * 1000); continue;
         }
-        const reason = q?.reviewed === s.head ? qodoReason(q.body) : '';   // only from Qodo's comment on this head (Qodo on #113)
+        const reason = qodoReasonSince(s.pr, s.pushedAt);
         throw new Stop(`${g.why}, twice: the runner asked Qodo to review again and the new run was incomplete too${reason ? `. Qodo says: "${reason}"` : ''}. Ask Qodo to review it again, then \`/agent retry\`.`);
       }
       if (g.state === 'done') {
