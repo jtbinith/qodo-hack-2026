@@ -257,9 +257,9 @@ export function blindVerdict(j, runs) {
   const red = (r) => !!r && !r.ok && /AssertionError|ERR_ASSERTION/.test(r.out || '') && !/SyntaxError|ERR_MODULE_NOT_FOUND|Cannot find module/.test(r.out || '');
   const out = { blocking: [], flagged: [] };
   for (const f of fs) {
-    const serious = f.severity !== 'Low';
-    if (serious && safeRepro(f) && red(runs[f.repro])) out.blocking.push(f);
-    else out.flagged.push({ ...f, why: f.why, unproven: serious });
+    // a failing repro is the evidence, whatever the label: real bugs were rated Low twice (Day 9, #95)
+    if (safeRepro(f) && red(runs[f.repro])) out.blocking.push(f);
+    else out.flagged.push({ ...f, why: f.why, unproven: f.severity !== 'Low' });
   }
   return { state: out.blocking.length ? 'fix' : 'done', ...out };
 }
