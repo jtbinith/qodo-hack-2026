@@ -501,7 +501,8 @@ function continueRun(n, s) {
         const plan = reaskPlan({ head: s.head, runId: read?.review_session?.run_id, asked: s.reasked });
         if (plan !== 'stop') {
           if (plan === 'reask') {
-            write(`ask Qodo to review PR #${s.pr} again`, () => gh('pr', 'comment', String(s.pr), '-R', REPO, '--body', '/review'));
+            // the command Qodo names when its review fails ("try again manually by commenting /agentic_review", #112)
+            write(`ask Qodo to review PR #${s.pr} again`, () => gh('pr', 'comment', String(s.pr), '-R', REPO, '--body', '/agentic_review'));
             if (!DRY) { s.reasked = { head: s.head, run: read?.review_session?.run_id }; s.waitFrom = Date.now(); save(n, s); }   // a rehearsal never records an ask it didn't make (Qodo on #113)
             event(n, `${g.why}: asked Qodo to review ${s.head.slice(0, 7)} again`);
           } else if ((Date.now() - s.waitFrom) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why}, and Qodo hadn't started a new review ${LIMITS.reviewWaitMin} min after it was asked again.`);

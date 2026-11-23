@@ -289,7 +289,8 @@ export function reaskPlan({ head, runId, asked }) {
 // verify all local findings on this PR.")
 export function qodoReason(body) {
   const text = decodeEntities((body || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, '\n'));
-  return text.split('\n').map((l) => l.trim()).find((l) => /^Qodo (could not|couldn't|did not|was unable)/i.test(l)) || '';
+  const lines = text.split('\n').map((l) => l.trim());
+  return lines.find((l) => /^Qodo (could not|couldn't|did not|was unable)/i.test(l)) || lines.find((l) => /^We weren't able to complete the code review/i.test(l)) || '';
 }
 // An owner's `/agent retry` on the ticket after a stop before the first push (no PR yet): the
 // runner checks the stopped branch again from where it stopped, under the same retry limit (#111).
