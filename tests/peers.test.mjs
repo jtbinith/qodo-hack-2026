@@ -388,10 +388,10 @@ test('a second answer to an offer sent twice is ignored, not an error', async ()
 // test can hand them to a the way net.js does: marked away (true) while presence doesn't list b.
 const RELAY_GAP = 45;
 const ABSENT_RELAY_TTL = peersMod.ABSENT_RELAY_TTL ?? 5000;
-async function pair() {
+async function pair(opts = {}) {
   const wire = [];
   let a = null, b = null;
-  a = createPeers({ myId: 'a', table: 'T', signal: (to, d) => { if (d.pub) b.onSignal('a', d); } });
+  a = createPeers({ myId: 'a', table: 'T', signal: (to, d) => { if (d.pub) b.onSignal('a', d); }, ...opts });
   b = createPeers({ myId: 'b', table: 'T', signal: (to, d) => { if (d.pub) a.onSignal('b', d); else if (d.r) wire.push(d); } });
   a.connect('b'); b.connect('a');
   await waitFor(() => a.linked('b') && b.linked('a'), 'the keys were never swapped');
@@ -493,4 +493,71 @@ test('relay frames from one device are used in the order they came, even when a 
     const order = p.got.map((m) => m.t).join(' ');
     assert.equal(order, Array(20).fill('chunk m').join(' '), `${away ? 'released' : 'live'} frames were used out of order`);
   }
+});
+
+// --- Qodo's local review of 09733ec: the receive chain ---
+// Holds every AES-GCM open back until the returned function is called, so a test can pile frames
+// up behind slow decryption the way a busy phone or a flood of forged frames would.
+function stallOpens() {
+  let go; const gate = new Promise((r) => { go = r; });
+  const real = crypto.subtle.decrypt;
+  const m = mock.method(crypto.subtle, 'decrypt', async function (...args) { await gate; return real.apply(this, args); });
+  return () => { go(); m.mock.restore(); };
+}
+// Real time: lets WebCrypto, which runs outside the mocked clock, finish
+const pause = (ms) => new Promise((r) => { const t = Date.now(); const loop = () => (Date.now() - t >= ms ? r() : setImmediate(loop)); loop(); });
+const RELAY_RX = peersMod.RELAY_RX ?? 400, RELAY_RX_BYTES = peersMod.RELAY_RX_BYTES ?? 16 * 1024 * 1024;
+
+// High: every relay frame went on the chain before it was opened, with no cap, so frames claiming
+// a linked device's id piled up in memory behind slow decryption
+test('relay frames from one device waiting to be opened are capped at RELAY_RX and RELAY_RX_BYTES (Rule 3)', async () => {
+  const p = await pair();
+  const [f] = await record(p, messages(p, 1), 1);
+  let release = stallOpens();
+  for (let i = 0; i < RELAY_RX + 20; i++) p.a.onSignal('b', f);
+  await quiet(); release();
+  await waitFor(() => p.got.length >= RELAY_RX, `got ${p.got.length} of ${RELAY_RX}`, 5000);
+  await pause(100);
+  assert.equal(p.got.length, RELAY_RX, 'more frames waited to be opened than RELAY_RX');
+
+  const q = await pair();
+  const cs = 96 * 1024, [g] = await record(q, () => q.b.sendFile('a', 'f', file(cs), null, cs), 1);
+  const fit = Math.floor(RELAY_RX_BYTES / g.r.length);
+  release = stallOpens();
+  for (let i = 0; i < fit + 5; i++) q.a.onSignal('b', g);
+  await quiet(); release();
+  await waitFor(() => q.got.length >= fit, `got ${q.got.length} of ${fit}`, 5000);
+  await pause(100);
+  assert.equal(q.got.length, fit, 'more bytes waited to be opened than RELAY_RX_BYTES');
+  for (const name of ['RELAY_RX', 'RELAY_RX_BYTES']) assert.equal(typeof peersMod[name], 'number', `${name} is a named constant in peers.js`);
+});
+
+// Medium: the hold's ABSENT_RELAY_TTL started only once a frame had been opened
+test('a frame from a device that is away expires ABSENT_RELAY_TTL after it came, however long it took to open', async () => {
+  const p = await pair();
+  const frames = await record(p, messages(p, 2), 2);
+  const release = stallOpens();
+  for (const f of frames) p.a.onSignal('b', f, true);
+  await quiet();
+  await tick(ABSENT_RELAY_TTL + 100);
+  release();
+  await pause(200);
+  p.a.returned('b');
+  await pause(200);
+  assert.deepEqual(p.got, [], 'a frame that came more than ABSENT_RELAY_TTL ago was used');
+});
+
+// Medium: returned() released the hold later, on the chain, without checking that the device was
+// still there by then
+test('frames held while a device was away are not used if it has gone again by the time they would be', async () => {
+  let here = true;
+  const p = await pair({ present: () => here });
+  const frames = await record(p, messages(p, 2), 2);
+  const release = stallOpens();
+  for (const f of frames) p.a.onSignal('b', f, true);
+  p.a.returned('b');   // presence lists b again…
+  here = false;        // …and then doesn't, before the frames have been opened
+  release();
+  await pause(200);
+  assert.deepEqual(p.got, [], 'held frames were used while the device was away again');
 });
