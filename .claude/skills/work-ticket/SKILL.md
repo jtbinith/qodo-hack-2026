@@ -64,7 +64,7 @@ The task is done only when this gate is met. It applies to every review: Qodo Re
 - Type is Qodo's own: 🐞 Bug, 📘 Rule violation, 📎 Requirement gap, 📜 Skill insight. The gate treats every type the same at a given severity.
 - A label or status you can't read is **not** Low. Treat it as Medium and say so.
 
-**Fix:** every **valid High or Medium** finding, of any type, test first (step 7).
+**Fix:** every **valid High or Medium** finding, of any type, test first (step 7), **if this branch introduced it or it is one of the ticket's acceptance cases.** A valid finding that was already there on main and isn't an acceptance case is **deferred**, not fixed: name the open ticket it belongs to (for example #24 for forged `from` ids). In an unattended run the runner decides this itself before the fix round: it runs each finding's repro on the branch and on main, and dismisses deferred findings in Qodo as deferred, with that evidence.
 **Flag, don't fix:** every **Low** finding. List each one under **Low findings for jtbinith** in your report, with its type and why it matters. Leave Low rule violations unchanged.
 
 **Valid** means you reproduced it against the code and the ticket: a failing test or a run with its output. If a High or Medium isn't valid, don't fix it and don't treat it as closed: give the evidence in your report. It stays open until jtbinith dismisses it in Qodo.

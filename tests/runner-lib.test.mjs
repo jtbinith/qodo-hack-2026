@@ -680,3 +680,81 @@ test("#117 f364e7d1: CI still running is a wait, not a refusal", () => {
   assert.equal(a.ok, false); assert.equal(a.wait, true);
   assert.match(runnerSrc(), /if \(a\.wait\) \{/);
 });
+
+// Day 10 (#21): every valid High or Medium was fixed, so each fix opened the next finding and the loop
+// didn't converge. A finding is fixed only if this branch introduced it (its repro passes on main and
+// fails on the branch) or it's one of the ticket's acceptance cases. Anything else is deferred.
+const SCOPE_RED = { ok: false, out: 'not ok 1\n  AssertionError [ERR_ASSERTION]: x' }, PASS = { ok: true, out: 'ok 1' }, CRASH = { ok: false, out: "SyntaxError: The requested module '../../web/net.js' does not provide an export named 'x'" };
+const sp = (entries, b, m, ids = entries.map((e) => e.id)) => lib.scopePlan?.(ids, { entries }, b, m) ?? {};
+const ent = (o) => ({ id: 'f1', repro: '.agent/scope/f1.test.mjs', acceptance: false, owner: '#24', ...o });
+test('scope: a finding this branch introduced is fixed (passes on main, fails here)', () => {
+  const p = sp([ent()], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': PASS });
+  assert.deepEqual(p.fix, ['f1']); assert.deepEqual(p.defer, []);
+});
+test("scope: a repro that can't even load on main is about new code, so it's fixed", () => {
+  assert.deepEqual(sp([ent()], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': CRASH }).fix, ['f1']);
+});
+test('scope: a pre-existing finding (fails on main too) outside the acceptance is deferred to its owner', () => {
+  const p = sp([ent()], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': SCOPE_RED });
+  assert.deepEqual(p.fix, []); assert.equal(p.defer[0]?.id, 'f1'); assert.equal(p.defer[0]?.owner, '#24');
+});
+test('scope: a pre-existing finding that is an acceptance case is still fixed', () => {
+  assert.deepEqual(sp([ent({ acceptance: true })], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': SCOPE_RED }).fix, ['f1']);
+});
+test("scope: a repro that doesn't fail on the branch isn't evidence; the finding stays open for the owner", () => {
+  const p = sp([ent()], { '.agent/scope/f1.test.mjs': PASS }, { '.agent/scope/f1.test.mjs': PASS });
+  assert.deepEqual(p.fix, []); assert.deepEqual(p.defer, []); assert.deepEqual(p.unproven, ['f1']);
+});
+test('scope: a finding the agent gave no scope entry for, or an unsafe repro path, is fixed as before', () => {
+  assert.deepEqual(sp([], {}, {}, ['f9']).fix, ['f9']);
+  assert.deepEqual(sp([ent({ repro: '../x.test.mjs' })], {}, {}).fix, ['f1']);
+});
+test('scope: an owner that is not a ticket number is recorded as unassigned', () => {
+  assert.equal(sp([ent({ owner: 'someone' })], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': SCOPE_RED }).defer[0]?.owner, null);
+});
+test('every fix round (local review, Qodo PR review, blind review) goes through the scope check first', () => {
+  const src = runnerSrc();
+  for (const kind of ['local', 'pr', 'blind']) assert.match(src, new RegExp(`scopeCheck\\(n, s, [\\s\\S]{0,400}?'${kind}'\\)`), kind);
+});
+
+// Qodo's review of #120 (1b5cafe), each finding as a test before its fix
+test('#120 29c2bc77 and a05bf49e: blind findings go through the scope agent too, which judges acceptance and copies repros with their helpers', () => {
+  const sc = runnerSrc().match(/function scopeCheck[\s\S]*?\n\}/)?.[0] || '';
+  assert.doesNotMatch(sc, /items\.every\(\(f\) => f\.repro\)/); assert.match(SCOPE_PROMPT_SRC(), /already has a repro/);
+});
+function SCOPE_PROMPT_SRC() { return runnerSrc().match(/const SCOPE_PROMPT = [\s\S]*?`;/)?.[0] || ''; }
+test('#120 76614eeb: when every blind finding is deferred, blind-review is posted as success', () => {
+  assert.match(runnerSrc(), /postBlind\(prHead, \{ state: 'success', description: `Nothing this branch introduced/);
+});
+test('#120 19be3a47: a local finding\'s review id is read from either shape, and one without an id is never deferred', () => {
+  const sc = runnerSrc();
+  assert.match(sc, /f\.local_review_id \|\| local\.ids\[f\.id\]/); assert.match(sc, /if \(kind === 'local' && !it\?\.localReviewId\) return false;/);
+});
+test('#120 14fb16a8: a deferral counts only when Qodo says the finding was dismissed', () => {
+  assert.match(lib.dismissedOk?.('{"results":{"a":{"status":"dismissed","reconciled":true}}}', 'a') ? 'ok' : 'no', /ok/);
+  assert.equal(lib.dismissedOk?.('{"results":{"a":{"status":"conflict","reconciled":false}}}', 'a'), false);
+  assert.equal(lib.dismissedOk?.('not json', 'a'), false);
+});
+test('#120 f08bd064: a scope entry whose repro file was never written counts as no entry', () => {
+  assert.match(runnerSrc(), /existsSync\(join\(s\.dir, e\.repro\)\)/);
+});
+test('#120 cd258e23: the fix round sees only the in-scope findings, and is told which were deferred', () => {
+  assert.match(runnerSrc(), /writeReview\(s, q && q\.reviewed === s\.head \? \{ \.\.\.q, open: q\.open\.filter/);
+  assert.match(runnerSrc(), /Deferred, don't fix these/);
+});
+test('#120 f35d5586: the review-round limit is checked after the scope check', () => {
+  const src = runnerSrc(), sc = src.indexOf("'pr');"), lim = src.indexOf('High or Medium findings still open after');
+  assert.ok(sc > 0 && lim > sc, 'scope check before the limit');
+});
+test('#120 fe9292c1: each deferral proof names its head and titles in its first line', () => {
+  assert.match(runnerSrc(), /\*\*Deferred by the scope rule\*\* \(\$\{kind\}, \$\{s\.head\.slice\(0, 7\)\}\): \$\{plan\.defer\.map/);
+});
+// Qodo's review of #120 (6c87d91), round 2
+test('#120 98f185aa: the deferral asks Qodo for JSON', () => {
+  assert.match(runnerSrc(), /'pr-review-session', 'dismiss', '--json', '--finding-ids'/);
+});
+test("#120 b5119c30: the owner's /agent rounds skip the local scope check", () => {
+  const src = runnerSrc();
+  assert.match(src, /if \(local\.g\.state === 'fix' && !ownerRound\) \{/);
+  assert.match(src, /checkAndPush\(n, s, 'owner comment', \{ ownerRound: true \}\)/);
+});
