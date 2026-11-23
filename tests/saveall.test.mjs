@@ -234,10 +234,57 @@ test('a share sheet that never settles holds Save all only until SHARE_TIMEOUT',
   assert.ok(log.waits.includes(SA.SHARE_TIMEOUT), 'the share wait is capped by SHARE_TIMEOUT');
   timeUp();
   await new Promise((r) => setTimeout(r, 10));
+  t.prints.set('r9', { pid: 'r9', owner: THEM, name: 'r9.jpg' }); t.files.set('r9', { name: 'r9.jpg' });
   s.tap();
   assert.equal(log.shares.length, 2, 'after the timeout a tap tries again');
+  assert.deepEqual(log.shares[1].map((f) => f.name), ['r9.jpg'], 'with only what the pending share does not hold');
   assert.deepEqual([...s.handed], [], 'a share that never finished hands over nothing');
 });
+
+// Qodo on the unpushed commits: after SHARE_TIMEOUT the photos still in the pending share were
+// offered again, so a share that finished late saved them twice
+test('after SHARE_TIMEOUT, photos still in the pending share are not shared or downloaded again', async () => {
+  const t = table({ n: 2 });
+  const log = { shares: [], downloads: [], toasts: [] };
+  let n = 0;
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true,
+    // the first sheet never settles; later ones are refused (only one share sheet at a time)
+    share: (l) => { log.shares.push(l.map((f) => f.name)); return n++ ? notAllowed() : new Promise(() => {}); },
+    download: (f) => log.downloads.push(f.name),
+    wait: async () => {},   // the timeout is up at once
+    toast: (m) => log.toasts.push(m),
+  });
+  s.tap();
+  await new Promise((r) => setTimeout(r, 10));
+  await s.tap();
+  assert.equal(log.shares.length, 1, 'the pending photos are not offered to a second share sheet');
+  assert.equal(log.toasts.at(-1), 'Still saving');
+  t.prints.set('r2', { pid: 'r2', owner: THEM, name: 'r2.jpg' }); t.files.set('r2', { name: 'r2.jpg' });
+  await s.tap();   // shares only r2, refused: the next tap downloads
+  assert.deepEqual(log.shares[1], ['r2.jpg']);
+  await s.tap();
+  assert.deepEqual(log.downloads, ['r2.jpg'], 'download mode skips the photos the pending share holds');
+});
+
+test('a pending share that fails after SHARE_TIMEOUT gives its photos back for the next tap', async () => {
+  const t = table({ n: 2 });
+  let fail; const sheet = new Promise((_, no) => { fail = no; });
+  const log = { downloads: [], toasts: [] };
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true, share: () => sheet,
+    download: (f) => log.downloads.push(f.name),
+    wait: async () => {},
+    toast: (m) => log.toasts.push(m),
+  });
+  const first = s.tap();
+  fail(Object.assign(new Error('no tap'), { name: 'NotAllowedError' })); await first;
+  await s.tap();
+  assert.deepEqual(log.downloads.sort(), ['r0.jpg', 'r1.jpg']);
+});
+
 
 test('a share that finishes after SHARE_TIMEOUT still marks its photos handed over', async () => {
   const t = table({ n: 2 });
