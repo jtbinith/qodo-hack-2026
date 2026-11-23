@@ -680,3 +680,35 @@ test("#117 f364e7d1: CI still running is a wait, not a refusal", () => {
   assert.equal(a.ok, false); assert.equal(a.wait, true);
   assert.match(runnerSrc(), /if \(a\.wait\) \{/);
 });
+
+// Day 10 (#21): every valid High or Medium was fixed, so each fix opened the next finding and the loop
+// didn't converge. A finding is fixed only if this branch introduced it (its repro passes on main and
+// fails on the branch) or it's one of the ticket's acceptance cases. Anything else is deferred.
+const SCOPE_RED = { ok: false, out: 'not ok 1\n  AssertionError [ERR_ASSERTION]: x' }, PASS = { ok: true, out: 'ok 1' }, CRASH = { ok: false, out: "SyntaxError: The requested module '../../web/net.js' does not provide an export named 'x'" };
+const sp = (entries, b, m, ids = entries.map((e) => e.id)) => lib.scopePlan?.(ids, { entries }, b, m) ?? {};
+const ent = (o) => ({ id: 'f1', repro: '.agent/scope/f1.test.mjs', acceptance: false, owner: '#24', ...o });
+test('scope: a finding this branch introduced is fixed (passes on main, fails here)', () => {
+  const p = sp([ent()], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': PASS });
+  assert.deepEqual(p.fix, ['f1']); assert.deepEqual(p.defer, []);
+});
+test("scope: a repro that can't even load on main is about new code, so it's fixed", () => {
+  assert.deepEqual(sp([ent()], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': CRASH }).fix, ['f1']);
+});
+test('scope: a pre-existing finding (fails on main too) outside the acceptance is deferred to its owner', () => {
+  const p = sp([ent()], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': SCOPE_RED });
+  assert.deepEqual(p.fix, []); assert.equal(p.defer[0]?.id, 'f1'); assert.equal(p.defer[0]?.owner, '#24');
+});
+test('scope: a pre-existing finding that is an acceptance case is still fixed', () => {
+  assert.deepEqual(sp([ent({ acceptance: true })], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': SCOPE_RED }).fix, ['f1']);
+});
+test("scope: a repro that doesn't fail on the branch isn't evidence; the finding stays open for the owner", () => {
+  const p = sp([ent()], { '.agent/scope/f1.test.mjs': PASS }, { '.agent/scope/f1.test.mjs': PASS });
+  assert.deepEqual(p.fix, []); assert.deepEqual(p.defer, []); assert.deepEqual(p.unproven, ['f1']);
+});
+test('scope: a finding the agent gave no scope entry for, or an unsafe repro path, is fixed as before', () => {
+  assert.deepEqual(sp([], {}, {}, ['f9']).fix, ['f9']);
+  assert.deepEqual(sp([ent({ repro: '../x.test.mjs' })], {}, {}).fix, ['f1']);
+});
+test('scope: an owner that is not a ticket number is recorded as unassigned', () => {
+  assert.equal(sp([ent({ owner: 'someone' })], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': SCOPE_RED }).defer[0]?.owner, null);
+});
