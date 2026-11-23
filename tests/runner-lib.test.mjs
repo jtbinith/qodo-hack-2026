@@ -776,3 +776,57 @@ test('#122 (blind Low): a blind repro that fails on main too is deferred, so its
   const p = lib.scopePlan?.(['blind-0'], { entries: [{ id: 'blind-0', repro: '.agent/blind/late.test.mjs', acceptance: false, owner: '#24' }] }, { '.agent/blind/late.test.mjs': SCOPE_RED }, { '.agent/blind/late.test.mjs': SCOPE_RED }) ?? {};
   assert.equal(p.defer?.[0]?.id, 'blind-0'); assert.deepEqual(p.fix, []);
 });
+
+// Day 10 (#21): the ticket didn't say what happens when a device's presence is late, so the agent
+// invented a design (holding early messages) and each review found the next gap in it. Wisdom's
+// open questions that decide the design now stop the run before any code, for the owner to answer.
+test('design questions: only questions marked as deciding the design stop the run', () => {
+  const r = lib.designQuestions?.({ questions: [
+    { question: 'What happens when presence arrives after the first setup message?', decides_design: true, why: 'drop vs hold changes the code' },
+    { question: 'Which wording for the toast?', decides_design: false },
+    'a plain string question (older format)'] }) ?? {};
+  assert.equal(r.blocking?.length, 1); assert.match(r.blocking[0].question, /presence arrives/);
+  assert.equal(r.other?.length, 2);
+});
+test('design questions: none, or a malformed list, stops nothing', () => {
+  for (const j of [{}, { questions: 'x' }, null, { questions: [{ decides_design: true }] }]) assert.equal(lib.designQuestions?.(j)?.blocking?.length ?? 1, 0, JSON.stringify(j));
+});
+// Day 10: GitHub answered HTTP 504 once and dropped the connection once, and each stopped a run.
+test('a passing GitHub error is retried; a real one is not', () => {
+  for (const m of ['gh: HTTP 504', 'HTTP 502: Bad Gateway', 'error connecting to api.github.com', 'read ECONNRESET', 'getaddrinfo EAI_AGAIN api.github.com', 'TLS handshake timeout'])
+    assert.equal(lib.transientGh?.(m), true, m);
+  for (const m of ['HTTP 404: Not Found', 'HTTP 422: Validation Failed', 'HTTP 403: Resource not accessible', 'a pull request for branch already exists'])
+    assert.equal(lib.transientGh?.(m), false, m);
+});
+test('the runner retries gh on a passing error, and stops Wisdom-flagged design questions before any code', () => {
+  assert.match(runnerSrc(), /transientGh\(/);
+  assert.match(runnerSrc(), /designQuestions\(result\)/);
+});
+
+// Qodo's review of #123 (60e0dbc), each finding as a test before its fix
+test('#123 97ce0912: only reads are retried; a write is never repeated', () => {
+  const r = (a) => lib.ghIsRead?.(a);
+  assert.equal(r(['api', 'repos/x/pulls/1']), true);
+  assert.equal(r(['issue', 'list', '-R', 'x']), true); assert.equal(r(['pr', 'view', '1']), true); assert.equal(r(['pr', 'list']), true);
+  assert.equal(r(['api', '-X', 'POST', 'repos/x/statuses/s', '-f', 'state=success']), false);
+  assert.equal(r(['api', 'repos/x/issues/1/labels', '-f', 'labels[]=x']), false, 'gh api with fields is a POST');
+  assert.equal(r(['api', '--method', 'PATCH', 'repos/x/pulls/1']), false);
+  assert.equal(r(['issue', 'comment', '1', '--body', 'x']), false); assert.equal(r(['pr', 'create']), false); assert.equal(r(['issue', 'edit', '1']), false);
+});
+test('#123 f49af0e8: a command that hit its own timeout is not retried', () => {
+  assert.equal(lib.transientGh?.('spawnSync gh ETIMEDOUT'), false);
+  assert.equal(lib.transientGh?.('gh: HTTP 504'), true);
+});
+test('#123 40cd1c60: design questions are checked before an empty claim list stops the run', () => {
+  const src = runnerSrc(), dq = src.indexOf('const dq = designQuestions(result);'), inv = src.indexOf("if (w.state === 'invalid') throw new Stop(`Codebase Wisdom's check");
+  assert.ok(dq > 0 && inv > dq, 'designQuestions before the invalid stop');
+});
+test('#123 76a9de3d: a design stop is not resumed by /agent retry on the ticket', () => {
+  const s = { phase: 'help', branch: 'agent/1-x', dir: '/w/1', stoppedAt: '2026-11-22T22:00:00Z', designStop: true };
+  assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }), null);
+});
+test('#123 blind round 2: a write flag in joined form also makes gh api a write', () => {
+  for (const a of [['api', '--method=POST', 'x'], ['api', '-XPOST', 'x'], ['api', '-XGET', 'x', '-fk=v'], ['api', '--field=k=v', 'x'], ['api', '--raw-field=k=v', 'x'], ['api', '--input=f', 'x'], ['api', '-Fk=v', 'x']])
+    assert.equal(lib.ghIsRead?.(a), false, a.join(' '));
+  assert.equal(lib.ghIsRead?.(['api', '-XGET', 'x']), true); assert.equal(lib.ghIsRead?.(['api', '--method=GET', 'x']), true);
+});

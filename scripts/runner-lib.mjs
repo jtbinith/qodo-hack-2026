@@ -295,7 +295,8 @@ export function reaskPlan({ head, runId, asked }) {
 // ticket never resumes a new run (blind review on #113). It waits while another PR is open, as new
 // tickets do (Qodo on #113).
 export function resumePlan(s, asks, limits, { openPr = null } = {}) {
-  if (!s || s.pr || s.phase !== 'help' || !s.branch || !s.dir || !s.stoppedAt) return null;
+  // a stop for the owner's design answer is answered in the ticket and relabelled, not resumed (Qodo on #123)
+  if (!s || s.pr || s.phase !== 'help' || !s.branch || !s.dir || !s.stoppedAt || s.designStop) return null;
   if (!asks.some((a) => a.retry && a.at > s.stoppedAt)) return null;
   if (openPr) return 'wait';
   return (s.retryRounds || 0) >= limits.retryRounds ? 'limit' : 'resume';
@@ -358,6 +359,31 @@ export function scopePlan(ids, j, onBranch, onMain) {
 // reconciled counts: a conflict, not_found or an unreadable reply means it's still open (Qodo on #120).
 export function dismissedOk(out, id) {
   try { const r = JSON.parse(String(out).split('\n  trace')[0]).results?.[id]; return !!r && /^(already_)?dismissed$/.test(r.status) && r.reconciled !== false; } catch { return false; }
+}
+
+// Wisdom's open questions: the ones it marks as deciding the design (an answer that changes what has
+// to be built, such as what happens on a race or a failure the acceptance doesn't settle) stop the run
+// before any code, for the owner to answer in the ticket (Day 10, #21: late presence). Plain strings
+// (the older format) and questions without text never stop it.
+export function designQuestions(result) {
+  const qs = result && Array.isArray(result.questions) ? result.questions : [];
+  const blocking = qs.filter((q) => q && typeof q === 'object' && q.decides_design === true && typeof q.question === 'string' && q.question.trim());
+  return { blocking, other: qs.filter((q) => !blocking.includes(q)) };
+}
+// A GitHub error worth one more try: a 5xx from GitHub or a dropped connection (Day 10: an HTTP 504
+// and an "error connecting to api.github.com" each stopped a run). A 4xx is a real answer.
+// A command that hit its own timeout isn't retried: it would hold the runner for minutes (Qodo on #123).
+export const transientGh = (msg) => /HTTP 5\d\d|error connecting to|ECONNRESET|EAI_AGAIN|TLS handshake timeout|connection reset/i.test(String(msg || '')) && !/ETIMEDOUT/.test(String(msg || ''));
+// Only reads are retried: a write whose reply was lost may have happened, so it's never repeated
+// (Qodo on #123). `gh api` is a read unless it sets a method or sends fields (which makes it a POST).
+export function ghIsRead(args) {
+  const [cmd, sub] = args;
+  // joined forms count too (--method=POST, -XPOST, -fk=v, --field=k=v): blind review on #123
+  if (cmd === 'api') {
+    const method = args.flatMap((a, i) => (a === '-X' || a === '--method') ? [args[i + 1] || ''] : /^(-X|--method=)(.+)$/.test(a) ? [a.replace(/^(-X|--method=)/, '')] : []);
+    return method.every((m) => m.toUpperCase() === 'GET') && !args.some((a) => /^(-f|-F|--field|--raw-field|--input)(=|$)|^-[fF].+/.test(a));
+  }
+  return ['issue', 'pr', 'project', 'label', 'run'].includes(cmd) && ['list', 'view', 'checks', 'field-list', 'item-list', 'status'].includes(sub);
 }
 
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
