@@ -193,14 +193,15 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
     h.list.push(frame); h.bytes += frame.length;
   }
   // web/net.js: presence lists this peer again. The hold is closed now: frames that come away
-  // after this start a new one. What it held is used after any frame still being opened and
-  // before any that comes later, and only if presence still lists the peer by then
+  // after this start a new one, and its ABSENT_RELAY_TTL stops now, because the peer came back in
+  // time however long the frames ahead take to open. What it held is used after any frame still
+  // being opened and before any that comes later, and only if presence still lists the peer by then
   function returned(peer) {
     const L = links[peer], h = L?.away;
     if (!h) return;
     L.away = null;
+    clearTimeout(h.timer);
     L.rx = L.rx.then(() => {
-      clearTimeout(h.timer);
       const ok = h.live && present(peer);
       h.live = false;
       if (ok) for (const f of h.list) onFrame(peer, f);
