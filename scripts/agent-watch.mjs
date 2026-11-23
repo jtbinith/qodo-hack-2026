@@ -626,7 +626,8 @@ function continueRun(n, s) {
         }
         // the blind review's findings bring their own repros: run them on main, defer what was there already
         const bplan = scopeCheck(n, s, b.blocking.map((f, i) => ({ id: `blind-${i}`, title: f.title, severity: f.severity || 'Medium', where: `${f.file}:${f.line}`, text: f.why, repro: f.repro })), 'blind');
-        b.blocking = b.blocking.filter((f, i) => bplan.fix.includes(`blind-${i}`));
+        // the blind review already reproduced these: one its scope copy didn't reproduce stays blocking (#121)
+        b.blocking = b.blocking.filter((f, i) => bplan.fix.includes(`blind-${i}`) || bplan.unproven.includes(`blind-${i}`));
         if (!b.blocking.length) {
           write(`set blind-review on ${prHead.slice(0, 7)} to success`, () => postBlind(prHead, { state: 'success', description: `Nothing this branch introduced: ${bplan.defer.length} reproduced finding${bplan.defer.length === 1 ? '' : 's'} deferred (pre-existing)` }));   // (Qodo on #120)
           gate(n, s, prHead, g); publish(n, s);
