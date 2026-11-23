@@ -19,21 +19,17 @@ const ASK_EVERY = 2000, ASK_TRIES = 5;
 // in time and dropped otherwise. A message that doesn't fit is dropped and takes no slot. Real
 // early setup is a key, an offer and a few candidates; a relay frame can't be early (S1.6)
 export const EARLY_SIG_HOLD = 30, EARLY_SIG_SENDERS = 8, EARLY_SIG_TTL = 5000, EARLY_SIG_BYTES = 32 * 1024;
-// A device this one holds a key for can drop out of presence for a moment mid-transfer (its
-// socket rejoins). Its relay frames are held, at most ABSENT_RELAY_HOLD frames and
-// ABSENT_RELAY_BYTES (as UTF-8 JSON) per device for EARLY_SIG_TTL ms, and passed on only if
-// presence lists it again in time. They are never used while it is absent, so a member can't
-// replay a departed device's recorded frames under its id. The caps fit EARLY_SIG_TTL of relay
-// chunks at peers.js's pace (one ~33 KB frame per 45 ms); only ids with a key get a slot
-export const ABSENT_RELAY_HOLD = 120, ABSENT_RELAY_BYTES = 4 * 1024 * 1024;
 const utf8 = new TextEncoder();
 const wall = () => performance.timeOrigin + performance.now();
 
 // `onSignal` (optional) receives messages sent with s.signal(to, data): a lane for
 // pages that set up direct device-to-device connections. Only the addressee handles them.
-// `linked(from)` (optional) says whether this device already holds a key for `from`: a relay
-// frame from such a device is held while presence briefly doesn't list it, not dropped.
-export function joinRoom({ room, id, name, size, onSignal, linked = () => false }) {
+// `linked(from)` (optional) says whether this device already holds a key for `from`. A device
+// it holds a key for can drop out of presence for a moment mid-transfer (its socket rejoins).
+// Its relay frames are then passed on as onSignal(from, data, true): "away", not to be used
+// yet. Only peers.js can tell a real frame from a forged one, so it opens each, holds the real
+// ones and uses none until `onReturn(from)` says presence lists that device again.
+export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, linked = () => false }) {
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   const ch = client.channel('stitch:' + room, { config: { broadcast: { self: false }, presence: { key: id } } });
   const joinedAt = wall();
@@ -50,7 +46,7 @@ export function joinRoom({ room, id, name, size, onSignal, linked = () => false 
   const send = (event, payload) => ch.send({ type: 'broadcast', event, payload });
   const earlyLayouts = new Map();   // device id -> the latest layout it sent while it wasn't this device's time keeper (#61)
   const earlySigs = new Map();      // id not yet in the room -> { list: setup it sent, bytes, timer } (S1.6)
-  const absentRelays = new Map();   // linked id briefly not in the room -> { list: relay frames it sent, bytes, timer }
+  const away = new Set();           // linked ids not in the room whose relay frames were passed on marked away
 
   function electLeader() {
     const all = Object.entries(s.peers).sort(([a, p], [b, q]) => (p.joinedAt - q.joinedAt) || (a < b ? -1 : 1));
@@ -99,12 +95,13 @@ export function joinRoom({ room, id, name, size, onSignal, linked = () => false 
     if (s.leader === id) sendLayout();
     emit('peers', s.peers);
     // setup held from a device that has now arrived is passed on, in the order it came (S1.6)
-    // (relay frames from a linked device held while it was briefly absent, likewise)
-    for (const map of [earlySigs, absentRelays]) for (const [from, held] of map) {
+    for (const [from, held] of earlySigs) {
       if (!inRoom(s.peers, from) || from === id) continue;
-      clearTimeout(held.timer); map.delete(from);
+      clearTimeout(held.timer); earlySigs.delete(from);
       for (const data of held.list) onSignal(from, data);
     }
+    // a linked device whose relay frames were marked away is back: peers.js may use them now
+    for (const from of away) if (inRoom(s.peers, from)) { away.delete(from); onReturn(from); }
   });
 
   // --- clock sync: NTP-style ping/pong with the time keeper ---
@@ -239,29 +236,27 @@ export function joinRoom({ room, id, name, size, onSignal, linked = () => false 
     if (!validSignal(payload) || payload.to !== id || payload.from === id) return;
     if (inRoom(s.peers, payload.from)) { onSignal(payload.from, payload.data); return; }
     // A relay frame from a device this one already shares a key with, while presence doesn't
-    // list it (a phone's socket rejoins mid-transfer, or it has left). It waits for that device
-    // to come back; setup from an absent device waits in the early hold below
-    const relayed = !!payload.data.r && linked(payload.from);
-    const size = utf8.encode(JSON.stringify(payload.data)).length;   // bytes, not UTF-16 code units
-    if (relayed) hold(absentRelays, payload.from, payload.data, size, ABSENT_RELAY_HOLD, ABSENT_RELAY_BYTES, Infinity);
-    else hold(earlySigs, payload.from, payload.data, size, EARLY_SIG_HOLD, EARLY_SIG_BYTES, EARLY_SIG_SENDERS);
+    // list it (a phone's socket rejoins mid-transfer, or it has left). It is passed on marked
+    // away (see joinRoom above); setup from an absent device waits in the early hold below
+    if (payload.data.r && linked(payload.from)) { away.add(payload.from); onSignal(payload.from, payload.data, true); return; }
+    hold(payload.from, payload.data, utf8.encode(JSON.stringify(payload.data)).length);   // bytes, not UTF-16 code units
   });
-  // Holds `data` from an absent `from` until presence lists it, for at most EARLY_SIG_TTL. A
+  // Holds setup from an absent `from` until presence lists it, for at most EARLY_SIG_TTL. A
   // message that doesn't fit is dropped and takes no slot
-  function hold(map, from, data, size, maxCount, maxBytes, maxSenders) {
-    let held = map.get(from);
-    if (held ? held.list.length >= maxCount || held.bytes + size > maxBytes : size > maxBytes) return;
+  function hold(from, data, size) {
+    let held = earlySigs.get(from);
+    if (held ? held.list.length >= EARLY_SIG_HOLD || held.bytes + size > EARLY_SIG_BYTES : size > EARLY_SIG_BYTES) return;
     if (!held) {
-      if (map.size >= maxSenders) return;
-      held = { list: [], bytes: 0, timer: setTimeout(() => map.delete(from), EARLY_SIG_TTL) };
-      map.set(from, held);
+      if (earlySigs.size >= EARLY_SIG_SENDERS) return;
+      held = { list: [], bytes: 0, timer: setTimeout(() => earlySigs.delete(from), EARLY_SIG_TTL) };
+      earlySigs.set(from, held);
     }
     held.list.push(data); held.bytes += size;
   }
   s.signal = (to, data) => send('sig', { from: id, to, data });
   s.on = (f) => s.listeners.add(f);
   s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer); stopAsking(); waits.forEach(clearTimeout); waits.clear();
-    for (const m of [earlySigs, absentRelays]) { m.forEach((h) => clearTimeout(h.timer)); m.clear(); }
+    earlySigs.forEach((h) => clearTimeout(h.timer)); earlySigs.clear(); away.clear();
     client.removeChannel(ch); };
 
   ch.subscribe(async (st) => {

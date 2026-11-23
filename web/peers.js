@@ -22,6 +22,14 @@ const DRAIN_CHECK = 1000;        // ms between checks that a full direct buffer 
 // has seen us: once we have both its key and an offer of ours waiting, that offer is sent once
 // more OFFER_RESEND later if it is still the one waiting. Without this the pair would stay on the relay
 export const OFFER_RESEND = 3000;
+// A linked device can drop out of the room's presence for a moment mid-transfer (its socket
+// rejoins). web/net.js then passes its relay frames on marked away. Each is opened first, so a
+// forged one is dropped and takes no slot. The real ones are held, at most ABSENT_RELAY_HOLD
+// frames and ABSENT_RELAY_BYTES per device for ABSENT_RELAY_TTL ms, and used only if net.js says
+// the device is back in time (returned). None is used while it is away, so a member can't replay
+// a departed device's recorded frames under its id. The caps fit ABSENT_RELAY_TTL of relay
+// chunks at RELAY_GAP pace (one 24 KiB chunk per 45 ms)
+export const ABSENT_RELAY_HOLD = 120, ABSENT_RELAY_BYTES = 4 * 1024 * 1024, ABSENT_RELAY_TTL = 5000;
 
 // A send gave up because the other device stopped answering.
 export class SendTimeout extends Error {
@@ -53,6 +61,10 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     // Frames for or from this peer wait here until its key arrives. They never sit in the
     // shared relay queue, so one silent peer can't hold up anyone else.
     L.outbox = []; L.inbox = [];
+    // Relay frames from this peer are opened and used one at a time, in the order they came, so a
+    // small frame can't overtake a bigger one that is still being opened. Per peer: a slow one
+    // holds up only its own frames. `away` holds frames opened while the peer was away
+    L.rx = Promise.resolve(); L.away = null;
     mine.then(({ pub }) => signal(peer, { pub: b64(pub) }));     // swap public keys
     const attach = (dc) => {
       L.dc = dc;
@@ -87,7 +99,8 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     }, OFFER_RESEND);
   }
 
-  async function onSignal(from, data) {
+  // `away` (from web/net.js): a relay frame from a peer presence doesn't list right now
+  async function onSignal(from, data, away = false) {
     const L = link(from), pc = L.pc;
     if (data.pub) {
       // Answer a first-time key with ours, in case our earlier one was sent before they
@@ -106,8 +119,8 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
       keyArrived(from, L);
     } else if (data.r) {                    // relayed, encrypted frame
       if (L.keyFailed) return;
-      if (!L.key) { if (L.inbox.length < HOLD) L.inbox.push(data.r); return; }
-      await openRelayed(from, L, data.r);
+      if (!L.key) { if (!away && L.inbox.length < HOLD) L.inbox.push(data.r); return; }
+      await received(from, L, data.r, away);
     } else if (data.desc) {
       // an answer to an offer already answered (we sent it twice: OFFER_RESEND) has nothing to do
       if (data.desc.type === 'answer' && pc.signalingState !== 'have-local-offer') return;
@@ -144,10 +157,39 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     return buf;
   }
 
-  async function openRelayed(from, L, r) {
+  // Queues a relay frame on the peer's chain. Whether it was sent while the peer was away is
+  // decided now, when it arrives, not after the wait
+  function received(from, L, r, away = false) {
+    L.rx = L.rx.then(() => openRelayed(from, L, r, away)).catch((e) => console.warn('bad relay frame from', from, e));
+    return L.rx;
+  }
+  async function openRelayed(from, L, r, away) {
     let frame;
     try { frame = await open(L.key, unb64(r), from, myId); } catch { return; } // tampered or not for us
-    onFrame(from, frame);
+    if (away) holdAway(from, L, frame); else onFrame(from, frame);
+  }
+  // A frame that doesn't fit is dropped and takes no slot
+  function holdAway(from, L, frame) {
+    if (!L.away) {
+      const h = L.away = { list: [], bytes: 0 };
+      h.timer = setTimeout(() => { if (L.away === h) L.away = null; }, ABSENT_RELAY_TTL);
+    }
+    const h = L.away;
+    if (h.list.length >= ABSENT_RELAY_HOLD || h.bytes + frame.length > ABSENT_RELAY_BYTES) return;
+    h.list.push(frame); h.bytes += frame.length;
+  }
+  // web/net.js: presence lists this peer again. What was held while it was away is used, after
+  // any frame still being opened and before any that comes later
+  function returned(peer) {
+    const L = links[peer];
+    if (!L) return;
+    L.rx = L.rx.then(() => {
+      const h = L.away;
+      L.away = null;
+      if (!h) return;
+      clearTimeout(h.timer);
+      for (const f of h.list) onFrame(peer, f);
+    });
   }
   // A peer's key has arrived (or turned out bad): deliver what was waiting for it.
   async function keyArrived(peer, L) {
@@ -155,7 +197,8 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     if (!L.key) { out.forEach((o) => o.done(false)); return; } // bad key: drop, but don't leave senders hanging
     for (const o of out) o.done(enqueue(peer, L, o.buf));  // stops its timer: the shared queue isn't a wait on the device
     readyHandlers.forEach((f) => f(peer));                 // anything dropped while waiting can be sent again
-    for (const r of inb) await openRelayed(peer, L, r);
+    for (const r of inb) received(peer, L, r);
+    await L.rx;
   }
 
   // One relay queue for the whole page, paced so we don't trip the server's rate limit.
@@ -237,6 +280,7 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     onSignal, send, sendFile,
     connect: (peer) => link(peer),
     linked: (peer) => !!links[peer]?.key,   // holds this peer's key; asking opens nothing (web/net.js)
+    returned,
     on: (f) => handlers.add(f),
     onReady: (f) => readyHandlers.add(f),   // f(peer) when a peer's key arrives
     path: (peer) => { const L = links[peer]; return !L ? 'none' : L.open ? 'direct' : L.key ? 'relay (encrypted)' : 'keys…'; },

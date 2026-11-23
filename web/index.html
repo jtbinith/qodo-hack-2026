@@ -340,7 +340,7 @@ function pushOrb(x, y) {
 function start(room) {
   $('lobby').remove();
   history.replaceState(null, '', '?room=' + room);
-  net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d) => peers.onSignal(from, d), linked: (from) => peers.linked(from) });
+  net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
   peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay') });
   peers.on((from, m, bytes) => {
     if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) dropped(p); return; }
