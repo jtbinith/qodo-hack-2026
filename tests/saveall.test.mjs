@@ -191,3 +191,21 @@ test('a photo is marked handed over only when its download starts: one that thro
   await s.tap();
   assert.deepEqual(log.downloads, ['r0.jpg', 'r2.jpg', 'r1.jpg']);
 });
+
+// Blind review on #130: the batch list is fixed before the first wait, so a photo saved by tapping
+// it during a download batch was downloaded again when its turn came
+test('a photo handed over during a download batch is not downloaded again by it', async () => {
+  const t = table({ n: 3 });
+  const downloads = [];
+  let s;
+  s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => false, share: async () => {},
+    download: (f) => downloads.push(f.name),
+    // during the first gap the user taps r2: save() downloads it and marks it handed over
+    wait: async () => { if (!s.handed.has('r2')) { downloads.push('r2.jpg'); s.handed.add('r2'); } },
+    toast: () => {},
+  });
+  await s.tap();
+  assert.deepEqual(downloads.sort(), ['r0.jpg', 'r1.jpg', 'r2.jpg'], 'each photo downloaded once');
+});
