@@ -46,7 +46,8 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
     busy = mine;
     try {
       if (sharing) {
-        const sheet = share(list);
+        // called now, inside the tap; a share that throws at once becomes a failure like any other
+        const sheet = (async () => share(list))();
         for (const r of ready) pending.add(r.pid);
         // a share that never settles frees Save all after SHARE_TIMEOUT; if it finishes later it still counts
         wait(SHARE_TIMEOUT).then(() => { if (busy === mine) busy = null; });
