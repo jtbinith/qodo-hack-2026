@@ -25,7 +25,7 @@ import { mkdirSync, readFileSync, realpathSync, cpSync, writeFileSync, existsSyn
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, ciPassed, reviewComment, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -35,6 +35,7 @@ const LIMITS = {
   localReviewMin: 20,       // one `qodo review` of the unpushed commits
   commentRounds: 3,         // rounds started by an `/agent <instruction>` comment from the owner
   retryRounds: 5,           // `/agent retry` comments: they start no agent, so they have their own limit
+  designStops: 2,           // design-question stops per ticket; after that the agent decides and lists its choices
   reviewWaitMin: 10,        // minutes to wait for Qodo after a push (about 3x the slowest seen)
   reviewPollSec: 30,        // how often to look for Qodo's review while waiting (re-reviews take about 1 min)
   agentRunMin: 45,          // one subagent run
@@ -271,7 +272,7 @@ function proveRed(n, s, base) {
 }
 
 // the agent's Assumptions section from its report, shown in the open (not folded away)
-const assumptions = (report) => (report.match(/^#+\s*Assumptions\s*\n([\s\S]*?)(?=^#+\s|(?![\s\S]))/m)?.[1] || '').trim();
+const assumptions = (report) => (report.match(/^(?:#+\s*Assumptions|\*\*Assumptions:?\*\*:?)\s*\n([\s\S]*?)(?=^#+\s|^\*\*[^*\n]+\*\*:?\s*$|(?![\s\S]))/m)?.[1] || '').trim();   // heading or bold, as the skill writes it (blind on #126)
 // acceptance the agent couldn't check itself: unticked boxes in its PR description
 const uncheckedCriteria = (body) => body.split('\n').filter((l) => /^\s*[-*]\s*\[ \]/.test(l)).map((l) => l.replace(/^\s*[-*]\s*\[ \]\s*/, '').trim());
 // a one-line reason for the popup: the first list item, else the first plain sentence (no headings or links)
@@ -319,13 +320,22 @@ function wisdomCheck(n, s) {
   // design questions first: a ticket with no claims can still leave the design open (Qodo on #123)
   // a question that decides the design stops the run here, before any code, for the owner to answer (#21)
   const dq = designQuestions(result);
-  if (dq.blocking.length) { s.designStop = true; save(n, s); throw new Stop(`Codebase Wisdom found ${dq.blocking.length} question${dq.blocking.length > 1 ? 's' : ''} the ticket leaves open that decide${dq.blocking.length > 1 ? '' : 's'} the design. Nothing was built. Answer ${dq.blocking.length > 1 ? 'them' : 'it'} in the ticket, then label it \`${L.ready}\` again:\n${dq.blocking.map((q) => `- ${q.question}${q.why ? ` (${q.why})` : ''}`).join('\n')}`); }
+  // after LIMITS.designStops stops on this ticket, its questions go to the agent as assumptions (#72)
+  // only the runner's own stop comments count, not a reply quoting one (blind review on #126)
+  const prevStops = issueComments(n).filter((c) => c.user.login === OWNER && c.body.startsWith('**NOT DONE.**') && /decide(s)? the design\. Nothing was built\./.test(c.body)).length;
+  const dplan = designStopPlan(prevStops, dq.blocking.length, LIMITS.designStops);
+  if (dplan === 'assume') {
+    s.designAssumptions = dq.blocking.map((q) => `- ${q.question}${q.why ? ` (${q.why})` : ''}`);
+    event(n, `Wisdom check: ${dq.blocking.length} design question${dq.blocking.length > 1 ? 's' : ''} handed to the agent (this ticket has had ${prevStops} design stops)`);
+  }
+  if (dplan === 'stop') { s.designStop = true; save(n, s); throw new Stop(`Codebase Wisdom found ${dq.blocking.length} question${dq.blocking.length > 1 ? 's' : ''} the ticket leaves open that decide${dq.blocking.length > 1 ? '' : 's'} the design. Nothing was built. Answer ${dq.blocking.length > 1 ? 'them' : 'it'} in the ticket, then label it \`${L.ready}\` again:\n${dq.blocking.map((q) => `- ${q.question}${q.why ? ` (${q.why})` : ''}`).join('\n')}`); }
   if (w.state === 'invalid') throw new Stop(`Codebase Wisdom's check of the ticket didn't work: ${w.why}. Nothing was built.`);
   if (w.state === 'stop') throw new Stop(`Codebase Wisdom found the ticket wrong about the code on main, before any code was written. Each quote was checked by the runner:\n${w.wrong.map(cite).join('\n')}\n\nFix the ticket, then label it \`${L.ready}\` again.`);
   const questions = dq.other.map((q) => (typeof q === 'string' ? q : q?.question)).filter((q) => typeof q === 'string' && q);
   const summary = `**Ticket checked by Codebase Wisdom** before any code (quotes checked by the runner): ${w.held.length} claim${w.held.length === 1 ? '' : 's'} held, ${w.unverified.length} unverified.` +
-    (w.unverified.length ? `\nUnverified, so treated as assumptions to test:\n${w.unverified.map(cite).join('\n')}` : '') + (questions.length ? `\nOpen questions:\n${questions.map((q) => `- ${q}`).join('\n')}` : '');
-  putAgentFile(s, 'wisdom.md', `# Codebase Wisdom's check of #${n}\n\n${summary}\n\nHeld:\n${w.held.map(cite).join('\n') || 'none'}\n`);
+    (w.unverified.length ? `\nUnverified, so treated as assumptions to test:\n${w.unverified.map(cite).join('\n')}` : '') + (questions.length ? `\nOpen questions:\n${questions.map((q) => `- ${q}`).join('\n')}` : '') +
+    ((s.designAssumptions || []).length ? `\n**Design questions handed to the agent** (after ${LIMITS.designStops} design stops on this ticket): its choices are under Assumptions.\n${s.designAssumptions.join('\n')}` : '');   // so the owner sees them in the PR (Qodo on #126)
+  putAgentFile(s, 'wisdom.md', `# Codebase Wisdom's check of #${n}\n\n${summary}\n\nHeld:\n${w.held.map(cite).join('\n') || 'none'}\n${(s.designAssumptions || []).length ? `\n## Open design questions: decide each one and list your choice under **Assumptions** in your report and the PR description\n${s.designAssumptions.join('\n')}\n` : ''}`);
   s.proofs = [...(s.proofs || []), summary]; save(n, s);
 }
 
@@ -498,7 +508,10 @@ function openPr(n, s, why) {
 
 // the PR description is always the agent's latest description plus every proof so far,
 // so the PR and the finished-run comment read from the same text
-const prBody = (n, s) => shown((agentFile(s, 'pr-body.md') || `Closes #${n}`) + '\n\n' + (s.proofs || []).join('\n\n'));
+// When design questions were handed to the agent, its choices (its report's Assumptions) go into the PR
+// description too, so the owner sees them at merge whatever the agent wrote there (Qodo on #126)
+const choices = (s) => ((s.designAssumptions || []).length && assumptions(agentFile(s, 'report.md')) ? `**The agent's choices for the handed-over design questions** (from its report):\n${assumptions(agentFile(s, 'report.md'))}` : '');
+const prBody = (n, s) => shown([agentFile(s, 'pr-body.md') || `Closes #${n}`, choices(s), ...(s.proofs || [])].filter(Boolean).join('\n\n'));
 // Posts what's pushed but not yet on the PR: the description, and each new proof as a comment.
 // It's resumable: a crash between push and post is caught up on the next step or /agent retry.
 // (gh api, not gh pr edit: gh pr edit fails on this repo with a classic-projects error.)

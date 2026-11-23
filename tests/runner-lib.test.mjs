@@ -830,3 +830,39 @@ test('#123 blind round 2: a write flag in joined form also makes gh api a write'
     assert.equal(lib.ghIsRead?.(a), false, a.join(' '));
   assert.equal(lib.ghIsRead?.(['api', '-XGET', 'x']), true); assert.equal(lib.ghIsRead?.(['api', '--method=GET', 'x']), true);
 });
+
+// Day 10 (#72): the design-question gate stopped #72 three times in a row, each with finer questions
+// (the second and third about details). After LIMITS.designStops stops on a ticket, its remaining
+// questions go to the agent: it decides and lists each choice under Assumptions in the PR.
+test('design stops are capped per ticket; later questions become the agent\'s assumptions', () => {
+  const plan = (prev, n) => lib.designStopPlan?.(prev, n, 2);
+  assert.equal(plan(0, 3), 'stop'); assert.equal(plan(1, 2), 'stop');
+  assert.equal(plan(2, 3), 'assume'); assert.equal(plan(5, 1), 'assume');
+  assert.equal(plan(0, 0), 'none'); assert.equal(plan(3, 0), 'none');
+});
+test('the runner counts its earlier design stops on the ticket and hands later questions to the agent', () => {
+  const src = runnerSrc();
+  assert.match(src, /designStopPlan\(/); assert.match(src, /Open design questions: decide each one and list your choice under \*\*Assumptions\*\*/);
+});
+// Qodo's review and the blind review of #126 (cbe00dc)
+test('#126: the PR proof lists the design questions handed to the agent', () => {
+  assert.match(runnerSrc(), /Design questions handed to the agent/);
+});
+test("#126: the skill tells the agent to decide handed-over design questions, not stop", () => {
+  const skill = readFileSync(new URL('../.claude/skills/work-ticket/SKILL.md', import.meta.url), 'utf8');
+  assert.match(skill, /Open design questions/); assert.match(skill, /decide each one/i);
+});
+test('#126 (blind Low): only the runner\'s own NOT DONE stop comments count as design stops', () => {
+  assert.match(runnerSrc(), /c\.body\.startsWith\('\*\*NOT DONE\.\*\*'\) && \/decide\(s\)\? the design/);
+});
+test("#126 6c0d7b41: when design questions were handed over, the PR description carries the agent's Assumptions", () => {
+  assert.match(runnerSrc(), /\(s\.designAssumptions \|\| \[\]\)\.length && assumptions\(agentFile\(s, 'report\.md'\)\)/);
+});
+test('#126 (blind, reproduced): a bold **Assumptions** section, as the skill writes it, is read for the PR description', () => {
+  const line = runnerSrc().split('\n').find((l) => l.startsWith('const assumptions = '));
+  const assumptions = new Function(`${line.replace(/^const assumptions = /, 'return ')}`)();
+  const report = '# Ticket #72\n\nDid the thing.\n\n**Assumptions**\n- Toast shows for 3 s\n- Downloads 300 ms apart\n\n**Proof**\n- npm test\n';
+  assert.equal(assumptions(report), '- Toast shows for 3 s\n- Downloads 300 ms apart');
+  assert.equal(assumptions('## Assumptions\n- x\n## Next\n- y\n'), '- x');
+  assert.equal(assumptions('No section here\n'), '');
+});

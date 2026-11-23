@@ -370,6 +370,11 @@ export function designQuestions(result) {
   const blocking = qs.filter((q) => q && typeof q === 'object' && q.decides_design === true && typeof q.question === 'string' && q.question.trim());
   return { blocking, other: qs.filter((q) => !blocking.includes(q)) };
 }
+// How a run treats Wisdom's design questions, given how many design stops this ticket has had: stop
+// for the owner until `limit` stops, then hand them to the agent as assumptions to decide and list
+// (Day 10, #72: three stops in a row, each with finer questions).
+export const designStopPlan = (prevStops, count, limit) => (!count ? 'none' : prevStops < limit ? 'stop' : 'assume');
+
 // A GitHub error worth one more try: a 5xx from GitHub or a dropped connection (Day 10: an HTTP 504
 // and an "error connecting to api.github.com" each stopped a run). A 4xx is a real answer.
 // A command that hit its own timeout isn't retried: it would hold the runner for minutes (Qodo on #123).
