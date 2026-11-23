@@ -14,9 +14,11 @@ const LAYOUT_GAP = 1000; // the time keeper answers layout asks at most once in 
 const ASK_EVERY = 2000, ASK_TRIES = 5;
 // Connection setup is used only from devices in the room (S1.6). A device that has just joined
 // can send setup before this device's presence lists it, so setup from an id not in the room is
-// held: at most EARLY_SIG_HOLD messages from each of at most EARLY_SIG_SENDERS ids, for at most
-// EARLY_SIG_TTL ms. It's passed on if presence lists the sender in time and dropped otherwise
-export const EARLY_SIG_HOLD = 30, EARLY_SIG_SENDERS = 8, EARLY_SIG_TTL = 5000;
+// held: at most EARLY_SIG_HOLD messages and EARLY_SIG_BYTES (as JSON) from each of at most
+// EARLY_SIG_SENDERS ids, for at most EARLY_SIG_TTL ms. It's passed on if presence lists the sender
+// in time and dropped otherwise. A message that doesn't fit is dropped and takes no slot. Real
+// early setup is a key, an offer and a few candidates; a relay frame can't be early (S1.6)
+export const EARLY_SIG_HOLD = 30, EARLY_SIG_SENDERS = 8, EARLY_SIG_TTL = 5000, EARLY_SIG_BYTES = 32 * 1024;
 const wall = () => performance.timeOrigin + performance.now();
 
 // `onSignal` (optional) receives messages sent with s.signal(to, data): a lane for
@@ -224,14 +226,16 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => {
     if (!validSignal(payload) || payload.to !== id || payload.from === id) return;
     if (inRoom(s.peers, payload.from)) { onSignal(payload.from, payload.data); return; }
+    const size = JSON.stringify(payload.data).length;
     let held = earlySigs.get(payload.from);
+    if (held ? held.list.length >= EARLY_SIG_HOLD || held.bytes + size > EARLY_SIG_BYTES : size > EARLY_SIG_BYTES) return;
     if (!held) {
       if (earlySigs.size >= EARLY_SIG_SENDERS) return;
       const from = payload.from;
-      held = { list: [], timer: setTimeout(() => earlySigs.delete(from), EARLY_SIG_TTL) };
+      held = { list: [], bytes: 0, timer: setTimeout(() => earlySigs.delete(from), EARLY_SIG_TTL) };
       earlySigs.set(from, held);
     }
-    if (held.list.length < EARLY_SIG_HOLD) held.list.push(payload.data);
+    held.list.push(payload.data); held.bytes += size;
   });
   s.signal = (to, data) => send('sig', { from: id, to, data });
   s.on = (f) => s.listeners.add(f);
