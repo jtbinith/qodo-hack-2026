@@ -34,6 +34,7 @@ flowchart LR
 | Links | `web/peers.js` | Direct WebRTC links. The encrypted relay when those fail |
 | Encryption | `web/seal.js` | ECDH P-256 key exchange, HKDF, AES-256-GCM |
 | Validation | `web/check.js` | A check for every message type, piece lengths and SHA-256 |
+| Save all | `web/saveall.js` | Which received photos Save all hands over (F13): the share sheet once with all of them, or downloads `DOWNLOAD_GAP` apart. Remembers what was handed over so nothing is saved twice |
 
 ## 3. Message flow
 ```mermaid

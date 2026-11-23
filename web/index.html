@@ -27,7 +27,7 @@
 <canvas id="c"></canvas>
 <div id="hud"></div>
 <div id="toast"></div>
-<div id="bar"><label><input id="keep" type="checkbox">Keep details</label><label>＋ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
+<div id="bar"><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>＋ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
 <div id="lobby"><form id="f">
   <div>Room code</div>
   <input id="code" maxlength="10" autocomplete="off" required>
@@ -42,6 +42,7 @@ import { joinRoom } from './net.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
+import { saveBatch, createSaveAll, REVOKE_AFTER } from './saveall.js';
 import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
 
 const $ = (id) => document.getElementById(id);
@@ -322,9 +323,24 @@ function save(p) {
     return toast('Drag it onto your screen first');
   }
   if (p.owner === id) return toast('Already yours');
-  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).catch(() => {});
-  else { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.click(); }
+  // handed over once it was shared or its download started, so Save all doesn't save it again (F13)
+  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => saveAll.handed.add(p.pid), () => {});
+  else { downloadFile(file); saveAll.handed.add(p.pid); }
 }
+function downloadFile(file) {
+  const a = document.createElement('a'), url = URL.createObjectURL(file);
+  a.href = url; a.download = file.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER);
+}
+// Save all (F13): every received photo in one tap. The share sheet once with all of them, or downloads
+const saveAll = createSaveAll({
+  batch: (handed) => saveBatch({ prints, files, incoming, me: id, handed }),
+  canShare: (list) => !!navigator.share && !!navigator.canShare?.({ files: list }),
+  share: (list) => navigator.share({ files: list }),
+  download: downloadFile,
+  toast,
+});
+$('saveall').onclick = () => saveAll.tap();
 function pushOrb(x, y) {
   const [hx, hy] = home(), dx = x - hx, dy = y - hy;
   if (Math.hypot(dx, dy) < Math.min(W, H) * 0.15) return;
