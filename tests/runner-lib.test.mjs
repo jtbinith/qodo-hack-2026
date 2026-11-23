@@ -483,7 +483,7 @@ test('blind review of #107: a blind review that reproduced a High is described a
 
 // The blind review of #107 (23fbc47), round 3: its repro, copied from .agent/blind/blind-gap.test.mjs
 test('blind review of #107 round 3: a head the runner pushed cannot be posted green before its blind review runs', () => {
-  const push = runnerSrc().match(/function checkAndPush[\s\S]*?\n\}/)?.[0] || '';
+  const push = runnerSrc().match(/function checkAndPush[\s\S]*?\nfunction openPr[\s\S]*?\n\}/)?.[0] || '';   // PR opening moved into openPr (#113)
   const statuses = /postBlind\(/.test(push)
     ? [{ context: 'blind-review', state: 'pending' }, { context: 'qodo-gate', state: 'pending' }]
     : [{ context: 'qodo-gate', state: 'pending' }];
@@ -510,4 +510,75 @@ test('blind review of #110: the red check runs the relay browser run even when t
   let expanded = cmd, prev;
   do { prev = expanded; expanded = expanded.replace(/npm run ([\w:]+)/g, (_, k) => `(${scripts[k]})`); } while (expanded !== prev);
   assert.doesNotMatch(expanded, /&&/, `a failing run still short-circuits the next one: ${expanded}`);
+});
+
+// Day 10: the factory survives a flaky test run and an incomplete Qodo review, and resumes before a push.
+// Measured that day: the first-transfer timeout (#100) stopped a run and turned CI red 3 times, and
+// 9 of 31 Qodo PR review runs on this repo were incomplete.
+const F = (fails) => ({ ok: false, out: fails.join('\n'), fails });
+test('a failed npm test that passes on an identical re-run is flaky: it goes on, and says so', () => {
+  const first = F(['FAIL timed out after 90 s at two-browser.mjs:212']), r = lib.testRetry?.(first, { ok: true, out: '', fails: [] }) ?? {};
+  assert.equal(r.ok, true); assert.equal(r.flaky, true); assert.match(r.note ?? '', /two-browser\.mjs:212/);
+});
+test('a failed npm test that fails again is a failure, with the second run\'s lines', () => {
+  const r = lib.testRetry?.(F(['FAIL a']), F(['FAIL b'])) ?? { ok: true };
+  assert.equal(r.ok, false); assert.deepEqual(r.fails, ['FAIL b']);
+});
+test('a passing npm test needs no re-run', () => {
+  const r = lib.testRetry?.({ ok: true, out: '', fails: [] }) ?? {};
+  assert.equal(r.ok, true); assert.equal(r.flaky, false);
+});
+test('an incomplete review: ask Qodo again once per head, wait for its new run, then stop', () => {
+  const plan = (o) => lib.reaskPlan?.(o);
+  assert.equal(plan({ head: 'h1', runId: 7 }), 'reask', 'first incomplete review of this head');
+  assert.equal(plan({ head: 'h1', runId: 7, asked: { head: 'h1', run: 7 } }), 'wait', 'still the run it saw before asking');
+  assert.equal(plan({ head: 'h1', runId: 8, asked: { head: 'h1', run: 7 } }), 'stop', 'the new run is incomplete too');
+  assert.equal(plan({ head: 'h2', runId: 9, asked: { head: 'h1', run: 7 } }), 'reask', 'a new head gets its own ask');
+});
+test("Qodo's stated reason for an incomplete review is quoted from its comment (#112)", () => {
+  const body = readFileSync(new URL('./fixtures/qodo/pr-112-comment.html', import.meta.url), 'utf8');
+  assert.equal(lib.qodoReason?.(body), 'Qodo could not verify all local findings on this PR.');
+  assert.equal(lib.qodoReason?.('<h3>PR Summary</h3> all good'), '');
+});
+test('an owner /agent retry on the ticket resumes a run that stopped before its first push', () => {
+  const plan = (s, asks) => lib.resumePlan?.(s, asks, { retryRounds: 5 });
+  const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', retryRounds: 0, stoppedAt: '2026-11-22T22:00:00Z' }, at = '2026-11-22T23:00:00Z';
+  assert.equal(plan(s, [{ retry: true, at }]), 'resume');
+  assert.equal(plan({ ...s, pr: 112 }, [{ retry: true, at }]), null, 'a run with a PR goes the PR way');
+  assert.equal(plan(s, [{ retry: false, text: 'do x', at }]), null, 'only a retry: there is no PR to read instructions from');
+  assert.equal(plan(s, []), null);
+  assert.equal(plan({ ...s, retryRounds: 5 }, [{ retry: true, at }]), 'limit');
+  assert.equal(plan({ ...s, phase: 'done' }, [{ retry: true, at }]), null);
+});
+
+// Qodo's review and the blind review of #113 (63bf29a), each finding as a test before its fix
+test('#113 355112c7: a re-run that fails with no failing lines keeps the first run\'s lines, and a note without lines falls back to the output', () => {
+  const r = lib.testRetry?.(F(['FAIL a']), { ok: false, out: '', fails: [] }) ?? {};
+  assert.deepEqual(r.fails, ['FAIL a']);
+  const n = lib.testRetry?.({ ok: false, out: 'x\nkilled after 15 min', fails: [] }, { ok: true, out: '', fails: [] }) ?? {};
+  assert.match(n.note ?? '', /killed after 15 min/);
+});
+test('blind review of #113: an /agent retry written before the run stopped never resumes it', () => {
+  const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', stoppedAt: '2026-11-22T22:00:00Z' };
+  assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T21:00:00Z' }], { retryRounds: 5 }), null);
+  assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }), 'resume');
+  assert.equal(lib.resumePlan?.({ ...s, stoppedAt: undefined }, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }), null, 'no stop time recorded: never resume');
+});
+test('#113 44689d11: a resume waits while another PR is open', () => {
+  const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', stoppedAt: '2026-11-22T22:00:00Z' };
+  assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }, { openPr: 113 }), 'wait');
+});
+test('#113 39277034 and the blind review: a dry run neither records a re-ask nor uses up a retry', () => {
+  const src = runnerSrc();
+  const reask = src.match(/if \(plan === 'reask'\) \{[\s\S]*?\n          \}/)?.[0] || '';
+  assert.match(reask, /if \(!DRY\) \{ s\.reasked/);
+  const resume = src.match(/for \(const \{ number: n \} of openTickets\(L\.help\)\) \{[\s\S]*?process\.exit\(0\);\n  \}/)?.[0] || '';
+  assert.match(resume, /if \(DRY\) \{ console\.log\(`DRY RUN would resume/);
+});
+test('#113 304ebe3f: a branch pushed without its PR gets the PR on retry, not "no new commits"', () => {
+  const push = runnerSrc().match(/function checkAndPush[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(push, /if \(!s\.pr && s\.head && head\(s\) === s\.head\) return openPr\(n, s, why\);/);
+});
+test("#113 3bc1eb25: the stop quotes Qodo's reason only from its comment on this head", () => {
+  assert.match(runnerSrc(), /const reason = q\?\.reviewed === s\.head \? qodoReason\(q\.body\) : '';/);
 });
