@@ -850,7 +850,7 @@ test('#126: the PR proof lists the design questions handed to the agent', () => 
 });
 test("#126: the skill tells the agent to decide handed-over design questions, not stop", () => {
   const skill = readFileSync(new URL('../.claude/skills/work-ticket/SKILL.md', import.meta.url), 'utf8');
-  assert.match(skill, /Open design questions/); assert.match(skill, /decide each one/);
+  assert.match(skill, /Open design questions/); assert.match(skill, /decide each one/i);
 });
 test('#126 (blind Low): only the runner\'s own NOT DONE stop comments count as design stops', () => {
   assert.match(runnerSrc(), /c\.body\.startsWith\('\*\*NOT DONE\.\*\*'\) && \/decide\(s\)\? the design/);

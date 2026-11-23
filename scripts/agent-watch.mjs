@@ -321,7 +321,8 @@ function wisdomCheck(n, s) {
   // a question that decides the design stops the run here, before any code, for the owner to answer (#21)
   const dq = designQuestions(result);
   // after LIMITS.designStops stops on this ticket, its questions go to the agent as assumptions (#72)
-  const prevStops = issueComments(n).filter((c) => c.user.login === OWNER && /decide(s)? the design\. Nothing was built\./.test(c.body)).length;
+  // only the runner's own stop comments count, not a reply quoting one (blind review on #126)
+  const prevStops = issueComments(n).filter((c) => c.user.login === OWNER && c.body.startsWith('**NOT DONE.**') && /decide(s)? the design\. Nothing was built\./.test(c.body)).length;
   const dplan = designStopPlan(prevStops, dq.blocking.length, LIMITS.designStops);
   if (dplan === 'assume') {
     s.designAssumptions = dq.blocking.map((q) => `- ${q.question}${q.why ? ` (${q.why})` : ''}`);
@@ -332,7 +333,8 @@ function wisdomCheck(n, s) {
   if (w.state === 'stop') throw new Stop(`Codebase Wisdom found the ticket wrong about the code on main, before any code was written. Each quote was checked by the runner:\n${w.wrong.map(cite).join('\n')}\n\nFix the ticket, then label it \`${L.ready}\` again.`);
   const questions = dq.other.map((q) => (typeof q === 'string' ? q : q?.question)).filter((q) => typeof q === 'string' && q);
   const summary = `**Ticket checked by Codebase Wisdom** before any code (quotes checked by the runner): ${w.held.length} claim${w.held.length === 1 ? '' : 's'} held, ${w.unverified.length} unverified.` +
-    (w.unverified.length ? `\nUnverified, so treated as assumptions to test:\n${w.unverified.map(cite).join('\n')}` : '') + (questions.length ? `\nOpen questions:\n${questions.map((q) => `- ${q}`).join('\n')}` : '');
+    (w.unverified.length ? `\nUnverified, so treated as assumptions to test:\n${w.unverified.map(cite).join('\n')}` : '') + (questions.length ? `\nOpen questions:\n${questions.map((q) => `- ${q}`).join('\n')}` : '') +
+    ((s.designAssumptions || []).length ? `\n**Design questions handed to the agent** (after ${LIMITS.designStops} design stops on this ticket): its choices are under Assumptions.\n${s.designAssumptions.join('\n')}` : '');   // so the owner sees them in the PR (Qodo on #126)
   putAgentFile(s, 'wisdom.md', `# Codebase Wisdom's check of #${n}\n\n${summary}\n\nHeld:\n${w.held.map(cite).join('\n') || 'none'}\n${(s.designAssumptions || []).length ? `\n## Open design questions: decide each one and list your choice under **Assumptions** in your report and the PR description\n${s.designAssumptions.join('\n')}\n` : ''}`);
   s.proofs = [...(s.proofs || []), summary]; save(n, s);
 }
