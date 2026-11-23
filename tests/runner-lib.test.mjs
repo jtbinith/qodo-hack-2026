@@ -428,9 +428,10 @@ test('blind: a repro outside .agent/blind/ or not a .test.mjs file is never run 
     assert.equal(b.state, 'done', repro); assert.deepEqual(lib.blindRepros?.({ findings: [bf({ repro })] }) ?? ['x'], [], repro);
   }
 });
-test('blind: Lows never block, and a finding with no severity counts as Medium', () => {
-  assert.equal(blind({ findings: [bf({ severity: 'Low' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'done');
+test('blind: a finding whose repro fails blocks whatever its label, since real bugs were labelled Low twice (Day 9, #95)', () => {
+  assert.equal(blind({ findings: [bf({ severity: 'Low' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'fix');
   assert.equal(blind({ findings: [bf({ severity: 'whatever' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'fix');
+  assert.equal(blind({ findings: [bf({ severity: 'Low', repro: undefined })] }, {}).state, 'done', 'a Low with no repro is only flagged');
 });
 test('blind: a clean review is done; no result at all is invalid, never clean', () => {
   assert.equal(blind({ findings: [] }, {}).state, 'done');
@@ -631,4 +632,16 @@ test('it is never accepted without that exact reason on this head, with CI red o
   assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, status: 'started' } }, head: h, review: reviewOf(h), ciOk: true }).ok, false, 'still running');
   assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, commit_sha: 'e'.repeat(40) } }, head: h, review: reviewOf(h), ciOk: true }).ok, false, 'a review of another commit');
   assert.equal(acc({ read: fx('pr-87'), head: h, review: reviewOf(h), ciOk: true }).ok, false, 'a complete review needs no exception');
+});
+
+// Day 10: the owner's own merge into main during an agent run stopped #96 ("Something changed on GitHub").
+test("the GitHub footprint watches the run's own branch and the branch names, not every branch's commit", () => {
+  const fp = runnerSrc().match(/const footprint = \(s\) => JSON\.stringify\(\{[\s\S]*?\}\);/)?.[0] || '';
+  assert.match(fp, /ls-remote', '--heads', 'origin', s\.branch/); assert.match(fp, /names:/);
+  assert.doesNotMatch(fp, /refs: sh\('git', \['ls-remote', '--heads', 'origin'\]/);
+});
+// Day 10: a round the agent stopped by the stopping rule was reported as "judged none valid".
+test("a review round with no commit says the agent made no change and points to its report, without claiming why", () => {
+  assert.doesNotMatch(runnerSrc(), /The agent judged none of the/);
+  assert.match(runnerSrc(), /The agent made no commit for the/);
 });
