@@ -858,3 +858,11 @@ test('#126 (blind Low): only the runner\'s own NOT DONE stop comments count as d
 test("#126 6c0d7b41: when design questions were handed over, the PR description carries the agent's Assumptions", () => {
   assert.match(runnerSrc(), /\(s\.designAssumptions \|\| \[\]\)\.length && assumptions\(agentFile\(s, 'report\.md'\)\)/);
 });
+test('#126 (blind, reproduced): a bold **Assumptions** section, as the skill writes it, is read for the PR description', () => {
+  const line = runnerSrc().split('\n').find((l) => l.startsWith('const assumptions = '));
+  const assumptions = new Function(`${line.replace(/^const assumptions = /, 'return ')}`)();
+  const report = '# Ticket #72\n\nDid the thing.\n\n**Assumptions**\n- Toast shows for 3 s\n- Downloads 300 ms apart\n\n**Proof**\n- npm test\n';
+  assert.equal(assumptions(report), '- Toast shows for 3 s\n- Downloads 300 ms apart');
+  assert.equal(assumptions('## Assumptions\n- x\n## Next\n- y\n'), '- x');
+  assert.equal(assumptions('No section here\n'), '');
+});
