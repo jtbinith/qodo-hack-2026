@@ -866,3 +866,31 @@ test('#126 (blind, reproduced): a bold **Assumptions** section, as the skill wri
   assert.equal(assumptions('## Assumptions\n- x\n## Next\n- y\n'), '- x');
   assert.equal(assumptions('No section here\n'), '');
 });
+
+// Gate 6 converges (Day 10): after the first blind round, a later round reviews only the fix commits,
+// and a reproduced finding that also fails on the head the last round reviewed was in code already
+// reviewed: it goes to a ticket instead of blocking. One the fix commits introduced still blocks.
+const red = { ok: false, out: 'AssertionError [ERR_ASSERTION]: x' };
+const green = { ok: true, out: 'ok' };
+test('gate 6 converges: a finding that also fails on the last reviewed head is deferred, not blocking', () => {
+  assert.equal(typeof lib.convergePlan, 'function');
+  const fs = [{ title: 'old', repro: '.agent/blind/old.test.mjs' }, { title: 'new', repro: '.agent/blind/new.test.mjs' }];
+  const p = lib.convergePlan(fs, { '.agent/blind/old.test.mjs': red, '.agent/blind/new.test.mjs': green });
+  assert.deepEqual(p.block.map((f) => f.title), ['new']);
+  assert.deepEqual(p.defer.map((f) => f.title), ['old']);
+});
+test('gate 6 converges: a repro that can\'t run on the last reviewed head (missing module, no run) still blocks', () => {
+  const fs = [{ title: 'a', repro: '.agent/blind/a.test.mjs' }, { title: 'b', repro: '.agent/blind/b.test.mjs' }];
+  const p = lib.convergePlan(fs, { '.agent/blind/a.test.mjs': { ok: false, out: 'Error [ERR_MODULE_NOT_FOUND]: x' } });
+  assert.deepEqual(p.block.map((f) => f.title), ['a', 'b']);
+  assert.deepEqual(p.defer, []);
+});
+test('gate 6 converges: with no earlier blind round, everything reproduced blocks', () => {
+  const fs = [{ title: 'a', repro: '.agent/blind/a.test.mjs' }];
+  assert.deepEqual(lib.convergePlan(fs, null).block.map((f) => f.title), ['a']);
+});
+test('gate 6 converges: a later blind round is asked about the fix commits since the head it last reviewed', () => {
+  const src = runnerSrc();
+  assert.match(src, /BLIND_PROMPT\(n, s\.base, s\.blindHead\)/);
+  assert.match(src, /s\.blindHead = s\.head/);
+});
