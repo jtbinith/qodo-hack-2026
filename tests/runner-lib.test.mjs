@@ -772,3 +772,7 @@ test("#122: a blind finding is judged on main by the blind review's own repro, n
   assert.deepEqual(p.fix, ['blind-0'], 'introduced: its own repro passes on main');
   assert.match(runnerSrc(), /if \(f\.repro\) e\.repro = f\.repro;   \/\/ the blind review's own repro/);
 });
+test('#122 (blind Low): a blind repro that fails on main too is deferred, so its path is accepted as a repro', () => {
+  const p = lib.scopePlan?.(['blind-0'], { entries: [{ id: 'blind-0', repro: '.agent/blind/late.test.mjs', acceptance: false, owner: '#24' }] }, { '.agent/blind/late.test.mjs': SCOPE_RED }, { '.agent/blind/late.test.mjs': SCOPE_RED }) ?? {};
+  assert.equal(p.defer?.[0]?.id, 'blind-0'); assert.deepEqual(p.fix, []);
+});
