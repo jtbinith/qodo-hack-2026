@@ -44,9 +44,11 @@ export function joinRoom({ room, id, name, size, onSignal }) {
       s.samples = []; emit('leader', s.leader);
       stopAsking();   // an ask to the old time keeper is over
       // a layout the new time keeper sent before this device heard it took over (#61). It is
-      // checked again against who is here now, and used only if it still passes
+      // checked again against who is here now, and used only if it still passes. Only the new time
+      // keeper's is used up: the others stay, as for join results below, so an in-between time
+      // keeper doesn't throw away the real one's layout (Qodo on b927d48)
       const early = earlyLayouts.get(s.leader);
-      earlyLayouts.clear();
+      earlyLayouts.delete(s.leader);
       if (s.leader === id) sendLayout();
       else if (early && isValidJoins(early, [...Object.keys(s.peers), id])) { s.joins = early; emit('layout'); }
       // Nothing usable was kept: a late layout from the old time keeper may have replaced it
@@ -191,7 +193,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     if (payload.from === s.leader) { s.joins = payload.joins; earlyLayouts.clear(); stopAsking(); emit('layout'); return; }
     // From another device in the room, it isn't used. It is kept, one per device, in case this
     // device hasn't yet heard that the sender took over (#61): electLeader uses it if so. A layout
-    // from the current time keeper replaces them all, and any change of time keeper clears them
+    // from the current time keeper replaces them all, and a change of time keeper uses up the new one's
     if (typeof payload.from === 'string' && Object.hasOwn(s.peers, payload.from) && payload.from !== id) earlyLayouts.set(payload.from, payload.joins);
   });
   // The time keeper answers asks for its layout by sending it to the whole room, at most once
