@@ -378,7 +378,7 @@ function scopeCheck(n, s, items, kind) {
     if (kind === 'blind') return true;
     if (kind === 'local' && !it?.localReviewId) return false;
     if (DRY) { console.log(`DRY RUN would defer ${d.id.slice(0, 8)}`); return true; }
-    try { return dismissedOk(sh(QODO_BIN, ['pr-review-session', 'dismiss', '--finding-ids', d.id, ...(kind === 'local' ? ['--local-review-id', it.localReviewId] : []), '--reason', 'deferred', '--explanation', why(d)], { env: QODO_ENV, cwd: kind === 'local' ? s.dir : MAIN }), d.id); } catch { return false; }
+    try { return dismissedOk(sh(QODO_BIN, ['pr-review-session', 'dismiss', '--json', '--finding-ids', d.id, ...(kind === 'local' ? ['--local-review-id', it.localReviewId] : []), '--reason', 'deferred', '--explanation', why(d)], { env: QODO_ENV, cwd: kind === 'local' ? s.dir : MAIN }), d.id); } catch { return false; }
   };
   const failed = plan.defer.filter((d) => !deferred(d));
   plan.fix.push(...failed.map((d) => d.id)); plan.defer = plan.defer.filter((d) => !failed.includes(d));
@@ -420,7 +420,7 @@ function blindReview(n, s) {
 }
 
 // Gets the agent's commits green, proves the red, then pushes. Throws Stop when it can't.
-function checkAndPush(n, s, why) {
+function checkAndPush(n, s, why, { ownerRound = false } = {}) {
   if (!s.pr && s.head && head(s) === s.head) return openPr(n, s, why);   // pushed before, but no PR yet: finish opening it
   for (let attempt = 1; ; attempt++) {
     if (agentFile(s, 'stop.md')) throw new Stop('The agent stopped instead of guessing:\n\n' + agentFile(s, 'stop.md'));
@@ -443,7 +443,8 @@ function checkAndPush(n, s, why) {
   const red = proveRed(n, s, s.head || s.base);
   // Gate 2, before the push: Qodo's local review of the unpushed commits, through the same gate as a PR
   const local = localReview(n, s);
-  if (local.g.state === 'fix') {
+  // the owner's own /agent rounds skip it: those are the owner's decisions (Qodo on #120)
+  if (local.g.state === 'fix' && !ownerRound) {
     // only what this branch introduced or the ticket asks for goes to a local fix round (scopeCheck)
     const lplan = scopeCheck(n, s, local.g.blocking.map((f) => ({ id: f.id, title: decodeEntities(f.title), severity: severityOf(f), where: `${f.location?.file_path || '?'}:${f.location?.start_line || '?'}`, text: decodeEntities(f.description || ''), localReviewId: f.local_review_id || local.ids[f.id] })), 'local');
     if (!lplan.fix.length && lplan.unproven.length) throw new Stop(`No repro failed on this branch for ${lplan.unproven.length} of the local review's High or Medium findings: ${listed(local.g.blocking.filter((f) => lplan.unproven.includes(f.id))).join('; ')}. Nothing was pushed. Dismiss them in Qodo if they're wrong, then \`/agent retry\` on the ticket.`);
@@ -457,7 +458,7 @@ function checkAndPush(n, s, why) {
     const before = head(s);
     agent(n, s, `local-${s.localRounds}`, `Unattended run. Qodo reviewed your unpushed commits for ticket #${n} before the push. Handle that review using step 7 of the skill at .claude/skills/work-ticket/SKILL.md: the findings are in .agent/review.md. Nothing is pushed yet.`);
     if (head(s) === before) throw new Stop(`The agent made no commit for the ${local.g.blocking.length} High or Medium findings from Qodo's local review: it judged them wrong or stopped by the stopping rule, and its report below says which. Nothing was pushed. A disputed finding stays open until you decide: dismiss it in Qodo, then label the ticket again.${lowsReport(local.g)}`);
-    return checkAndPush(n, s, why);   // tests, red check and local review again on the fixed commits
+    return checkAndPush(n, s, why, { ownerRound });   // tests, red check and local review again on the fixed commits
   }
   const localProof = `- Qodo's local review of the unpushed commits (${(s.head || s.base).slice(0, 7)}..${head(s).slice(0, 7)}): no open High or Medium${local.g.lows.length ? `, ${local.g.lows.length} Low flagged` : ''}${s.localRounds ? ` after ${s.localRounds} local fix round${s.localRounds > 1 ? 's' : ''}` : ''}.`;
   write(`push ${head(s).slice(0, 7)} to ${s.branch}`, () => sh('git', ['push', '-u', 'origin', `HEAD:refs/heads/${s.branch}`], { cwd: s.dir }));
@@ -560,7 +561,7 @@ function continueRun(n, s) {
       }
       if (afterOwnerRound({ committed: head(s) !== before }) === 'stop')
         throw new Stop(`The agent made no change for your /agent request. Its reasons are in the report below. Comment \`/agent retry\` on its own on PR #${s.pr} to re-run the checks.`);
-      checkAndPush(n, s, 'owner comment');
+      checkAndPush(n, s, 'owner comment', { ownerRound: true });
     } else {
       // the quality gate (work-ticket skill): every High and Medium fixed, Lows flagged for the owner.
       // It reads Qodo's stored review and the PR's head fresh, not Qodo's rendered comment (which can lag).
