@@ -891,7 +891,7 @@ test('gate 6 converges: with no earlier blind round, everything reproduced block
 });
 test('gate 6 converges: a later blind round is asked about the fix commits since the head it last reviewed', () => {
   const src = runnerSrc();
-  assert.match(src, /BLIND_PROMPT\(n, s\.base, s\.blindHead\)/);
+  assert.match(src, /BLIND_PROMPT\(n, s\.base, blindSince\(s\.blindHead, s\.head\)\)/);
   assert.match(src, /s\.blindHead = s\.head/);
 });
 

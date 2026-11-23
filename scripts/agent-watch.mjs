@@ -23,11 +23,11 @@
 // The agent never sees GitHub. The script writes the ticket and the review to .agent/ for it,
 // from text written by jtbinith and qodo-code-review only (the repo is public).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, realpathSync, cpSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, cpSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync, readdirSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, ciPassed, reviewComment, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan, convergePlan } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan, convergePlan, convergeAfterScope, blindSince, reproBundle } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -393,6 +393,7 @@ function scopeCheck(n, s, items, kind) {
   const onMain = Object.fromEntries(repros.map((f) => [f, run(mainDir, f)]));
   sh('git', ['worktree', 'remove', '--force', mainDir], { cwd: MAIN });
   const plan = scopePlan(items.map((f) => f.id), j, onBranch, onMain);
+  plan.acceptance = (j && Array.isArray(j.entries) ? j.entries : []).filter((e) => e && e.acceptance === true).map((e) => e.id);   // (Qodo on #131)
   const why = (d) => `Deferred by the factory's scope rule: its repro (${d.repro}) fails on main too, so this branch didn't introduce it, and it isn't one of #${n}'s acceptance cases.${d.owner ? ` Belongs to ${d.owner}.` : ''}`;
   // a deferral counts only when Qodo says the finding is dismissed; otherwise the finding is fixed (Qodo on #120)
   const deferred = (d) => {
@@ -425,7 +426,7 @@ function blindReview(n, s) {
   rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'ticket.md'), agentFile(s, 'ticket.md'));
   const before = head(s);
-  agent(n, s, `blind-review-${s.round}`, BLIND_PROMPT(n, s.base, s.blindHead), BLIND);
+  agent(n, s, `blind-review-${s.round}`, BLIND_PROMPT(n, s.base, blindSince(s.blindHead, s.head)), BLIND);
   if (head(s) !== before) throw new Stop('The blind review made commits. It may only read and write .agent/blind/.');
   let j = null; try { j = JSON.parse(readFileSync(join(dir, 'findings.json'), 'utf8')); } catch { /* invalid below */ }
   const runs = Object.fromEntries(blindRepros(j).map((f) => {
@@ -433,25 +434,20 @@ function blindReview(n, s) {
     return [f, { ok: r.status === 0, out: (r.stdout || '') + (r.stderr || '') }];
   }));
   const b = blindVerdict(j, runs);
-  // gate 6 converges: what also fails on the head the last blind round reviewed was in reviewed code
-  if (b.blocking.length && s.blindHead && s.blindHead !== s.head) {
+  // gate 6 converges: what also fails on the head the last blind round reviewed was in reviewed code.
+  // Only recorded here; the scope check decides acceptance first (Qodo on #131).
+  b.older = [];
+  const since = blindSince(s.blindHead, s.head);
+  if (b.blocking.length && since) {
     const prevDir = join(WORK, `${n}-blind-prev`);
     rmSync(prevDir, { recursive: true, force: true }); sh('git', ['worktree', 'prune'], { cwd: MAIN });
-    sh('git', ['worktree', 'add', '--detach', prevDir, s.blindHead], { cwd: s.dir });
+    sh('git', ['worktree', 'add', '--detach', prevDir, since], { cwd: s.dir });
     symlinkSync(join(MAIN, 'node_modules'), join(prevDir, 'node_modules'));
     cpSync(dir, join(prevDir, '.agent', 'blind'), { recursive: true });   // the repros and any helper they import
     const onPrev = Object.fromEntries(b.blocking.map((f) => { const r = spawnSync(SANDBOX, ['node', '--test', f.repro], { cwd: prevDir, encoding: 'utf8', timeout: LIMITS.testRunMin * 60000 }); return [f.repro, { ok: r.status === 0, out: (r.stdout || '') + (r.stderr || '') }]; }));
     sh('git', ['worktree', 'remove', '--force', prevDir], { cwd: s.dir });
-    const c = convergePlan(b.blocking, onPrev);
-    for (const f of c.defer) {
-      const body = `Found by the blind review of ${s.head.slice(0, 7)} on PR #${s.pr} (ticket #${n}), in code an earlier blind round had already reviewed: its repro fails on ${s.blindHead.slice(0, 7)} too. Deferred by the factory so the review converges.\n\n**${f.severity || 'Medium'} · ${f.title}** (${f.file}${f.line ? `:${f.line}` : ''})\n\n${f.why || ''}\n\n### Acceptance\n- This repro passes:\n\n\`\`\`js\n${readFileSync(join(s.dir, f.repro), 'utf8').slice(0, 6000)}\n\`\`\``;
-      f.ticket = write(`file a ticket for "${f.title}"`, () => gh('issue', 'create', '-R', REPO, '--title', `Deferred from #${s.pr} · ${f.title}`.slice(0, 200), '--body', publicText(body)).trim().split('\n').pop(), '(dry run)');
-    }
-    if (c.defer.length) {
-      event(n, `blind review converges: ${c.defer.length} finding${c.defer.length === 1 ? '' : 's'} in already-reviewed code deferred (${c.defer.map((f) => f.ticket).join(', ')})`);
-      s.proofs = [...(s.proofs || []), `**Deferred so the blind review converges** (${s.head.slice(0, 7)}): ${c.defer.length === 1 ? 'this finding is' : 'these findings are'} in code the blind round of ${s.blindHead.slice(0, 7)} already reviewed (each repro fails there too).\n${c.defer.map((f) => `- ${f.severity || 'Medium'} · ${f.title} → ${f.ticket}`).join('\n')}`];
-    }
-    b.blocking = c.block; if (!b.blocking.length) b.state = 'done';
+    b.older = convergePlan(b.blocking.map((f, i) => ({ ...f, id: `blind-${i}` })), onPrev).defer.map((f) => f.id);
+    b.since = since;
   }
   if (b.state !== 'invalid') s.blindHead = s.head;   // the next blind round reviews only the commits after this one
   writeFileSync(join(HOME, 'logs', `${n}-${s.runs}-blind.json`), JSON.stringify({ findings: j, runs, verdict: b }, null, 2));
@@ -673,7 +669,19 @@ function continueRun(n, s) {
         // the blind review's findings bring their own repros: run them on main, defer what was there already
         const bplan = scopeCheck(n, s, b.blocking.map((f, i) => ({ id: `blind-${i}`, title: f.title, severity: f.severity || 'Medium', where: `${f.file}:${f.line}`, text: f.why, repro: f.repro })), 'blind');
         // the blind review already reproduced these: one its scope copy didn't reproduce stays blocking (#121)
-        b.blocking = b.blocking.filter((f, i) => bplan.fix.includes(`blind-${i}`) || bplan.unproven.includes(`blind-${i}`));
+        // gate 6 converges: a finding in code the last blind round reviewed goes to a ticket, unless it's an acceptance case
+        const conv = convergeAfterScope(b.blocking.map((f, i) => ({ ...f, id: `blind-${i}` })).filter((f) => bplan.fix.includes(f.id) || bplan.unproven.includes(f.id)), b.older, bplan.acceptance);
+        for (const f of conv.defer) {
+          const dirB = join(s.dir, '.agent', 'blind'), files = Object.fromEntries(readdirSync(dirB).filter((x) => /\.m?js$/.test(x)).map((x) => [x, readFileSync(join(dirB, x), 'utf8')]));
+          const body = `Found by the blind review of ${s.head.slice(0, 7)} on PR #${s.pr} (ticket #${n}), in code an earlier blind round had already reviewed: its repro fails on ${b.since.slice(0, 7)} too. Deferred by the factory so the review converges.\n\n**${f.severity || 'Medium'} · ${f.title}** (${f.file}${f.line ? `:${f.line}` : ''})\n\n${f.why || ''}\n\n### Acceptance\n- This repro passes (copy the files into \`.agent/blind/\`):\n\n${reproBundle(files, f.repro)}`;
+          f.ticket = write(`file a ticket for "${f.title}"`, () => gh('issue', 'create', '-R', REPO, '--title', `Deferred from #${s.pr} · ${f.title}`.slice(0, 200), '--body', publicText(body)).trim().split('\n').pop(), '(dry run)');
+        }
+        if (conv.defer.length) {
+          event(n, `blind review converges: ${conv.defer.length} finding${conv.defer.length === 1 ? '' : 's'} in already-reviewed code deferred (${conv.defer.map((f) => f.ticket).join(', ')})`);
+          s.proofs = [...(s.proofs || []), `**Deferred so the blind review converges** (${s.head.slice(0, 7)}): ${conv.defer.length === 1 ? 'this finding is' : 'these findings are'} in code the blind round of ${b.since.slice(0, 7)} already reviewed (each repro fails there too) and not one of #${n}'s acceptance cases.\n${conv.defer.map((f) => `- ${f.severity || 'Medium'} · ${f.title} → ${f.ticket}`).join('\n')}`]; save(n, s);
+        }
+        const convIds = new Set(conv.defer.map((f) => f.id));
+        b.blocking = b.blocking.filter((f, i) => (bplan.fix.includes(`blind-${i}`) || bplan.unproven.includes(`blind-${i}`)) && !convIds.has(`blind-${i}`));
         if (!b.blocking.length) {
           write(`set blind-review on ${prHead.slice(0, 7)} to success`, () => postBlind(prHead, { state: 'success', description: `Nothing this branch introduced: ${bplan.defer.length} reproduced finding${bplan.defer.length === 1 ? '' : 's'} deferred (pre-existing)` }));   // (Qodo on #120)
           gate(n, s, prHead, g); publish(n, s);
