@@ -54,9 +54,12 @@ export function joinRoom({ room, id, name, size, onSignal }) {
       // there's no need: the time keeper sends its layout when it hears this device arrive
       else if (prev !== null) ask(s.leader, ASK_TRIES);
       // join results the new time keeper sent before this device heard it took over (#96). Each is
-      // checked again against who is here now, and only while a push could still be waiting on it
+      // checked again against who is here now, and only while a push could still be waiting on it.
+      // Only the new time keeper's are used up: the others stay, as this device may be passing
+      // through an in-between time keeper on its way to the real one (review of f642be7). The
+      // NO_MATCH_AFTER age check and the EARLY_RESULTS cap keep what stays fresh and bounded
       const results = earlyResults.get(s.leader) || [];
-      earlyResults.clear();
+      earlyResults.delete(s.leader);
       if (s.leader !== id) for (const { ev, p, at } of results)
         if (performance.now() - at < NO_MATCH_AFTER && validResult[ev](p) && namesOnlyHere(ev, p)) result(ev, p);
     }
@@ -204,7 +207,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   // mistakes and stale time keepers, not forgery: anyone can write `from` until #24.
   // A result from another device in the room isn't used either. Like a layout, it is kept, the
   // newest EARLY_RESULTS per device, in case this device hasn't yet heard that the sender took
-  // over (#96): electLeader then uses it. Any change of time keeper clears what was kept
+  // over (#96): electLeader then uses it, and only its sender's are used up when it takes over
   const validResult = {
     joined: (p) => validJoined(p) && isValidJoins([p], [...Object.keys(s.peers), id]),
     retry: validRetry, nomatch: validNoMatch,
