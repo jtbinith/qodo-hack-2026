@@ -257,9 +257,9 @@ export function blindVerdict(j, runs) {
   const red = (r) => !!r && !r.ok && /AssertionError|ERR_ASSERTION/.test(r.out || '') && !/SyntaxError|ERR_MODULE_NOT_FOUND|Cannot find module/.test(r.out || '');
   const out = { blocking: [], flagged: [] };
   for (const f of fs) {
-    const serious = f.severity !== 'Low';
-    if (serious && safeRepro(f) && red(runs[f.repro])) out.blocking.push(f);
-    else out.flagged.push({ ...f, why: f.why, unproven: serious });
+    // a failing repro is the evidence, whatever the label: real bugs were rated Low twice (Day 9, #95)
+    if (safeRepro(f) && red(runs[f.repro])) out.blocking.push(f);
+    else out.flagged.push({ ...f, why: f.why, unproven: f.severity !== 'Low' });
   }
   return { state: out.blocking.length ? 'fix' : 'done', ...out };
 }
@@ -299,6 +299,34 @@ export function resumePlan(s, asks, limits, { openPr = null } = {}) {
   if (!asks.some((a) => a.retry && a.at > s.stoppedAt)) return null;
   if (openPr) return 'wait';
   return (s.retryRounds || 0) >= limits.retryRounds ? 'limit' : 'resume';
+}
+
+// An incomplete Qodo review of the head is accepted as complete only when Qodo's own stated reason,
+// in its review comment for this head, is exactly that it couldn't verify the local findings (every
+// factory PR with Gate 3's local findings got this on Day 10, 8 of 8 runs), the review run finished,
+// nothing High or Medium is open on the head, and CI's required check passed. Anything else stays
+// incomplete. Returns the verdict to use instead ({ ok, g }).
+export const LOCAL_ONLY_REASON = 'Qodo could not verify all local findings on this PR.';
+export function acceptLocalOnly({ read, head, review, ciOk }) {
+  const r = read?.review_session;
+  if (!r || r.commit_sha !== head || r.status !== 'completed' || r.review_complete !== false) return { ok: false, why: 'not an incomplete finished review of the head' };
+  if (!review || review.reviewed !== head) return { ok: false, why: "Qodo's review comment isn't for this head" };
+  // the comment must be newer than this review run, so an older run's text can't stand in (Qodo on #117);
+  // a run with no start time can't be dated, so it's never accepted (blind review on #117)
+  if (!r.started_at || !(review.at >= Date.parse(r.started_at))) return { ok: false, why: "Qodo's review comment isn't newer than this review run" };
+  // Qodo's notice section (after its daily tip, before the commit marker) must hold exactly the
+  // local-findings line and nothing else: any other notice, however phrased, or a different layout,
+  // keeps the review incomplete (blind review on #117)
+  const tip = (review.body || '').lastIndexOf('qodo-daily-tip:end -->');
+  const after = tip < 0 ? null : review.body.slice(tip + 'qodo-daily-tip:end -->'.length);
+  const notice = after === null ? null : decodeEntities(after.slice(0, after.indexOf('<!--') < 0 ? after.length : after.indexOf('<!--')).replace(/<[^>]+>/g, '\n'))
+    .split('\n').map((l) => l.trim()).filter(Boolean);
+  if (!notice || notice.length !== 1 || notice[0] !== LOCAL_ONLY_REASON) return { ok: false, why: notice?.length ? `Qodo's notice says: ${notice.join(' ')}` : "Qodo didn't say the local findings were the reason" };
+  if (ciOk === 'pending') return { ok: false, wait: true, why: "CI's npm test is still running on the head" };   // wait for it (Qodo on #117)
+  if (ciOk !== true) return { ok: false, why: "CI's npm test hasn't passed on the head" };
+  const g = gateVerdict({ ...read, review_session: { ...r, review_complete: true } }, head);
+  if (g.state !== 'done') return { ok: false, why: g.why || `${g.blocking?.length ?? 0} High or Medium open` };
+  return { ok: true, g };
 }
 
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review

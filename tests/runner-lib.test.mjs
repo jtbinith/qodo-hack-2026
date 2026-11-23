@@ -428,9 +428,10 @@ test('blind: a repro outside .agent/blind/ or not a .test.mjs file is never run 
     assert.equal(b.state, 'done', repro); assert.deepEqual(lib.blindRepros?.({ findings: [bf({ repro })] }) ?? ['x'], [], repro);
   }
 });
-test('blind: Lows never block, and a finding with no severity counts as Medium', () => {
-  assert.equal(blind({ findings: [bf({ severity: 'Low' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'done');
+test('blind: a finding whose repro fails blocks whatever its label, since real bugs were labelled Low twice (Day 9, #95)', () => {
+  assert.equal(blind({ findings: [bf({ severity: 'Low' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'fix');
   assert.equal(blind({ findings: [bf({ severity: 'whatever' })] }, { '.agent/blind/late.test.mjs': RED }).state, 'fix');
+  assert.equal(blind({ findings: [bf({ severity: 'Low', repro: undefined })] }, {}).state, 'done', 'a Low with no repro is only flagged');
 });
 test('blind: a clean review is done; no result at all is invalid, never clean', () => {
   assert.equal(blind({ findings: [] }, {}).state, 'done');
@@ -607,4 +608,75 @@ test("an incomplete-review stop links to Qodo's latest comment instead of quotin
   const src = runnerSrc();
   assert.doesNotMatch(src, /qodoReason/);
   assert.equal((src.match(/\$\{qodoLatest\(s\.pr\)\}/g) || []).length, 2, 'both stops, the second incomplete review and the timeout');
+});
+
+// Day 10: every Qodo PR review of a factory branch that had local findings came back incomplete,
+// "Qodo could not verify all local findings on this PR." (8 of 8 runs on #112 and #116; 0 of 18 on
+// PRs without). The gate accepts that one stated reason, and only when everything else holds.
+const LINE = 'Qodo could not verify all local findings on this PR.';
+const acc = (o) => lib.acceptLocalOnly?.(o) ?? { ok: true };
+const incomplete = (r) => ({ ...r, review_session: { ...r.review_session, review_complete: false } });
+const reviewOf = (head, extra = '', at = Date.parse('2099-01-01')) => ({ reviewed: head, at, body: `<h3>Code Review by Qodo</h3> findings <!-- qodo-daily-tip:end -->${extra}\n\n${LINE}\n<!-- https://github.com/x/commit/${head} -->` });
+test('an incomplete review whose only stated reason is the local findings is accepted when everything else holds', () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r), a = acc({ read: r, head: h, review: reviewOf(h), ciOk: true });
+  assert.equal(a.ok, true); assert.equal(a.g?.state, 'done');
+});
+test('it is never accepted without that exact reason on this head, with CI red or not finished, or with a High or Medium open', () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r);
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, body: 'no reason given' }, ciOk: true }).ok, false, 'no reason');
+  assert.equal(acc({ read: r, head: h, review: reviewOf('f'.repeat(40)), ciOk: true }).ok, false, 'the reason is for another head');
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, body: 'Qodo could not verify all findings on this PR.' }, ciOk: true }).ok, false, 'another reason');
+  assert.equal(acc({ read: r, head: h, review: reviewOf(h), ciOk: false }).ok, false, 'CI not green');
+  const med = { ...r, finding_count: r.findings.length + 1, findings: [...r.findings, { id: 'med00001', title: 'm', action_level: 'remediation_recommended', attribution_status: 'pending', git_sha: h }] };
+  assert.equal(acc({ read: med, head: h, review: reviewOf(h), ciOk: true }).ok, false, 'a Medium is open');
+  assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, status: 'started' } }, head: h, review: reviewOf(h), ciOk: true }).ok, false, 'still running');
+  assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, commit_sha: 'e'.repeat(40) } }, head: h, review: reviewOf(h), ciOk: true }).ok, false, 'a review of another commit');
+  assert.equal(acc({ read: fx('pr-87'), head: h, review: reviewOf(h), ciOk: true }).ok, false, 'a complete review needs no exception');
+});
+
+// Day 10: the owner's own merge into main during an agent run stopped #96 ("Something changed on GitHub").
+test("the GitHub footprint watches the run's own branch and the branch names, not every branch's commit", () => {
+  const fp = runnerSrc().match(/const footprint = \(s\) => JSON\.stringify\(\{[\s\S]*?\}\);/)?.[0] || '';
+  assert.match(fp, /ls-remote', '--heads', 'origin', s\.branch/); assert.match(fp, /names:/);
+  assert.doesNotMatch(fp, /refs: sh\('git', \['ls-remote', '--heads', 'origin'\]/);
+});
+// Day 10: a round the agent stopped by the stopping rule was reported as "judged none valid".
+test("a review round with no commit says the agent made no change and points to its report, without claiming why", () => {
+  assert.doesNotMatch(runnerSrc(), /The agent judged none of the/);
+  assert.match(runnerSrc(), /The agent made no commit for the/);
+});
+
+// Qodo's review and the blind review of #117 (afa986c), each finding as a test before its fix
+test('#117 70c0b9f1 and the blind review: the local-findings reason must be the only one, in a comment updated after this review run started', () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r);
+  assert.equal(acc({ read: r, head: h, review: reviewOf(h, '\n\nQodo could not complete the security review on this PR.'), ciOk: true }).ok, false, 'a second stated reason');
+  assert.equal(acc({ read: r, head: h, review: reviewOf(h, '\n\nSorry, something went wrong'), ciOk: true }).ok, false, 'an error alongside it');
+  assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, started_at: '2026-11-23T10:00:00Z' } }, head: h, review: reviewOf(h, '', Date.parse('2026-11-23T09:00:00Z')), ciOk: true }).ok, false, 'the comment is older than this review run');
+});
+test('#117 ba2f8c9a: qodo-gate.mjs applies the same rule, so a manual --post agrees with the runner', () => {
+  const g = readFileSync(new URL('../scripts/qodo-gate.mjs', import.meta.url), 'utf8');
+  assert.match(g, /acceptLocalOnly\(/); assert.match(g, /export function ciPassed/); assert.match(g, /export function reviewComment/);
+  assert.match(runnerSrc(), /import \{[^}]*ciPassed[^}]*reviewComment[^}]*\} from '\.\/qodo-gate\.mjs'/);
+});
+test("#117 8186b50b and 489b96bb: CI counts only GitHub's latest npm test run, and only when it finished green", () => {
+  const g = readFileSync(new URL('../scripts/qodo-gate.mjs', import.meta.url), 'utf8');
+  assert.match(g, /filter=latest/); assert.match(g, /runs\.length > 0 && runs\.every\(\(c\) => c\.status === 'completed' && c\.conclusion === 'success'\)/);
+});
+
+// Qodo's review and the blind review of #117 (c69f5b7), round 2
+test("#117 blind round 2: any other line in Qodo's notice section keeps the review incomplete, however it's phrased", () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r);
+  const body = (extra) => `<h3>Code Review by Qodo</h3> findings <!-- qodo-daily-tip:end -->\n\n${LINE}${extra}\n\n<!-- https://github.com/x/commit/${h} -->`;
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, at: Date.parse('2099-01-01'), body: body('') }, ciOk: true }).ok, true);
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, at: Date.parse('2099-01-01'), body: body('\nQodo failed to review 3 files on this PR.') }, ciOk: true }).ok, false);
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, at: Date.parse('2099-01-01'), body: `<h3>Code Review by Qodo</h3> ${LINE} <!-- https://github.com/x/commit/${h} -->` }, ciOk: true }).ok, false, 'no notice section where Qodo puts it: not accepted');
+});
+test('#117 blind round 2 (Low): a review run with no start time is never accepted', () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r);
+  assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, started_at: undefined } }, head: h, review: reviewOf(h), ciOk: true }).ok, false);
+});
+test("#117 f364e7d1: CI still running is a wait, not a refusal", () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r), a = acc({ read: r, head: h, review: reviewOf(h), ciOk: 'pending' });
+  assert.equal(a.ok, false); assert.equal(a.wait, true);
+  assert.match(runnerSrc(), /if \(a\.wait\) \{/);
 });
