@@ -3,6 +3,7 @@
 
 export const DOWNLOAD_GAP = 400;     // ms between two downloads of one batch: browsers block or prompt on a burst
 export const REVOKE_AFTER = 10000;   // ms a download's object URL lives after its click, so the browser can read it
+export const SHARE_TIMEOUT = 60000;  // ms a share sheet holds Save all: navigator.share can stay pending forever (WebKit)
 
 // What Save all can hand over now: every verified file in `files` that isn't this device's own
 // and hasn't been handed over yet. "Still arriving" counts only full photos on their way here:
@@ -24,7 +25,7 @@ export function saveBatch({ prints, files, incoming, me, handed }) {
 export function createSaveAll({ batch, canShare, share, download, toast, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const handed = new Set();
   let downloadNext = false;   // the share sheet failed: the next tap downloads instead
-  let busy = false;           // a share sheet or a download batch is still running
+  let busy = null;            // the tap whose share sheet or download batch is still running
   const more = (n) => (n ? ` · ${n} still arriving` : '');
 
   // Everything is decided, and the share sheet opened, before the first await: the share sheet
@@ -36,10 +37,14 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
     const list = ready.map((r) => r.file);
     let sharing = false;
     if (!downloadNext) { try { sharing = !!canShare(list); } catch { sharing = false; } }
-    busy = true;
+    const mine = {};
+    busy = mine;
     try {
       if (sharing) {
-        try { await share(list); } catch (e) {
+        const sheet = share(list);
+        // a share that never settles frees Save all after SHARE_TIMEOUT; if it finishes later it still counts
+        wait(SHARE_TIMEOUT).then(() => { if (busy === mine) busy = null; });
+        try { await sheet; } catch (e) {
           if (e?.name === 'AbortError') return;   // cancelled: nothing happens, the photos stay available
           downloadNext = true;
           return toast('Couldn’t open the share sheet. Tap Save all again to download');
@@ -54,7 +59,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
         if (handed.has(ready[i].pid)) continue;   // tapped and saved during the gap: read again after the await
         try { download(ready[i].file); handed.add(ready[i].pid); } catch (e) { console.warn('download failed', ready[i].file?.name, e); }
       }
-    } finally { busy = false; }
+    } finally { if (busy === mine) busy = null; }   // a late share doesn't free a newer tap's batch
   }
   return { handed, tap };
 }
