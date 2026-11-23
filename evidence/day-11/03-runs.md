@@ -6,7 +6,7 @@ Answer key hashed first ([00-answer-key-hash.md](00-answer-key-hash.md), reveale
 |---|---|---|---|---|---|
 | [#130](https://github.com/jtbinith/qodo-hack-2026/pull/130) original (15:05Z) | none | on push | 0 | – | – |
 | [#132](https://github.com/jtbinith/qodo-hack-2026/pull/132) control | none | 16:20:17Z | 2 Medium: a pending photo can be shared twice (opposite order to K1); download failures aren't shown | partly | – |
-| [#133](https://github.com/jtbinith/qodo-hack-2026/pull/133) | wiki page pushed 16:27:52Z, 32 s after the ask | 16:27:20Z | 1 High: photo taps duplicate batch downloads; 2 Medium: an unsettled share blocks later saves, verifying photos disappear from counts | yes (High) | yes |
+| [#133](https://github.com/jtbinith/qodo-hack-2026/pull/133) | wiki page pushed 16:27:52Z, 32 s after the ask (it still read it: Context sources shows) | 16:27:20Z | 1 High: photo taps duplicate batch downloads; 2 Medium: an unsettled share blocks later saves, verifying photos disappear from counts | yes (High) | yes |
 | [#134](https://github.com/jtbinith/qodo-hack-2026/pull/134) configured | wiki on | 16:28:22Z | 2 Medium: a photo downloads twice during a batch, a verifying photo disappears from counts | yes | – |
 | #130 rerun, same PR | wiki on | 16:37:12Z | 0 (run 2116680, done in 50 s, review comment unchanged) | – | – |
 
