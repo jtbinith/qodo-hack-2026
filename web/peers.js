@@ -30,6 +30,11 @@ export const OFFER_RESEND = 3000;
 // a departed device's recorded frames under its id. The caps fit ABSENT_RELAY_TTL of relay
 // chunks at RELAY_GAP pace (one 24 KiB chunk per 45 ms)
 export const ABSENT_RELAY_HOLD = 120, ABSENT_RELAY_BYTES = 4 * 1024 * 1024, ABSENT_RELAY_TTL = 5000;
+// Relay frames from one device that have arrived but not yet been used (still being opened, or
+// waiting for an earlier one): at most RELAY_RX frames and RELAY_RX_BYTES of sealed base64 per
+// device. Anything over is dropped on arrival, so frames sent under a linked device's id can't
+// pile up in memory. RELAY_RX fits a full key-wait inbox (HOLD); paced real traffic never comes close
+export const RELAY_RX = HOLD, RELAY_RX_BYTES = 16 * 1024 * 1024;
 
 // A send gave up because the other device stopped answering.
 export class SendTimeout extends Error {
@@ -48,7 +53,8 @@ function waitOn(peer, start) {
   });
 }
 
-export function createPeers({ myId, table, signal, forceRelay = false }) {
+// `present(peer)` (optional) says whether the room's presence lists `peer` right now
+export function createPeers({ myId, table, signal, forceRelay = false, present = () => true }) {
   const links = {};   // peer id -> { pc, dc, open, polite, makingOffer, ignoreOffer, pending, key, keyFailed, outbox, inbox }
   const handlers = new Set(), readyHandlers = new Set();
   const emit = (from, msg, bytes) => handlers.forEach((f) => f(from, msg, bytes));
@@ -63,8 +69,9 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     L.outbox = []; L.inbox = [];
     // Relay frames from this peer are opened and used one at a time, in the order they came, so a
     // small frame can't overtake a bigger one that is still being opened. Per peer: a slow one
-    // holds up only its own frames. `away` holds frames opened while the peer was away
-    L.rx = Promise.resolve(); L.away = null;
+    // holds up only its own frames. `away` holds frames that came while the peer was away.
+    // `rxCount`/`rxBytes`: frames on the chain not yet used (RELAY_RX, RELAY_RX_BYTES)
+    L.rx = Promise.resolve(); L.away = null; L.rxCount = 0; L.rxBytes = 0;
     mine.then(({ pub }) => signal(peer, { pub: b64(pub) }));     // swap public keys
     const attach = (dc) => {
       L.dc = dc;
@@ -157,38 +164,46 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     return buf;
   }
 
-  // Queues a relay frame on the peer's chain. Whether it was sent while the peer was away is
-  // decided now, when it arrives, not after the wait
+  // A relay frame from the peer. Everything about it is decided now, when it arrives, before any
+  // wait: whether it fits (RELAY_RX, RELAY_RX_BYTES), whether the peer was away and which hold it
+  // belongs to (so its ABSENT_RELAY_TTL counts from now). It starts opening at once, so a slow or
+  // forged frame ahead of it doesn't add its own decryption time, and is used in arrival order
   function received(from, L, r, away = false) {
-    L.rx = L.rx.then(() => openRelayed(from, L, r, away)).catch((e) => console.warn('bad relay frame from', from, e));
+    if (L.rxCount >= RELAY_RX || L.rxBytes + r.length > RELAY_RX_BYTES) return L.rx;  // dropped, takes no slot
+    L.rxCount++; L.rxBytes += r.length;
+    const h = away ? awayHold(L) : null;
+    const opened = (async () => open(L.key, unb64(r), from, myId))().catch(() => null);  // null: tampered or not for us
+    L.rx = L.rx.then(() => opened).then((frame) => {
+      L.rxCount--; L.rxBytes -= r.length;
+      if (!frame) return;
+      if (h) holdAway(h, frame); else onFrame(from, frame);
+    }).catch((e) => console.warn('bad relay frame from', from, e));
     return L.rx;
   }
-  async function openRelayed(from, L, r, away) {
-    let frame;
-    try { frame = await open(L.key, unb64(r), from, myId); } catch { return; } // tampered or not for us
-    if (away) holdAway(from, L, frame); else onFrame(from, frame);
+  // The peer's current hold, or a new one that lives ABSENT_RELAY_TTL from now
+  function awayHold(L) {
+    if (L.away) return L.away;
+    const h = L.away = { list: [], bytes: 0, live: true };
+    h.timer = setTimeout(() => { h.live = false; if (L.away === h) L.away = null; }, ABSENT_RELAY_TTL);
+    return h;
   }
-  // A frame that doesn't fit is dropped and takes no slot
-  function holdAway(from, L, frame) {
-    if (!L.away) {
-      const h = L.away = { list: [], bytes: 0 };
-      h.timer = setTimeout(() => { if (L.away === h) L.away = null; }, ABSENT_RELAY_TTL);
-    }
-    const h = L.away;
-    if (h.list.length >= ABSENT_RELAY_HOLD || h.bytes + frame.length > ABSENT_RELAY_BYTES) return;
+  // A frame whose hold has expired or been released, or that doesn't fit, is dropped and takes no slot
+  function holdAway(h, frame) {
+    if (!h.live || h.list.length >= ABSENT_RELAY_HOLD || h.bytes + frame.length > ABSENT_RELAY_BYTES) return;
     h.list.push(frame); h.bytes += frame.length;
   }
-  // web/net.js: presence lists this peer again. What was held while it was away is used, after
-  // any frame still being opened and before any that comes later
+  // web/net.js: presence lists this peer again. The hold is closed now: frames that come away
+  // after this start a new one. What it held is used after any frame still being opened and
+  // before any that comes later, and only if presence still lists the peer by then
   function returned(peer) {
-    const L = links[peer];
-    if (!L) return;
+    const L = links[peer], h = L?.away;
+    if (!h) return;
+    L.away = null;
     L.rx = L.rx.then(() => {
-      const h = L.away;
-      L.away = null;
-      if (!h) return;
       clearTimeout(h.timer);
-      for (const f of h.list) onFrame(peer, f);
+      const ok = h.live && present(peer);
+      h.live = false;
+      if (ok) for (const f of h.list) onFrame(peer, f);
     });
   }
   // A peer's key has arrived (or turned out bad): deliver what was waiting for it.
