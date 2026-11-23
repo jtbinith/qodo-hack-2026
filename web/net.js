@@ -2,7 +2,7 @@
 // The server only relays messages. One device (the earliest to arrive) is the "time
 // keeper": everyone syncs their clock to it, and it decides which orb pushes pair up.
 import { addJoins, matchPushes, isValidJoins } from './layout.js';
-import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk } from './check.js';
+import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk, inRoom } from './check.js';
 
 const SUPABASE_URL = 'https://aimoujzdcaxkejraattw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_D8DGNTiXWHRFaoE2ae3ACg_8G8Y_yDS'; // public by design
@@ -12,6 +12,11 @@ const LAYOUT_GAP = 1000; // the time keeper answers layout asks at most once in 
 // A device that asked for the layout asks again about every ASK_EVERY (jittered, never sooner
 // than LAYOUT_GAP) until the time keeper's layout arrives, at most ASK_TRIES asks in all
 const ASK_EVERY = 2000, ASK_TRIES = 5;
+// Connection setup is used only from devices in the room (S1.6). A device that has just joined
+// can send setup before this device's presence lists it, so setup from an id not in the room is
+// held: at most EARLY_SIG_HOLD messages from each of at most EARLY_SIG_SENDERS ids, for at most
+// EARLY_SIG_TTL ms. It's passed on if presence lists the sender in time and dropped otherwise
+export const EARLY_SIG_HOLD = 30, EARLY_SIG_SENDERS = 8, EARLY_SIG_TTL = 5000;
 const wall = () => performance.timeOrigin + performance.now();
 
 // `onSignal` (optional) receives messages sent with s.signal(to, data): a lane for
@@ -32,6 +37,7 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   const emit = (ev, data) => s.listeners.forEach((f) => f(ev, data));
   const send = (event, payload) => ch.send({ type: 'broadcast', event, payload });
   const earlyLayouts = new Map();   // device id -> the latest layout it sent while it wasn't this device's time keeper (#61)
+  const earlySigs = new Map();      // id not yet in the room -> { list: setup it sent, timer } (S1.6)
 
   function electLeader() {
     const all = Object.entries(s.peers).sort(([a, p], [b, q]) => (p.joinedAt - q.joinedAt) || (a < b ? -1 : 1));
@@ -79,6 +85,12 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     electLeader();
     if (s.leader === id) sendLayout();
     emit('peers', s.peers);
+    // setup held from a device that has now arrived is passed on, in the order it came (S1.6)
+    for (const [from, held] of earlySigs) {
+      if (!inRoom(s.peers, from) || from === id) continue;
+      clearTimeout(held.timer); earlySigs.delete(from);
+      for (const data of held.list) onSignal(from, data);
+    }
   });
 
   // --- clock sync: NTP-style ping/pong with the time keeper ---
@@ -209,10 +221,22 @@ export function joinRoom({ room, id, name, size, onSignal }) {
     onPush(p);
   };
   s.resize = (w, h) => { if (s.status === 'live') ch.track({ name, w, h, joinedAt }); };
-  if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => { if (validSignal(payload) && payload.to === id) onSignal(payload.from, payload.data); });
+  if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => {
+    if (!validSignal(payload) || payload.to !== id || payload.from === id) return;
+    if (inRoom(s.peers, payload.from)) { onSignal(payload.from, payload.data); return; }
+    let held = earlySigs.get(payload.from);
+    if (!held) {
+      if (earlySigs.size >= EARLY_SIG_SENDERS) return;
+      const from = payload.from;
+      held = { list: [], timer: setTimeout(() => earlySigs.delete(from), EARLY_SIG_TTL) };
+      earlySigs.set(from, held);
+    }
+    if (held.list.length < EARLY_SIG_HOLD) held.list.push(payload.data);
+  });
   s.signal = (to, data) => send('sig', { from: id, to, data });
   s.on = (f) => s.listeners.add(f);
-  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer); stopAsking(); waits.forEach(clearTimeout); waits.clear(); client.removeChannel(ch); };
+  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer); stopAsking(); waits.forEach(clearTimeout); waits.clear();
+    earlySigs.forEach((h) => clearTimeout(h.timer)); earlySigs.clear(); client.removeChannel(ch); };
 
   ch.subscribe(async (st) => {
     if (st === 'SUBSCRIBED') {
