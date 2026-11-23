@@ -776,3 +776,29 @@ test('#122 (blind Low): a blind repro that fails on main too is deferred, so its
   const p = lib.scopePlan?.(['blind-0'], { entries: [{ id: 'blind-0', repro: '.agent/blind/late.test.mjs', acceptance: false, owner: '#24' }] }, { '.agent/blind/late.test.mjs': SCOPE_RED }, { '.agent/blind/late.test.mjs': SCOPE_RED }) ?? {};
   assert.equal(p.defer?.[0]?.id, 'blind-0'); assert.deepEqual(p.fix, []);
 });
+
+// Day 10 (#21): the ticket didn't say what happens when a device's presence is late, so the agent
+// invented a design (holding early messages) and each review found the next gap in it. Wisdom's
+// open questions that decide the design now stop the run before any code, for the owner to answer.
+test('design questions: only questions marked as deciding the design stop the run', () => {
+  const r = lib.designQuestions?.({ questions: [
+    { question: 'What happens when presence arrives after the first setup message?', decides_design: true, why: 'drop vs hold changes the code' },
+    { question: 'Which wording for the toast?', decides_design: false },
+    'a plain string question (older format)'] }) ?? {};
+  assert.equal(r.blocking?.length, 1); assert.match(r.blocking[0].question, /presence arrives/);
+  assert.equal(r.other?.length, 2);
+});
+test('design questions: none, or a malformed list, stops nothing', () => {
+  for (const j of [{}, { questions: 'x' }, null, { questions: [{ decides_design: true }] }]) assert.equal(lib.designQuestions?.(j)?.blocking?.length ?? 1, 0, JSON.stringify(j));
+});
+// Day 10: GitHub answered HTTP 504 once and dropped the connection once, and each stopped a run.
+test('a passing GitHub error is retried; a real one is not', () => {
+  for (const m of ['gh: HTTP 504', 'HTTP 502: Bad Gateway', 'error connecting to api.github.com', 'read ECONNRESET', 'getaddrinfo EAI_AGAIN api.github.com', 'TLS handshake timeout'])
+    assert.equal(lib.transientGh?.(m), true, m);
+  for (const m of ['HTTP 404: Not Found', 'HTTP 422: Validation Failed', 'HTTP 403: Resource not accessible', 'a pull request for branch already exists'])
+    assert.equal(lib.transientGh?.(m), false, m);
+});
+test('the runner retries gh on a passing error, and stops Wisdom-flagged design questions before any code', () => {
+  assert.match(runnerSrc(), /transientGh\(/);
+  assert.match(runnerSrc(), /designQuestions\(result\)/);
+});
