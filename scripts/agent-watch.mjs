@@ -27,7 +27,7 @@ import { mkdirSync, readFileSync, realpathSync, cpSync, writeFileSync, existsSyn
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, ciPassed, reviewComment, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan, convergePlan, convergeAfterScope, blindSince, reproBundle } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan, convergePlan, convergeAfterScope, blindSince, reproBundle, notAcceptanceIds } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -393,7 +393,7 @@ function scopeCheck(n, s, items, kind) {
   const onMain = Object.fromEntries(repros.map((f) => [f, run(mainDir, f)]));
   sh('git', ['worktree', 'remove', '--force', mainDir], { cwd: MAIN });
   const plan = scopePlan(items.map((f) => f.id), j, onBranch, onMain);
-  plan.notAcceptance = (j && Array.isArray(j.entries) ? j.entries : []).filter((e) => e && e.acceptance === false).map((e) => e.id);   // judged not an acceptance case (Qodo on #131)
+  plan.notAcceptance = notAcceptanceIds(j);   // judged not an acceptance case, last entry wins (Qodo on #131)
   const why = (d) => `Deferred by the factory's scope rule: its repro (${d.repro}) fails on main too, so this branch didn't introduce it, and it isn't one of #${n}'s acceptance cases.${d.owner ? ` Belongs to ${d.owner}.` : ''}`;
   // a deferral counts only when Qodo says the finding is dismissed; otherwise the finding is fixed (Qodo on #120)
   const deferred = (d) => {
@@ -670,7 +670,7 @@ function continueRun(n, s) {
         const bplan = scopeCheck(n, s, b.blocking.map((f, i) => ({ id: `blind-${i}`, title: f.title, severity: f.severity || 'Medium', where: `${f.file}:${f.line}`, text: f.why, repro: f.repro })), 'blind');
         // the blind review already reproduced these: one its scope copy didn't reproduce stays blocking (#121)
         // gate 6 converges: a finding in code the last blind round reviewed goes to a ticket, unless it's an acceptance case
-        const conv = convergeAfterScope(b.blocking.map((f, i) => ({ ...f, id: `blind-${i}` })).filter((f) => bplan.fix.includes(f.id) || bplan.unproven.includes(f.id)), b.older, bplan.notAcceptance);
+        const conv = convergeAfterScope(b.blocking.map((f, i) => ({ ...f, id: `blind-${i}` })).filter((f) => bplan.fix.includes(f.id)), b.older, bplan.notAcceptance);
         for (const f of conv.defer) {
           const dirB = join(s.dir, '.agent', 'blind'), files = Object.fromEntries(readdirSync(dirB).filter((x) => /\.m?js$/.test(x)).map((x) => [x, readFileSync(join(dirB, x), 'utf8')]));
           const body = `Found by the blind review of ${s.head.slice(0, 7)} on PR #${s.pr} (ticket #${n}), in code an earlier blind round had already reviewed: its repro fails on ${b.since.slice(0, 7)} too. Deferred by the factory so the review converges.\n\n**${f.severity || 'Medium'} · ${f.title}** (${f.file}${f.line ? `:${f.line}` : ''})\n\n${f.why || ''}\n\n### Acceptance\n- This repro passes (copy the files into \`.agent/blind/\`):\n\n${reproBundle(files, f.repro)}`;

@@ -366,6 +366,13 @@ export function convergePlan(blocking, onPrev) {
   return out;
 }
 
+// The findings the scope run judged NOT an acceptance case, reading the last entry for each id as
+// scopePlan does (Qodo on #131).
+export function notAcceptanceIds(j) {
+  const last = new Map(((j && Array.isArray(j.entries)) ? j.entries : []).filter((e) => e && typeof e.id === 'string').map((e) => [e.id, e]));
+  return [...last.values()].filter((e) => e.acceptance === false).map((e) => e.id);
+}
+
 // After the scope check: a finding in already-reviewed code goes to a ticket only if the scope run
 // judged it NOT one of the ticket's acceptance cases. An acceptance case, or one with no judgment (no
 // scope entry), still blocks (Qodo on #131). Items carry `id`.
