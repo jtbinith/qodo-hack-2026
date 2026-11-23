@@ -491,3 +491,31 @@ test('malformed or misaddressed setup is still dropped', async () => {
   await tick(10_000);
   assert.deepEqual(A.got, []);
 });
+
+// Qodo's local review of c65f992: held setup also has a byte cap. A relay frame can be 128 KiB, so
+// a count cap alone let eight absent ids pin about 30 MiB on a receiver
+test('setup held for one sender is capped at EARLY_SIG_BYTES, and a frame too big to hold takes no slot (Rule 3)', async () => {
+  assert.equal(typeof net.EARLY_SIG_BYTES, 'number', 'EARLY_SIG_BYTES is a named constant');
+  const { A } = await sigRoom();
+  const big = { r: 'A'.repeat(128 * 1024) };                       // the biggest relay frame validSignal accepts
+  for (let s = 0; s < net.EARLY_SIG_SENDERS; s++) for (let i = 0; i < net.EARLY_SIG_HOLD; i++) deliver('A', 'sig', sig('S' + s, 'A', big));
+  deliver('A', 'sig', sig('N', 'A', offer));                       // a real newcomer, just after
+  await settle();
+  for (let s = 0; s < net.EARLY_SIG_SENDERS; s++) await arrive('S' + s);
+  await arrive('N');
+  const held = A.got.filter(([from]) => from !== 'N').reduce((n, [, d]) => n + JSON.stringify(d).length, 0);
+  assert.equal(held, 0, 'frames bigger than the cap were held');
+  assert.deepEqual(A.got.filter(([from]) => from === 'N'), [['N', offer]], 'the oversized frames took the slots');
+});
+
+test('setup that fits is held up to EARLY_SIG_BYTES for each sender and the rest is dropped (Rule 3)', async () => {
+  const { A } = await sigRoom();
+  const cand = (i) => ({ cand: { candidate: String(i).padEnd(1900, 'x') } });
+  for (let i = 0; i < net.EARLY_SIG_HOLD; i++) deliver('A', 'sig', sig('N', 'A', cand(i)));
+  await settle();
+  await arrive('N');
+  const bytes = A.got.reduce((n, [, d]) => n + JSON.stringify(d).length, 0);
+  assert.ok(A.got.length > 0 && bytes <= net.EARLY_SIG_BYTES, `held ${bytes} bytes in ${A.got.length} messages`);
+  assert.ok(bytes + JSON.stringify(cand(0)).length > net.EARLY_SIG_BYTES, 'stopped before the cap was reached');
+  assert.deepEqual(A.got[0], ['N', cand(0)], 'the first ones are kept');
+});
