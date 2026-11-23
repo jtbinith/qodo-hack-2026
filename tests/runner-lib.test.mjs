@@ -825,3 +825,8 @@ test('#123 76a9de3d: a design stop is not resumed by /agent retry on the ticket'
   const s = { phase: 'help', branch: 'agent/1-x', dir: '/w/1', stoppedAt: '2026-11-22T22:00:00Z', designStop: true };
   assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }), null);
 });
+test('#123 blind round 2: a write flag in joined form also makes gh api a write', () => {
+  for (const a of [['api', '--method=POST', 'x'], ['api', '-XPOST', 'x'], ['api', '-XGET', 'x', '-fk=v'], ['api', '--field=k=v', 'x'], ['api', '--raw-field=k=v', 'x'], ['api', '--input=f', 'x'], ['api', '-Fk=v', 'x']])
+    assert.equal(lib.ghIsRead?.(a), false, a.join(' '));
+  assert.equal(lib.ghIsRead?.(['api', '-XGET', 'x']), true); assert.equal(lib.ghIsRead?.(['api', '--method=GET', 'x']), true);
+});
