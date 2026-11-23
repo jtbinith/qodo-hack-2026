@@ -329,6 +329,31 @@ export function acceptLocalOnly({ read, head, review, ciOk }) {
   return { ok: true, g };
 }
 
+// Which valid findings a fix round takes on (Day 10, #21: fixing every valid finding didn't converge).
+// The scope run writes a repro per finding to .agent/scope/ and says whether it is one of the ticket's
+// acceptance cases. The runner runs each repro on the branch and on main:
+//   fails here, passes on main (or can't load there) -> this branch introduced it: fix
+//   fails here and on main, an acceptance case       -> the ticket asks for it: fix
+//   fails here and on main, not an acceptance case   -> pre-existing: defer to its owner ticket
+//   doesn't fail here                                -> not reproduced: open for the owner
+// A finding with no scope entry or an unsafe repro is fixed, as before.
+const SCOPE_REPRO = /^\.agent\/scope\/[\w.-]+\.test\.mjs$/;
+const assertionRed = (r) => !!r && !r.ok && /AssertionError|ERR_ASSERTION/.test(r.out || '') && !/SyntaxError|ERR_MODULE_NOT_FOUND|Cannot find module/.test(r.out || '');
+export const scopeRepros = (j) => [...new Set(((j && Array.isArray(j.entries)) ? j.entries : []).map((e) => e?.repro).filter((r) => typeof r === 'string' && SCOPE_REPRO.test(r) && !r.includes('..')))];
+export function scopePlan(ids, j, onBranch, onMain) {
+  const entries = new Map(((j && Array.isArray(j.entries)) ? j.entries : []).filter((e) => e && typeof e.id === 'string').map((e) => [e.id, e]));
+  const out = { fix: [], defer: [], unproven: [] };
+  for (const id of ids) {
+    const e = entries.get(id);
+    if (!e || typeof e.repro !== 'string' || !SCOPE_REPRO.test(e.repro) || e.repro.includes('..')) { out.fix.push(id); continue; }
+    if (!assertionRed(onBranch[e.repro])) { out.unproven.push(id); continue; }
+    const introduced = !assertionRed(onMain[e.repro]);
+    if (introduced || e.acceptance === true) { out.fix.push(id); continue; }
+    out.defer.push({ id, owner: typeof e.owner === 'string' && /^#\d+$/.test(e.owner) ? e.owner : null, why: String(e.why || '').slice(0, 400), repro: e.repro });
+  }
+  return out;
+}
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {

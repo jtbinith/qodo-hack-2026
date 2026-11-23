@@ -712,3 +712,7 @@ test('scope: a finding the agent gave no scope entry for, or an unsafe repro pat
 test('scope: an owner that is not a ticket number is recorded as unassigned', () => {
   assert.equal(sp([ent({ owner: 'someone' })], { '.agent/scope/f1.test.mjs': SCOPE_RED }, { '.agent/scope/f1.test.mjs': SCOPE_RED }).defer[0]?.owner, null);
 });
+test('every fix round (local review, Qodo PR review, blind review) goes through the scope check first', () => {
+  const src = runnerSrc();
+  for (const kind of ['local', 'pr', 'blind']) assert.match(src, new RegExp(`scopeCheck\\(n, s, [\\s\\S]{0,400}?'${kind}'\\)`), kind);
+});
