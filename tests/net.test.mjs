@@ -397,12 +397,15 @@ test('a flood of layout asks gets at most one answer per gap, and the last ask i
 // Each device here records the setup messages net.js hands to its onSignal.
 const net = await import('../web/net.js');
 // `linked(from)` stands in for peers.js: whether this device already holds a key for `from`.
+// `got` records [from, data] for each message passed on, plus `true` if it was marked away.
+// `back` records each id whose return onReturn announced.
 async function sigRoom(ids = ['L', 'A'], linked = () => false) {
   const devs = {};
   for (const id of ids) {
-    const got = [];
-    devs[id] = joinRoom({ room: 'r', id, name: id.toLowerCase(), size: { w: 400, h: 800 }, onSignal: (from, data) => got.push([from, data]), linked });
-    devs[id].got = got;
+    const got = [], back = [];
+    devs[id] = joinRoom({ room: 'r', id, name: id.toLowerCase(), size: { w: 400, h: 800 },
+      onSignal: (from, data, away) => got.push(away === undefined ? [from, data] : [from, data, away]), onReturn: (from) => back.push(from), linked });
+    devs[id].got = got; devs[id].back = back;
     await tick(1);
   }
   await settle();
@@ -537,54 +540,44 @@ test('setup held for one sender is capped at EARLY_SIG_BYTES encoded bytes, even
 
 // Qodo's review of d264fe6 on #116: a device can drop out of presence for a moment (a phone's
 // Wi-Fi blips, its socket rejoins) while a relay transfer to this device is under way. A full
-// relay chunk is bigger than EARLY_SIG_BYTES, so it was dropped instead of held. A relay frame
-// from a device this one already holds a key for opens nothing new (peers.js opens it with that
-// key or drops it), so it is passed on. Everything else from an absent device is still held.
+// relay chunk is bigger than EARLY_SIG_BYTES, so it was dropped instead of held.
 const chunk = { r: 'A'.repeat(40 * 1024) };                          // a full relay chunk, sealed and base64'd
 // Qodo's review of cc2cc80 on #116: passing those frames straight on let a room member replay a
-// departed device's recorded frames (a move, say) under its id. They are now held, passed on
-// only if presence lists the sender again within EARLY_SIG_TTL, and dropped otherwise.
+// departed device's recorded frames under its id. Qodo's local review of e006f6c: holding them
+// here, before anything checked them, let a member forge the id and fill the hold. So net.js now
+// passes them on marked away: peers.js opens each one, holds only the real ones and uses none
+// until net.js says presence lists the device again (tests/peers.test.mjs).
 const chunks = (n) => Array.from({ length: n }, (_, i) => ({ r: String(i).padStart(4, '0') + 'A'.repeat(chunk.r.length - 4) }));
-test('a relay chunk from a linked device is held while presence briefly doesn’t list it, then passed on in order', async () => {
+test('relay frames from a linked device presence doesn’t list are passed on marked away, in order, and its return is announced', async () => {
   const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
   delete presence.L; sync(); await settle();                        // L drops out of presence for a moment
-  const sent = chunks(3);
-  for (const c of sent) deliver('A', 'sig', sig('L', 'A', c));
+  for (const c of chunks(3)) deliver('A', 'sig', sig('L', 'A', c));
   await settle();
-  assert.equal(A.got.length, 0, 'a relay frame from an absent device was used before it came back');
+  assert.deepEqual(A.got.map(([from, d, away]) => [from, d.r.slice(0, 4), away]), [['L', '0000', true], ['L', '0001', true], ['L', '0002', true]], 'not passed on marked away, in order');
+  assert.deepEqual(A.back, [], 'announced a return before presence listed L');
   await arrive('L');
-  assert.deepEqual(A.got.map(([from, d]) => [from, d.r.slice(0, 4)]), [['L', '0000'], ['L', '0001'], ['L', '0002']], 'the chunks were lost or reordered in the presence gap');
+  assert.deepEqual(A.back, ['L'], 'L’s return was not announced');
+  sync(); await settle();
+  assert.deepEqual(A.back, ['L'], 'announced again with nothing marked away since');
+  deliver('A', 'sig', sig('L', 'A', chunk));
+  await settle();
+  assert.equal(A.got.at(-1).length, 2, 'a frame from L once it is back was still marked away');
 });
 
-test('a relay frame under the id of a linked device that has left is never passed on (replay)', async () => {
+test('a relay frame under the id of a linked device that has left is only ever passed on marked away (replay)', async () => {
   const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
   delete presence.L; sync(); await settle();                        // L has left; a member replays its frame
   deliver('A', 'sig', sig('L', 'A', { r: 'cmVjb3JkZWQgbW92ZQ==' }));
   await tick(net.EARLY_SIG_TTL + 100);
-  await arrive('L');
-  assert.deepEqual(A.got, [], 'a departed device’s relay frame was used');
+  assert.ok(A.got.length > 0 && A.got.every((g) => g[2] === true), 'a departed device’s relay frame was passed on as if it were here');
+  assert.deepEqual(A.back, [], 'a return was announced for a device that never came back');
 });
 
-test('relay frames held for a briefly absent linked device are capped at ABSENT_RELAY_HOLD and ABSENT_RELAY_BYTES (Rule 3)', async () => {
-  assert.equal(typeof net.ABSENT_RELAY_HOLD, 'number', 'ABSENT_RELAY_HOLD is a named constant');
-  assert.equal(typeof net.ABSENT_RELAY_BYTES, 'number', 'ABSENT_RELAY_BYTES is a named constant');
+test('no return is announced for a device that sent nothing while away', async () => {
   const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
   delete presence.L; sync(); await settle();
-  for (const c of chunks(net.ABSENT_RELAY_HOLD + 50)) deliver('A', 'sig', sig('L', 'A', c));
-  await arrive('L');
-  const bytes = A.got.reduce((n, [, d]) => n + JSON.stringify(d).length, 0);
-  assert.ok(A.got.length > 0 && A.got.length <= net.ABSENT_RELAY_HOLD, `held ${A.got.length} frames`);
-  assert.ok(bytes <= net.ABSENT_RELAY_BYTES, `held ${bytes} bytes`);
-});
-
-test('a presence gap as long as EARLY_SIG_TTL loses no paced relay chunks', async () => {
-  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
-  delete presence.L; sync(); await settle();
-  const n = Math.ceil(net.EARLY_SIG_TTL / 45);                       // RELAY_GAP in web/peers.js: one frame per 45 ms
-  const real = Array.from({ length: n }, (_, i) => ({ r: String(i).padStart(4, '0') + 'A'.repeat(32 * 1024) }));   // 24 KiB sealed, base64'd
-  for (const c of real) deliver('A', 'sig', sig('L', 'A', c));
-  await arrive('L');
-  assert.equal(A.got.length, n, 'chunks from a short presence gap were dropped');
+  await arrive('L'); await arrive('B');
+  assert.deepEqual(A.back, []);
 });
 
 test('a relay chunk from an absent device this one holds no key for is still dropped (S1.6)', async () => {

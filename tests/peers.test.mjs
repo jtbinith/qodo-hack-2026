@@ -382,3 +382,115 @@ test('a second answer to an offer sent twice is ignored, not an error', async ()
   await assert.doesNotReject(peers.onSignal('b', { desc: { type: 'answer', sdp: 'answer sdp' } }));
   assert.equal(pc.signalingState, 'stable');
 });
+
+// --- Relay frames from a linked device that presence briefly doesn't list (S1.6) ---
+// Two real peers.js devices swap keys. b's sealed relay frames to a are caught on `wire`, so a
+// test can hand them to a the way net.js does: marked away (true) while presence doesn't list b.
+const RELAY_GAP = 45;
+const ABSENT_RELAY_TTL = peersMod.ABSENT_RELAY_TTL ?? 5000;
+async function pair() {
+  const wire = [];
+  let a = null, b = null;
+  a = createPeers({ myId: 'a', table: 'T', signal: (to, d) => { if (d.pub) b.onSignal('a', d); } });
+  b = createPeers({ myId: 'b', table: 'T', signal: (to, d) => { if (d.pub) a.onSignal('b', d); else if (d.r) wire.push(d); } });
+  a.connect('b'); b.connect('a');
+  await waitFor(() => a.linked('b') && b.linked('a'), 'the keys were never swapped');
+  const got = [];
+  a.on((from, msg, bytes) => got.push({ from, ...msg, size: bytes.length }));
+  return { a, b, wire, got };
+}
+// Runs `send` on b and returns the `count` sealed frames it put on the wire, in order
+async function record({ wire }, send, count) {
+  const start = wire.length;
+  send();
+  for (let i = 0; i < 20 * count && wire.length < start + count; i++) { await tick(RELAY_GAP); await waitFor(() => true); }
+  assert.equal(wire.length - start, count, 'b never sent all its frames');
+  return wire.slice(start);
+}
+const messages = (p, n) => () => { for (let i = 0; i < n; i++) p.b.send('a', { t: 'm', n: i }); };
+const quiet = async () => { await settle(); await waitFor(() => true); await settle(); };
+
+test('relay frames from a linked device that is away are used only once it is back, in the order they came', async () => {
+  const p = await pair();
+  const frames = await record(p, messages(p, 3), 3);
+  for (const f of frames) p.a.onSignal('b', f, true);
+  await quiet();
+  assert.deepEqual(p.got, [], 'a frame from a device that is away was used before it came back');
+  assert.equal(typeof p.a.returned, 'function', 'peers.returned is missing');
+  p.a.returned('b');
+  await waitFor(() => p.got.length === 3, `got ${p.got.length} of 3 frames`);
+  assert.deepEqual(p.got.map((m) => m.n), [0, 1, 2], 'the frames were reordered in the gap');
+});
+
+// Qodo's local review of e006f6c: net.js held relay frames from an absent linked id before
+// checking them, so a member could forge that id and fill the hold, and the real frames sent
+// during the gap were dropped. Frames are now opened first: a forged one never takes a slot.
+test('forged relay frames under the id of a device that is away take no slot in its hold', async () => {
+  const p = await pair();
+  for (let i = 0; i < 200; i++) p.a.onSignal('b', { r: b64(crypto.getRandomValues(new Uint8Array(24 * 1024))) }, true);
+  const frames = await record(p, messages(p, 3), 3);
+  for (const f of frames) p.a.onSignal('b', f, true);
+  await quiet();
+  assert.equal(typeof p.a.returned, 'function', 'peers.returned is missing');
+  p.a.returned('b');
+  await waitFor(() => p.got.length === 3, `the real frames were displaced: got ${p.got.length} of 3`);
+  assert.deepEqual(p.got.map((m) => m.n), [0, 1, 2]);
+});
+
+test('frames held for a device that is away are capped at ABSENT_RELAY_HOLD and ABSENT_RELAY_BYTES (Rule 3)', async () => {
+  for (const name of ['ABSENT_RELAY_HOLD', 'ABSENT_RELAY_BYTES', 'ABSENT_RELAY_TTL']) assert.equal(typeof peersMod[name], 'number', `${name} is a named constant in peers.js`);
+  const p = await pair();
+  const n = peersMod.ABSENT_RELAY_HOLD + 20;
+  for (const f of await record(p, messages(p, n), n)) p.a.onSignal('b', f, true);
+  p.a.returned('b');
+  await waitFor(() => p.got.length >= peersMod.ABSENT_RELAY_HOLD, 'the held frames never came through', 5000);
+  await quiet();
+  assert.equal(p.got.length, peersMod.ABSENT_RELAY_HOLD, 'held more frames than ABSENT_RELAY_HOLD');
+  assert.deepEqual(p.got.slice(0, 3).map((m) => m.n), [0, 1, 2], 'the first ones are kept');
+
+  const q = await pair();
+  const cs = 96 * 1024, m = Math.ceil(peersMod.ABSENT_RELAY_BYTES / cs) + 5;
+  for (const f of await record(q, () => q.b.sendFile('a', 'f', file(m * cs), null, cs), m)) q.a.onSignal('b', f, true);
+  q.a.returned('b');
+  await waitFor(() => q.got.length > 0, 'nothing held came through', 5000);
+  await quiet();
+  const bytes = q.got.reduce((s, x) => s + x.size, 0);
+  assert.ok(bytes <= peersMod.ABSENT_RELAY_BYTES, `held ${bytes} bytes`);
+  assert.ok(q.got.length < m, 'nothing was dropped at the byte cap');
+});
+
+test('frames from a device that stays away past ABSENT_RELAY_TTL are dropped (replay of a departed device)', async () => {
+  const p = await pair();
+  for (const f of await record(p, messages(p, 2), 2)) p.a.onSignal('b', f, true);
+  await quiet();
+  await tick(ABSENT_RELAY_TTL + 100);
+  assert.equal(typeof p.a.returned, 'function', 'peers.returned is missing');
+  p.a.returned('b');
+  await quiet();
+  assert.deepEqual(p.got, [], 'frames held past ABSENT_RELAY_TTL were used');
+});
+
+test('a presence gap as long as ABSENT_RELAY_TTL loses no paced relay chunks', async () => {
+  const p = await pair();
+  const n = Math.ceil(ABSENT_RELAY_TTL / RELAY_GAP), cs = 24 * 1024;   // RELAY_CHUNK at the relay's pace
+  for (const f of await record(p, () => p.b.sendFile('a', 'f', file(n * cs), null, cs), n)) p.a.onSignal('b', f, true);
+  assert.equal(typeof p.a.returned, 'function', 'peers.returned is missing');
+  p.a.returned('b');
+  await waitFor(() => p.got.length === n, `chunks from a short presence gap were dropped: got ${p.got.length} of ${n}`, 5000);
+});
+
+// Qodo's local review of e006f6c: held frames were released by calling the async onSignal once
+// per frame without waiting, so their decryptions raced and a later move could be applied
+// before an earlier one. A big frame followed by a small one shows the race.
+test('relay frames from one device are used in the order they came, even when a later one opens sooner', async () => {
+  for (const away of [false, true]) {
+    const p = await pair();
+    const cs = 96 * 1024;
+    const frames = [...await record(p, () => p.b.sendFile('a', 'f', file(cs), null, cs), 1), ...await record(p, messages(p, 1), 1)];
+    for (let i = 0; i < 20; i++) for (const f of frames) p.a.onSignal('b', f, away);   // not awaited, as net.js passes them
+    if (away) { assert.equal(typeof p.a.returned, 'function', 'peers.returned is missing'); p.a.returned('b'); }
+    await waitFor(() => p.got.length === 40, `got ${p.got.length} of 40 frames`, 5000);
+    const order = p.got.map((m) => m.t).join(' ');
+    assert.equal(order, Array(20).fill('chunk m').join(' '), `${away ? 'released' : 'live'} frames were used out of order`);
+  }
+});
