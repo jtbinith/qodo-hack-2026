@@ -209,3 +209,48 @@ test('a photo handed over during a download batch is not downloaded again by it'
   await s.tap();
   assert.deepEqual(downloads.sort(), ['r0.jpg', 'r1.jpg', 'r2.jpg'], 'each photo downloaded once');
 });
+
+// Blind review on #130: navigator.share can stay pending forever (WebKit, a page hidden mid-share).
+// The busy guard gives up after a named SHARE_TIMEOUT, so Save all isn't dead for the session
+test('a share sheet that never settles holds Save all only until SHARE_TIMEOUT', async () => {
+  const SA = await import('../web/saveall.js');
+  assert.equal(typeof SA.SHARE_TIMEOUT, 'number', 'SHARE_TIMEOUT is a named constant');
+  const t = table({ n: 2 });
+  const log = { shares: [], toasts: [], waits: [] };
+  let timeUp; const clock = new Promise((r) => { timeUp = r; });
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true,
+    share: (l) => { log.shares.push(l); return new Promise(() => {}); },   // never settles
+    download: () => {},
+    wait: (ms) => { log.waits.push(ms); return clock; },
+    toast: (m) => log.toasts.push(m),
+  });
+  s.tap();
+  await new Promise((r) => setTimeout(r, 10));
+  s.tap();
+  assert.equal(log.toasts.at(-1), 'Still saving', 'before the timeout a second tap waits');
+  assert.equal(log.shares.length, 1);
+  assert.ok(log.waits.includes(SA.SHARE_TIMEOUT), 'the share wait is capped by SHARE_TIMEOUT');
+  timeUp();
+  await new Promise((r) => setTimeout(r, 10));
+  s.tap();
+  assert.equal(log.shares.length, 2, 'after the timeout a tap tries again');
+  assert.deepEqual([...s.handed], [], 'a share that never finished hands over nothing');
+});
+
+test('a share that finishes after SHARE_TIMEOUT still marks its photos handed over', async () => {
+  const t = table({ n: 2 });
+  let done; const sheet = new Promise((r) => { done = r; });
+  const toasts = [];
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true, share: () => sheet, download: () => {},
+    wait: async () => {},   // the timeout is already up
+    toast: (m) => toasts.push(m),
+  });
+  const first = s.tap();
+  done(); await first;
+  assert.deepEqual([...s.handed].sort(), ['r0', 'r1']);
+  assert.equal(toasts.at(-1), 'Shared 2');
+});
