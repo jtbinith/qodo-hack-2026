@@ -802,3 +802,26 @@ test('the runner retries gh on a passing error, and stops Wisdom-flagged design 
   assert.match(runnerSrc(), /transientGh\(/);
   assert.match(runnerSrc(), /designQuestions\(result\)/);
 });
+
+// Qodo's review of #123 (60e0dbc), each finding as a test before its fix
+test('#123 97ce0912: only reads are retried; a write is never repeated', () => {
+  const r = (a) => lib.ghIsRead?.(a);
+  assert.equal(r(['api', 'repos/x/pulls/1']), true);
+  assert.equal(r(['issue', 'list', '-R', 'x']), true); assert.equal(r(['pr', 'view', '1']), true); assert.equal(r(['pr', 'list']), true);
+  assert.equal(r(['api', '-X', 'POST', 'repos/x/statuses/s', '-f', 'state=success']), false);
+  assert.equal(r(['api', 'repos/x/issues/1/labels', '-f', 'labels[]=x']), false, 'gh api with fields is a POST');
+  assert.equal(r(['api', '--method', 'PATCH', 'repos/x/pulls/1']), false);
+  assert.equal(r(['issue', 'comment', '1', '--body', 'x']), false); assert.equal(r(['pr', 'create']), false); assert.equal(r(['issue', 'edit', '1']), false);
+});
+test('#123 f49af0e8: a command that hit its own timeout is not retried', () => {
+  assert.equal(lib.transientGh?.('spawnSync gh ETIMEDOUT'), false);
+  assert.equal(lib.transientGh?.('gh: HTTP 504'), true);
+});
+test('#123 40cd1c60: design questions are checked before an empty claim list stops the run', () => {
+  const src = runnerSrc(), dq = src.indexOf('const dq = designQuestions(result);'), inv = src.indexOf("if (w.state === 'invalid') throw new Stop(`Codebase Wisdom's check");
+  assert.ok(dq > 0 && inv > dq, 'designQuestions before the invalid stop');
+});
+test('#123 76a9de3d: a design stop is not resumed by /agent retry on the ticket', () => {
+  const s = { phase: 'help', branch: 'agent/1-x', dir: '/w/1', stoppedAt: '2026-11-22T22:00:00Z', designStop: true };
+  assert.equal(lib.resumePlan?.(s, [{ retry: true, at: '2026-11-22T23:00:00Z' }], { retryRounds: 5 }), null);
+});
