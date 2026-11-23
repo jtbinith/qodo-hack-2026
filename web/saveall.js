@@ -51,6 +51,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
       toast(`Downloading ${ready.length}${more(arriving)}`);
       for (let i = 0; i < ready.length; i++) {
         if (i) await wait(DOWNLOAD_GAP);
+        if (handed.has(ready[i].pid)) continue;   // tapped and saved during the gap: read again after the await
         try { download(ready[i].file); handed.add(ready[i].pid); } catch (e) { console.warn('download failed', ready[i].file?.name, e); }
       }
     } finally { busy = false; }
