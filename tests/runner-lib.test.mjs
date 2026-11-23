@@ -582,3 +582,14 @@ test('#113 304ebe3f: a branch pushed without its PR gets the PR on retry, not "n
 test("#113 3bc1eb25: the stop quotes Qodo's reason only from its comment on this head", () => {
   assert.match(runnerSrc(), /const reason = q\?\.reviewed === s\.head \? qodoReason\(q\.body\) : '';/);
 });
+
+// #96 on Day 10: the runner asked Qodo again with `/review`, and Qodo answered "Sorry, something went
+// wrong ... Please try again manually by commenting /agentic_review on this PR." and never ran.
+test('the runner asks Qodo again with the command Qodo names: /agentic_review', () => {
+  assert.match(runnerSrc(), /'--body', '\/agentic_review'/);
+  assert.doesNotMatch(runnerSrc(), /'--body', '\/review'/);
+});
+test("Qodo's \"something went wrong\" reply is quoted as its reason", () => {
+  const body = readFileSync(new URL('./fixtures/qodo/pr-112-sorry.html', import.meta.url), 'utf8');
+  assert.match(lib.qodoReason?.(body) ?? '', /weren't able to complete the code review/);
+});
