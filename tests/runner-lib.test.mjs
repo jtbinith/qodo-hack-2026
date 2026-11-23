@@ -582,3 +582,12 @@ test('#113 304ebe3f: a branch pushed without its PR gets the PR on retry, not "n
 test("#113 3bc1eb25: the stop quotes Qodo's reason only from its comment on this head", () => {
   assert.match(runnerSrc(), /const reason = q\?\.reviewed === s\.head \? qodoReason\(q\.body\) : '';/);
 });
+
+// The blind review of #113 (951ae92), round 2: its repro, copied from .agent/blind/pr-exists.test.mjs
+test('blind review of #113 round 2: openPr looks up an existing PR for the branch on GitHub before creating one', () => {
+  const fn = runnerSrc().match(/function openPr\(n, s, why\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.ok(fn, 'openPr not found');
+  const create = fn.indexOf("'pr', 'create'");
+  assert.ok(create > 0, 'openPr no longer creates a PR');
+  assert.match(fn.slice(0, create), /'pr', 'list'[\s\S]*'--head'|pulls\?[^`]*head=/, 'openPr trusts the saved s.pr and never asks GitHub whether the branch already has a PR');
+});
