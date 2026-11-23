@@ -355,6 +355,50 @@ export function scopePlan(ids, j, onBranch, onMain) {
   return out;
 }
 
+// Gate 6 converges (Day 10: 1 of 6 PRs reached green, each new blind round found one more edge case in
+// code an earlier round had already reviewed). After the first round, a reproduced finding whose repro
+// also fails on the head the last blind round reviewed goes to a ticket; only one the fix commits
+// introduced blocks. `onPrev` maps each repro to its run on that head; null means no earlier round. A
+// repro that didn't run there (or failed on anything but an assertion) can't prove it's old: it blocks.
+export function convergePlan(blocking, onPrev) {
+  const out = { block: [], defer: [] };
+  for (const f of blocking || []) (onPrev && assertionRed(onPrev[f.repro]) ? out.defer : out.block).push(f);
+  return out;
+}
+
+// The findings the scope run judged NOT an acceptance case, reading the last entry for each id as
+// scopePlan does (Qodo on #131).
+export function notAcceptanceIds(j) {
+  const last = new Map(((j && Array.isArray(j.entries)) ? j.entries : []).filter((e) => e && typeof e.id === 'string').map((e) => [e.id, e]));
+  return [...last.values()].filter((e) => e.acceptance === false).map((e) => e.id);
+}
+
+// After the scope check: a finding in already-reviewed code goes to a ticket only if the scope run
+// judged it NOT one of the ticket's acceptance cases. An acceptance case, or one with no judgment (no
+// scope entry), still blocks (Qodo on #131). Items carry `id`.
+export function convergeAfterScope(items, olderIds, notAcceptanceIds) {
+  const older = new Set(olderIds || []), notAcc = new Set(notAcceptanceIds || []);
+  return { defer: (items || []).filter((f) => older.has(f.id) && notAcc.has(f.id)) };
+}
+
+// The head a later blind round reviews from: the head the last round reviewed, unless that is still the
+// head (a retry with no new commit), when the whole diff is reviewed again (Qodo on #131).
+export function blindSince(blindHead, head) { return blindHead && blindHead !== head ? blindHead : null; }
+
+// A deferred blind finding's repro for its ticket: the test and every helper it imports from
+// .agent/blind/, whole, so the ticket's acceptance can be run as given (Qodo on #131). `files` maps
+// names in .agent/blind/ to their text.
+export function reproBundle(files, repro, limit = 40000) {
+  const start = String(repro).split('/').pop(), seen = [], queue = [start];
+  while (queue.length) {
+    const f = queue.shift(); if (seen.includes(f) || !(f in (files || {}))) continue; seen.push(f);
+    for (const m of String(files[f]).matchAll(/(?:from\s+|import\s*\(\s*)['"]\.\/([^'"]+)['"]/g)) queue.push(m[1]);
+  }
+  let out = seen.map((f) => `\`.agent/blind/${f}\`\n\n\`\`\`js\n${files[f]}\n\`\`\``).join('\n\n');
+  if (out.length > limit) out = `${out.slice(0, limit)}\n\n(cut at ${limit} characters: the whole files are in the run's .agent/blind/)`;
+  return out;
+}
+
 // Did Qodo dismiss this finding? Only a per-finding "dismissed" (or already dismissed) that was
 // reconciled counts: a conflict, not_found or an unreadable reply means it's still open (Qodo on #120).
 export function dismissedOk(out, id) {

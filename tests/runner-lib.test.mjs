@@ -866,3 +866,70 @@ test('#126 (blind, reproduced): a bold **Assumptions** section, as the skill wri
   assert.equal(assumptions('## Assumptions\n- x\n## Next\n- y\n'), '- x');
   assert.equal(assumptions('No section here\n'), '');
 });
+
+// Gate 6 converges (Day 10): after the first blind round, a later round reviews only the fix commits,
+// and a reproduced finding that also fails on the head the last round reviewed was in code already
+// reviewed: it goes to a ticket instead of blocking. One the fix commits introduced still blocks.
+const red = { ok: false, out: 'AssertionError [ERR_ASSERTION]: x' };
+const green = { ok: true, out: 'ok' };
+test('gate 6 converges: a finding that also fails on the last reviewed head is deferred, not blocking', () => {
+  assert.equal(typeof lib.convergePlan, 'function');
+  const fs = [{ title: 'old', repro: '.agent/blind/old.test.mjs' }, { title: 'new', repro: '.agent/blind/new.test.mjs' }];
+  const p = lib.convergePlan(fs, { '.agent/blind/old.test.mjs': red, '.agent/blind/new.test.mjs': green });
+  assert.deepEqual(p.block.map((f) => f.title), ['new']);
+  assert.deepEqual(p.defer.map((f) => f.title), ['old']);
+});
+test('gate 6 converges: a repro that can\'t run on the last reviewed head (missing module, no run) still blocks', () => {
+  const fs = [{ title: 'a', repro: '.agent/blind/a.test.mjs' }, { title: 'b', repro: '.agent/blind/b.test.mjs' }];
+  const p = lib.convergePlan(fs, { '.agent/blind/a.test.mjs': { ok: false, out: 'Error [ERR_MODULE_NOT_FOUND]: x' } });
+  assert.deepEqual(p.block.map((f) => f.title), ['a', 'b']);
+  assert.deepEqual(p.defer, []);
+});
+test('gate 6 converges: with no earlier blind round, everything reproduced blocks', () => {
+  const fs = [{ title: 'a', repro: '.agent/blind/a.test.mjs' }];
+  assert.deepEqual(lib.convergePlan(fs, null).block.map((f) => f.title), ['a']);
+});
+test('gate 6 converges: a later blind round is asked about the fix commits since the head it last reviewed', () => {
+  const src = runnerSrc();
+  assert.match(src, /BLIND_PROMPT\(n, s\.base, blindSince\(s\.blindHead, s\.head\)\)/);
+  assert.match(src, /s\.blindHead = s\.head/);
+});
+
+// Qodo on #131: an acceptance case still blocks, a retry with no new commit reviews the whole diff,
+// and a deferred ticket carries a runnable repro with its helpers.
+test('#131 95de16b9: a finding in already-reviewed code that is an acceptance case still blocks', () => {
+  assert.equal(typeof lib.convergeAfterScope, 'function');
+  const items = [{ id: 'blind-0', title: 'old' }, { id: 'blind-1', title: 'old but acceptance' }, { id: 'blind-2', title: 'new' }];
+  // the third argument lists the findings the scope run judged NOT an acceptance case
+  const p = lib.convergeAfterScope(items, ['blind-0', 'blind-1'], ['blind-0']);
+  assert.deepEqual(p.defer.map((f) => f.title), ['old']);
+});
+test('#131 62f6bbc3: a finding in already-reviewed code with no acceptance judgment still blocks', () => {
+  const items = [{ id: 'blind-0', title: 'judged not acceptance' }, { id: 'blind-1', title: 'no scope entry' }];
+  const p = lib.convergeAfterScope(items, ['blind-0', 'blind-1'], ['blind-0']);
+  assert.deepEqual(p.defer.map((f) => f.title), ['judged not acceptance']);
+  assert.match(runnerSrc(), /plan\.notAcceptance = /);
+});
+test('#131 9aaf15c9: a blind round on the head it already reviewed reviews the whole diff, not an empty range', () => {
+  assert.equal(typeof lib.blindSince, 'function');
+  assert.equal(lib.blindSince('abc', 'abc'), null);
+  assert.equal(lib.blindSince('abc', 'def'), 'abc');
+  assert.equal(lib.blindSince(undefined, 'def'), null);
+  assert.match(runnerSrc(), /BLIND_PROMPT\(n, s\.base, blindSince\(s\.blindHead, s\.head\)\)/);
+});
+test('#131 898e53f5: a deferred ticket carries the whole repro and the helpers it imports', () => {
+  assert.equal(typeof lib.reproBundle, 'function');
+  const big = 'x'.repeat(7000);
+  const files = { 'a.test.mjs': `import { h } from './helper.mjs';\n// ${big}\n`, 'helper.mjs': 'export const h = 1;\n', 'other.mjs': 'unrelated' };
+  const md = lib.reproBundle(files, '.agent/blind/a.test.mjs');
+  assert.match(md, /\.agent\/blind\/a\.test\.mjs/);
+  assert.match(md, /\.agent\/blind\/helper\.mjs[\s\S]*export const h = 1;/);
+  assert.ok(md.includes(big), 'the repro is not cut at 6,000 characters');
+  assert.doesNotMatch(md, /unrelated/);
+});
+test('#131 de8f4908 / 340576f0: the last scope entry per finding decides, and an unproven finding is never deferred', () => {
+  assert.equal(typeof lib.notAcceptanceIds, 'function');
+  const j = { entries: [{ id: 'blind-0', acceptance: false }, { id: 'blind-0', acceptance: true }, { id: 'blind-1', acceptance: false }] };
+  assert.deepEqual(lib.notAcceptanceIds(j), ['blind-1']);
+  assert.match(runnerSrc(), /\.filter\(\(f\) => bplan\.fix\.includes\(f\.id\)\), b\.older, bplan\.notAcceptance\)/);
+});
