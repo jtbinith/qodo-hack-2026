@@ -354,6 +354,12 @@ export function scopePlan(ids, j, onBranch, onMain) {
   return out;
 }
 
+// Did Qodo dismiss this finding? Only a per-finding "dismissed" (or already dismissed) that was
+// reconciled counts: a conflict, not_found or an unreadable reply means it's still open (Qodo on #120).
+export function dismissedOk(out, id) {
+  try { const r = JSON.parse(String(out).split('\n  trace')[0]).results?.[id]; return !!r && /^(already_)?dismissed$/.test(r.status) && r.reconciled !== false; } catch { return false; }
+}
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {
