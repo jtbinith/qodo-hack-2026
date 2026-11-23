@@ -519,3 +519,17 @@ test('setup that fits is held up to EARLY_SIG_BYTES for each sender and the rest
   assert.ok(bytes + JSON.stringify(cand(0)).length > net.EARLY_SIG_BYTES, 'stopped before the cap was reached');
   assert.deepEqual(A.got[0], ['N', cand(0)], 'the first ones are kept');
 });
+
+// Qodo's local review of 3a2ba3a: the cap counted UTF-16 code units, not bytes, so setup in
+// non-ASCII text let one absent sender pin about three times EARLY_SIG_BYTES
+test('setup held for one sender is capped at EARLY_SIG_BYTES encoded bytes, even in non-ASCII text (Rule 3)', async () => {
+  const { A } = await sigRoom();
+  const utf8 = (d) => new TextEncoder().encode(JSON.stringify(d)).length;
+  const cand = (i) => ({ cand: { candidate: String(i).padEnd(1900, '€') } });   // '€' is 3 bytes in UTF-8
+  for (let i = 0; i < net.EARLY_SIG_HOLD; i++) deliver('A', 'sig', sig('N', 'A', cand(i)));
+  await settle();
+  await arrive('N');
+  const bytes = A.got.reduce((n, [, d]) => n + utf8(d), 0);
+  assert.ok(A.got.length > 0 && bytes <= net.EARLY_SIG_BYTES, `held ${bytes} bytes in ${A.got.length} messages`);
+  assert.ok(bytes + utf8(cand(0)) > net.EARLY_SIG_BYTES, 'stopped before the cap was reached');
+});
