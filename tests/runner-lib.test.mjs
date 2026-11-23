@@ -830,3 +830,17 @@ test('#123 blind round 2: a write flag in joined form also makes gh api a write'
     assert.equal(lib.ghIsRead?.(a), false, a.join(' '));
   assert.equal(lib.ghIsRead?.(['api', '-XGET', 'x']), true); assert.equal(lib.ghIsRead?.(['api', '--method=GET', 'x']), true);
 });
+
+// Day 10 (#72): the design-question gate stopped #72 three times in a row, each with finer questions
+// (the second and third about details). After LIMITS.designStops stops on a ticket, its remaining
+// questions go to the agent: it decides and lists each choice under Assumptions in the PR.
+test('design stops are capped per ticket; later questions become the agent\'s assumptions', () => {
+  const plan = (prev, n) => lib.designStopPlan?.(prev, n, 2);
+  assert.equal(plan(0, 3), 'stop'); assert.equal(plan(1, 2), 'stop');
+  assert.equal(plan(2, 3), 'assume'); assert.equal(plan(5, 1), 'assume');
+  assert.equal(plan(0, 0), 'none'); assert.equal(plan(3, 0), 'none');
+});
+test('the runner counts its earlier design stops on the ticket and hands later questions to the agent', () => {
+  const src = runnerSrc();
+  assert.match(src, /designStopPlan\(/); assert.match(src, /Open design questions: decide each one and list your choice under \*\*Assumptions\*\*/);
+});
