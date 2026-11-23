@@ -286,6 +286,26 @@ test('a pending share that fails after SHARE_TIMEOUT gives its photos back for t
 });
 
 
+// Qodo on the unpushed commits: share() was called outside the try, so a share that throws at once
+// (a TypeError from navigator.share) showed no guidance and the next tap tried the sheet again
+test('a share sheet that throws at once shows the retry toast, and the next tap downloads', async () => {
+  const t = table({ n: 2 });
+  const log = { shares: 0, downloads: [], toasts: [] };
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true,
+    share: () => { log.shares++; throw new TypeError('bad files'); },
+    download: (f) => log.downloads.push(f.name),
+    wait: async () => {},
+    toast: (m) => log.toasts.push(m),
+  });
+  await s.tap().catch(() => {});
+  assert.equal(log.toasts.at(-1), 'Couldn’t open the share sheet. Tap Save all again to download');
+  await s.tap();
+  assert.equal(log.shares, 1);
+  assert.deepEqual(log.downloads.sort(), ['r0.jpg', 'r1.jpg']);
+});
+
 test('a share that finishes after SHARE_TIMEOUT still marks its photos handed over', async () => {
   const t = table({ n: 2 });
   let done; const sheet = new Promise((r) => { done = r; });
