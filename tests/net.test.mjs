@@ -392,3 +392,102 @@ test('a flood of layout asks gets at most one answer per gap, and the last ask i
   for (let i = 1; i < sent.length; i++) assert.ok(sent[i] - sent[i - 1] >= 1000, 'answers are at least 1 s apart');
   assert.ok(sent[sent.length - 1] >= last, 'an answer went out after the last ask');
 });
+
+// --- S1.6 (#21): connection setup from devices not in the room opens no connection ---
+// Each device here records the setup messages net.js hands to its onSignal.
+const net = await import('../web/net.js');
+async function sigRoom(ids = ['L', 'A']) {
+  const devs = {};
+  for (const id of ids) {
+    const got = [];
+    devs[id] = joinRoom({ room: 'r', id, name: id.toLowerCase(), size: { w: 400, h: 800 }, onSignal: (from, data) => got.push([from, data]) });
+    devs[id].got = got;
+    await tick(1);
+  }
+  await settle();
+  return devs;
+}
+const pub = (n = 0) => ({ pub: 'AAAA' + n });
+const offer = { desc: { type: 'offer', sdp: 'v=0' } };
+const sig = (from, to, data = pub()) => ({ from, to, data });
+const sync = () => { for (const c of channels) c.handlers['presence:sync']?.(); };
+// A device joins the room the way a real one does, so every device hears its presence
+const arrive = async (id) => { presence[id] = { name: id.toLowerCase(), w: 400, h: 800, joinedAt: Date.now() }; sync(); await settle(); };
+
+test('setup from a device in the room is passed on', async () => {
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('L', 'A'));
+  await settle();
+  assert.deepEqual(A.got, [['L', pub()]]);
+});
+
+test('setup from a device not in the room is never passed on (S1.6)', async () => {
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('stranger', 'A'));
+  deliver('A', 'sig', sig('stranger', 'A', offer));
+  await tick(60_000);
+  assert.deepEqual(A.got, [], 'nothing from the stranger reached onSignal');
+});
+
+test('setup that claims to come from this device itself is dropped (S1.6)', async () => {
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('A', 'A'));
+  await tick(60_000);
+  assert.deepEqual(A.got, []);
+});
+
+test('setup that arrives just before its sender’s presence is passed on, in order, once presence lists it', async () => {
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('N', 'A', pub(1)));
+  deliver('A', 'sig', sig('N', 'A', offer));
+  await tick(500);
+  assert.deepEqual(A.got, [], 'held until N is in the room');
+  await arrive('N');
+  assert.deepEqual(A.got, [['N', pub(1)], ['N', offer]]);
+  deliver('A', 'sig', sig('N', 'A', pub(2)));
+  await settle();
+  assert.equal(A.got.length, 3, 'later setup from N goes straight through');
+});
+
+test('held setup is dropped after EARLY_SIG_TTL if its sender doesn’t arrive in time (Rule 3)', async () => {
+  assert.equal(typeof net.EARLY_SIG_TTL, 'number', 'EARLY_SIG_TTL is a named constant');
+  const { A } = await sigRoom();
+  deliver('A', 'sig', sig('N', 'A'));
+  await tick(net.EARLY_SIG_TTL + 100);
+  await arrive('N');
+  assert.deepEqual(A.got, [], 'nothing held past its time is passed on');
+});
+
+test('setup held for one sender is capped at EARLY_SIG_HOLD messages (Rule 3)', async () => {
+  assert.equal(typeof net.EARLY_SIG_HOLD, 'number', 'EARLY_SIG_HOLD is a named constant');
+  const { A } = await sigRoom();
+  for (let i = 0; i < net.EARLY_SIG_HOLD + 50; i++) deliver('A', 'sig', sig('N', 'A', pub(i)));
+  await arrive('N');
+  assert.equal(A.got.length, net.EARLY_SIG_HOLD);
+  assert.deepEqual(A.got[0], ['N', pub(0)], 'the first ones are kept');
+});
+
+test('setup is held for at most EARLY_SIG_SENDERS unknown senders at once (Rule 3)', async () => {
+  assert.equal(typeof net.EARLY_SIG_SENDERS, 'number', 'EARLY_SIG_SENDERS is a named constant');
+  const { A } = await sigRoom();
+  const n = net.EARLY_SIG_SENDERS + 20;
+  for (let i = 0; i < n; i++) deliver('A', 'sig', sig('S' + i, 'A'));
+  for (let i = 0; i < n; i++) await arrive('S' + i);
+  assert.equal(new Set(A.got.map(([from]) => from)).size, net.EARLY_SIG_SENDERS);
+});
+
+test('once a device has left, its setup is dropped again', async () => {
+  const { A } = await sigRoom();
+  await arrive('N');
+  delete presence.N; sync(); await settle();
+  deliver('A', 'sig', sig('N', 'A'));
+  await tick(60_000);
+  assert.deepEqual(A.got, []);
+});
+
+test('malformed or misaddressed setup is still dropped', async () => {
+  const { A } = await sigRoom();
+  for (const bad of [null, {}, sig('L', 'A', {}), sig('L', 'A', { pub: 'AA', r: 'AA' }), sig('L', 'B')]) deliver('A', 'sig', bad);
+  await tick(10_000);
+  assert.deepEqual(A.got, []);
+});
