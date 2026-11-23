@@ -580,7 +580,8 @@ test('#113 304ebe3f: a branch pushed without its PR gets the PR on retry, not "n
   assert.match(push, /if \(!s\.pr && s\.head && head\(s\) === s\.head\) return openPr\(n, s, why\);/);
 });
 test("#113 3bc1eb25: the stop quotes Qodo's reason only from its comment on this head", () => {
-  assert.match(runnerSrc(), /const reason = q\?\.reviewed === s\.head \? qodoReason\(q\.body\) : '';/);
+  // since #115: only comments Qodo posted after this head was pushed count (older ones are older heads')
+  assert.match(runnerSrc(), /Date\.parse\(c\.updated_at\) >= \(since \|\| 0\)/);
 });
 
 // #96 on Day 10: the runner asked Qodo again with `/review`, and Qodo answered "Sorry, something went
