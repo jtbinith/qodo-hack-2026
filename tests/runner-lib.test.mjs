@@ -616,7 +616,7 @@ test("an incomplete-review stop links to Qodo's latest comment instead of quotin
 const LINE = 'Qodo could not verify all local findings on this PR.';
 const acc = (o) => lib.acceptLocalOnly?.(o) ?? { ok: true };
 const incomplete = (r) => ({ ...r, review_session: { ...r.review_session, review_complete: false } });
-const reviewOf = (head, extra = '', at = Date.parse('2099-01-01')) => ({ reviewed: head, at, body: `<h3>Code Review by Qodo</h3>${extra}\n\n${LINE}\n<!-- https://github.com/x/commit/${head} -->` });
+const reviewOf = (head, extra = '', at = Date.parse('2099-01-01')) => ({ reviewed: head, at, body: `<h3>Code Review by Qodo</h3> findings <!-- qodo-daily-tip:end -->${extra}\n\n${LINE}\n<!-- https://github.com/x/commit/${head} -->` });
 test('an incomplete review whose only stated reason is the local findings is accepted when everything else holds', () => {
   const r = incomplete(fx('pr-87')), h = HEAD(r), a = acc({ read: r, head: h, review: reviewOf(h), ciOk: true });
   assert.equal(a.ok, true); assert.equal(a.g?.state, 'done');
@@ -661,4 +661,22 @@ test('#117 ba2f8c9a: qodo-gate.mjs applies the same rule, so a manual --post agr
 test("#117 8186b50b and 489b96bb: CI counts only GitHub's latest npm test run, and only when it finished green", () => {
   const g = readFileSync(new URL('../scripts/qodo-gate.mjs', import.meta.url), 'utf8');
   assert.match(g, /filter=latest/); assert.match(g, /runs\.length > 0 && runs\.every\(\(c\) => c\.status === 'completed' && c\.conclusion === 'success'\)/);
+});
+
+// Qodo's review and the blind review of #117 (c69f5b7), round 2
+test("#117 blind round 2: any other line in Qodo's notice section keeps the review incomplete, however it's phrased", () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r);
+  const body = (extra) => `<h3>Code Review by Qodo</h3> findings <!-- qodo-daily-tip:end -->\n\n${LINE}${extra}\n\n<!-- https://github.com/x/commit/${h} -->`;
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, at: Date.parse('2099-01-01'), body: body('') }, ciOk: true }).ok, true);
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, at: Date.parse('2099-01-01'), body: body('\nQodo failed to review 3 files on this PR.') }, ciOk: true }).ok, false);
+  assert.equal(acc({ read: r, head: h, review: { reviewed: h, at: Date.parse('2099-01-01'), body: `<h3>Code Review by Qodo</h3> ${LINE} <!-- https://github.com/x/commit/${h} -->` }, ciOk: true }).ok, false, 'no notice section where Qodo puts it: not accepted');
+});
+test('#117 blind round 2 (Low): a review run with no start time is never accepted', () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r);
+  assert.equal(acc({ read: { ...r, review_session: { ...r.review_session, started_at: undefined } }, head: h, review: reviewOf(h), ciOk: true }).ok, false);
+});
+test("#117 f364e7d1: CI still running is a wait, not a refusal", () => {
+  const r = incomplete(fx('pr-87')), h = HEAD(r), a = acc({ read: r, head: h, review: reviewOf(h), ciOk: 'pending' });
+  assert.equal(a.ok, false); assert.equal(a.wait, true);
+  assert.match(runnerSrc(), /if \(a\.wait\) \{/);
 });
