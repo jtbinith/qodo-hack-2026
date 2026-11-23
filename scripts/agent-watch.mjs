@@ -403,9 +403,6 @@ function checkAndPush(n, s, why) {
 // way on for a branch that was pushed but whose PR creation failed (Qodo on #113).
 function openPr(n, s, why) {
   const pushed = s.head;
-  // GitHub wins over the saved note: a create that worked before the runner could save it isn't
-  // made twice (blind review on #113)
-  if (!s.pr) s.pr = ghJson('pr', 'list', '-R', REPO, '--head', s.branch, '--state', 'open', '--limit', '1', '--json', 'number')[0]?.number || null;
   if (!s.pr) {
     writeFileSync(join(HOME, `${n}-pr-body.md`), prBody(n, s));
     const url = write(`open a PR from ${s.branch}`, () => gh('pr', 'create', '-R', REPO, '--head', s.branch, '--base', 'main', '--title', shown(agentFile(s, 'pr-title.txt').trim()) || `Ticket #${n}`, '--body-file', join(HOME, `${n}-pr-body.md`)), 'https://github.com/x/pull/0');
