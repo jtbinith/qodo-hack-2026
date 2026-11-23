@@ -25,7 +25,7 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync, existsSync, appen
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -135,6 +135,9 @@ function gate(n, s, sha, g) {
 // where Qodo says why its review isn't complete: a link to its newest comment on the PR, not a quote
 // (quoting picked the wrong comment: Qodo edits its comments in place for later heads, Qodo on #115)
 const qodoLatest = (pr) => { const c = issueComments(pr).filter((x) => x.user.login === QODO).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0]; return c ? `Qodo's latest comment: ${c.html_url}` : `Qodo hasn't commented on PR #${pr}`; };
+// CI's required check on a commit, read fresh: the newest `npm test` run passed
+const ciPassed = (sha) => { const runs = ghJson('api', `repos/${REPO}/commits/${sha}/check-runs?check_name=${encodeURIComponent('npm test')}&per_page=100`)?.check_runs || [];
+  const last = runs.sort((a, b) => Date.parse(b.started_at || 0) - Date.parse(a.started_at || 0))[0]; return last?.status === 'completed' && last.conclusion === 'success'; };
 const listed = (fs) => fs.map((f) => `${severityOf(f)}: ${decodeEntities(f.title)}`);
 const ownerAsks = (s) => issueComments(s.pr).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
 // what the owner's account did on GitHub: compared before and after every agent run
@@ -499,7 +502,22 @@ function continueRun(n, s) {
       // the quality gate (work-ticket skill): every High and Medium fixed, Lows flagged for the owner.
       // It reads Qodo's stored review and the PR's head fresh, not Qodo's rendered comment (which can lag).
       const prHead = ghJson('api', `repos/${REPO}/pulls/${s.pr}`).head.sha;
-      const read = qodoRead(s.pr, MAIN), g = gateVerdict(read, s.head, { prHead });
+      const read = qodoRead(s.pr, MAIN);
+      let g = gateVerdict(read, s.head, { prHead });
+      // Qodo marks every review of a branch with Gate 3's local findings incomplete ("could not verify
+      // all local findings"): that one stated reason is accepted when nothing High or Medium is open and
+      // CI passed (acceptLocalOnly). The PR says so, and the blind review still runs.
+      if (g.state === 'incomplete') {
+        const a = acceptLocalOnly({ read, head: s.head, review: q, ciOk: ciPassed(s.head) });
+        if (a.ok) {
+          g = a.g;
+          if (s.acceptedLocal !== s.head) {
+            s.acceptedLocal = s.head;
+            s.proofs = [...(s.proofs || []), `**Qodo's review accepted with a note** on ${s.head.slice(0, 7)}: Qodo marked it incomplete, and its only stated reason was "${LOCAL_ONLY_REASON}" (the runner's local reviews, gate 3). Nothing High or Medium is open on this head and CI's \`npm test\` passed, so the gate counts it as complete. The blind review still runs.`];
+            save(n, s); event(n, `Qodo's review of ${s.head.slice(0, 7)} accepted: incomplete only because of the local findings`);
+          }
+        }
+      }
       if (g.state !== 'done') gate(n, s, prHead, g);   // the ruleset requires it: only a met gate lets the PR merge
       if (g.state === 'moved') throw new Stop(`${g.why}. Someone pushed to the branch outside the run, so the runner won't mark it done.`);
       if (g.state === 'wait') {

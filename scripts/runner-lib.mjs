@@ -301,6 +301,24 @@ export function resumePlan(s, asks, limits, { openPr = null } = {}) {
   return (s.retryRounds || 0) >= limits.retryRounds ? 'limit' : 'resume';
 }
 
+// An incomplete Qodo review of the head is accepted as complete only when Qodo's own stated reason,
+// in its review comment for this head, is exactly that it couldn't verify the local findings (every
+// factory PR with Gate 3's local findings got this on Day 10, 8 of 8 runs), the review run finished,
+// nothing High or Medium is open on the head, and CI's required check passed. Anything else stays
+// incomplete. Returns the verdict to use instead ({ ok, g }).
+export const LOCAL_ONLY_REASON = 'Qodo could not verify all local findings on this PR.';
+export function acceptLocalOnly({ read, head, review, ciOk }) {
+  const r = read?.review_session;
+  if (!r || r.commit_sha !== head || r.status !== 'completed' || r.review_complete !== false) return { ok: false, why: 'not an incomplete finished review of the head' };
+  if (!review || review.reviewed !== head) return { ok: false, why: "Qodo's review comment isn't for this head" };
+  const text = decodeEntities((review.body || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, '\n'));
+  if (!text.split('\n').some((l) => l.trim() === LOCAL_ONLY_REASON)) return { ok: false, why: "Qodo didn't say the local findings were the reason" };
+  if (!ciOk) return { ok: false, why: "CI's npm test hasn't passed on the head" };
+  const g = gateVerdict({ ...read, review_session: { ...r, review_complete: true } }, head);
+  if (g.state !== 'done') return { ok: false, why: g.why || `${g.blocking?.length ?? 0} High or Medium open` };
+  return { ok: true, g };
+}
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {
