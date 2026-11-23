@@ -26,14 +26,19 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
   const handed = new Set();
   let downloadNext = false;   // the share sheet failed: the next tap downloads instead
   let busy = null;            // the tap whose share sheet or download batch is still running
+  const pending = new Set();  // pids in a share sheet that hasn't settled, even after SHARE_TIMEOUT
   const more = (n) => (n ? ` · ${n} still arriving` : '');
 
   // Everything is decided, and the share sheet opened, before the first await: the share sheet
   // only opens inside the tap (iOS rule)
   async function tap() {
     if (busy) return toast('Still saving');
-    const { ready, arriving } = batch(handed);
-    if (!ready.length) return toast(arriving ? `Nothing to save yet${more(arriving)}` : 'Nothing new to save');
+    // a share that outlived SHARE_TIMEOUT may still finish: its photos aren't offered again until it settles
+    const { ready, arriving } = batch(new Set([...handed, ...pending]));
+    if (!ready.length) {
+      if (pending.size) return toast('Still saving');
+      return toast(arriving ? `Nothing to save yet${more(arriving)}` : 'Nothing new to save');
+    }
     const list = ready.map((r) => r.file);
     let sharing = false;
     if (!downloadNext) { try { sharing = !!canShare(list); } catch { sharing = false; } }
@@ -42,14 +47,16 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
     try {
       if (sharing) {
         const sheet = share(list);
+        for (const r of ready) pending.add(r.pid);
         // a share that never settles frees Save all after SHARE_TIMEOUT; if it finishes later it still counts
         wait(SHARE_TIMEOUT).then(() => { if (busy === mine) busy = null; });
         try { await sheet; } catch (e) {
+          for (const r of ready) pending.delete(r.pid);   // settled: cancelled or failed, the photos stay available
           if (e?.name === 'AbortError') return;   // cancelled: nothing happens, the photos stay available
           downloadNext = true;
           return toast('Couldn’t open the share sheet. Tap Save all again to download');
         }
-        for (const r of ready) handed.add(r.pid);
+        for (const r of ready) { handed.add(r.pid); pending.delete(r.pid); }
         return toast(`Shared ${ready.length}${more(arriving)}`);
       }
       downloadNext = false;   // download mode lasts one batch
