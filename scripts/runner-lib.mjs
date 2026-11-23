@@ -131,6 +131,10 @@ export function askPlan({ asked, commentRounds, retryRounds, limits }) {
   return kind === 'instruction' ? { ...r, commentRounds: commentRounds + 1 } : { ...r, retryRounds: retryRounds + 1 };
 }
 
+// Does an /agent instruction round count against the limit? Not when its agent run didn't finish and
+// changed nothing, for example a sign-in that had expired (#96 on Day 10): the owner gets it back.
+export const roundCounts = ({ finished, committed }) => finished || committed;
+
 // Rule 7: the GitHub list reads in the runner's source that stop at one page. A REST list (comments,
 // events, blocked_by, /issues, /pulls) must be the callback of allPages((page) => …), not just have a
 // page number in its URL. gh's own list commands stop at 30, so they need an explicit --limit.
