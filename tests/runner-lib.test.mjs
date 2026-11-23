@@ -758,3 +758,11 @@ test("#120 b5119c30: the owner's /agent rounds skip the local scope check", () =
   assert.match(src, /if \(local\.g\.state === 'fix' && !ownerRound\) \{/);
   assert.match(src, /checkAndPush\(n, s, 'owner comment', \{ ownerRound: true \}\)/);
 });
+
+// #121, from the blind review of #120: a blind finding the runner had already reproduced, whose
+// scope copy didn't fail, was dropped and blind-review went green.
+test('#121: a blind finding the scope copy does not reproduce stays blocking', () => {
+  const src = runnerSrc(), start = src.indexOf('const bplan = scopeCheck('), end = src.indexOf("postBlind(prHead, { state: 'success', description: `Nothing this branch introduced", start);
+  assert.ok(start > 0 && end > start, 'blind scope block found');
+  assert.match(src.slice(start, end), /bplan\.fix\.includes\(`blind-\$\{i\}`\) \|\| bplan\.unproven\.includes\(`blind-\$\{i\}`\)/);
+});
