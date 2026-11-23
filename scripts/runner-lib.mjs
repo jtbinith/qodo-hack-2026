@@ -378,7 +378,11 @@ export const transientGh = (msg) => /HTTP 5\d\d|error connecting to|ECONNRESET|E
 // (Qodo on #123). `gh api` is a read unless it sets a method or sends fields (which makes it a POST).
 export function ghIsRead(args) {
   const [cmd, sub] = args;
-  if (cmd === 'api') return !args.some((a, i) => (a === '-X' || a === '--method') && args[i + 1] && args[i + 1].toUpperCase() !== 'GET') && !args.some((a) => /^(-f|-F|--field|--raw-field|--input)$/.test(a));
+  // joined forms count too (--method=POST, -XPOST, -fk=v, --field=k=v): blind review on #123
+  if (cmd === 'api') {
+    const method = args.flatMap((a, i) => (a === '-X' || a === '--method') ? [args[i + 1] || ''] : /^(-X|--method=)(.+)$/.test(a) ? [a.replace(/^(-X|--method=)/, '')] : []);
+    return method.every((m) => m.toUpperCase() === 'GET') && !args.some((a) => /^(-f|-F|--field|--raw-field|--input)(=|$)|^-[fF].+/.test(a));
+  }
   return ['issue', 'pr', 'project', 'label', 'run'].includes(cmd) && ['list', 'view', 'checks', 'field-list', 'item-list', 'status'].includes(sub);
 }
 
