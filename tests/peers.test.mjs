@@ -305,6 +305,62 @@ test('an offer that is answered in time is not sent again', async () => {
   assert.equal(offers(), 1);
 });
 
+// Qodo's review of d264fe6 on #116: the resend was set up only by a first-time key that came
+// after the offer. A key that came before the offer, or only as a reply, set up nothing, so a
+// dropped offer was never sent again.
+test('an offer made after the other device\'s key arrived is sent again if it isn\'t answered', async () => {
+  const sent = [];
+  const peers = createPeers({ myId: 'a', table: 'T', signal: (to, d) => sent.push([to, d]) });
+  peers.connect('b');
+  const pc = pcs.at(-1);
+  await peers.onSignal('b', await firstKey());        // b's key comes first, while a is still stable
+  await settle();
+  await pc.onnegotiationneeded(); await settle();
+  const offers = () => sent.filter(([to, d]) => to === 'b' && d.desc?.type === 'offer').length;
+  assert.equal(offers(), 1);
+  await tick(OFFER_RESEND);
+  assert.equal(offers(), 2, 'the offer was never sent again');
+  await tick(10 * OFFER_RESEND);
+  assert.equal(offers(), 2, 'sent again more than once');
+});
+
+test('an unanswered offer is sent again when the only key that arrives is a reply', async () => {
+  const { peers, offers } = await offering();
+  await peers.onSignal('b', { ...(await firstKey()), reply: true });
+  await settle();
+  await tick(OFFER_RESEND);
+  assert.equal(offers(), 2, 'a reply key set up no resend');
+  await tick(10 * OFFER_RESEND);
+  assert.equal(offers(), 2, 'sent again more than once');
+});
+
+test('only the offer that was waiting is sent again, not a later one', async () => {
+  const { peers, pc, offers } = await offering();
+  await peers.onSignal('b', await firstKey());
+  await peers.onSignal('b', { desc: { type: 'answer', sdp: 'answer sdp' } });
+  await pc.onnegotiationneeded(); await settle();     // a new offer before the resend timer fires
+  assert.equal(offers(), 2);
+  await tick(10 * OFFER_RESEND);
+  assert.equal(offers(), 2, 'a different offer was sent again by the first one\'s timer');
+});
+
+// Qodo's review of d264fe6 on #116: net.js passes on a relay frame from a device that is briefly
+// out of presence only if peers.js already holds that device's key
+test('linked(peer) is true only once that peer\'s key has arrived', async () => {
+  const { peers } = room();
+  assert.equal(typeof peers.linked, 'function', 'peers.linked is missing');
+  assert.equal(peers.linked('c'), false, 'a device never heard from');
+  const before = pcs.length;
+  peers.linked('d');
+  assert.equal(pcs.length, before, 'asking opened a connection');
+  peers.connect('c');
+  assert.equal(peers.linked('c'), false, 'a link without a key');
+  await giveKey(peers, 'c'); await settle();
+  assert.equal(peers.linked('c'), true);
+  await peers.onSignal('e', { pub: 'AAAA' }); await settle();      // a bad key
+  assert.equal(peers.linked('e'), false, 'a bad key counts as linked');
+});
+
 test('a second answer to an offer sent twice is ignored, not an error', async () => {
   const { peers, pc } = await offering();
   await peers.onSignal('b', { desc: { type: 'answer', sdp: 'answer sdp' } });

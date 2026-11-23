@@ -396,11 +396,12 @@ test('a flood of layout asks gets at most one answer per gap, and the last ask i
 // --- S1.6 (#21): connection setup from devices not in the room opens no connection ---
 // Each device here records the setup messages net.js hands to its onSignal.
 const net = await import('../web/net.js');
-async function sigRoom(ids = ['L', 'A']) {
+// `linked(from)` stands in for peers.js: whether this device already holds a key for `from`.
+async function sigRoom(ids = ['L', 'A'], linked = () => false) {
   const devs = {};
   for (const id of ids) {
     const got = [];
-    devs[id] = joinRoom({ room: 'r', id, name: id.toLowerCase(), size: { w: 400, h: 800 }, onSignal: (from, data) => got.push([from, data]) });
+    devs[id] = joinRoom({ room: 'r', id, name: id.toLowerCase(), size: { w: 400, h: 800 }, onSignal: (from, data) => got.push([from, data]), linked });
     devs[id].got = got;
     await tick(1);
   }
@@ -532,4 +533,38 @@ test('setup held for one sender is capped at EARLY_SIG_BYTES encoded bytes, even
   const bytes = A.got.reduce((n, [, d]) => n + utf8(d), 0);
   assert.ok(A.got.length > 0 && bytes <= net.EARLY_SIG_BYTES, `held ${bytes} bytes in ${A.got.length} messages`);
   assert.ok(bytes + utf8(cand(0)) > net.EARLY_SIG_BYTES, 'stopped before the cap was reached');
+});
+
+// Qodo's review of d264fe6 on #116: a device can drop out of presence for a moment (a phone's
+// Wi-Fi blips, its socket rejoins) while a relay transfer to this device is under way. A full
+// relay chunk is bigger than EARLY_SIG_BYTES, so it was dropped instead of held. A relay frame
+// from a device this one already holds a key for opens nothing new (peers.js opens it with that
+// key or drops it), so it is passed on. Everything else from an absent device is still held.
+const chunk = { r: 'A'.repeat(40 * 1024) };                          // a full relay chunk, sealed and base64'd
+test('a relay chunk from a linked device is passed on while presence briefly doesn’t list it', async () => {
+  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
+  delete presence.L; sync(); await settle();                        // L drops out of presence for a moment
+  deliver('A', 'sig', sig('L', 'A', chunk));
+  await settle();
+  assert.deepEqual(A.got.map(([from, d]) => [from, d.r?.length]), [['L', chunk.r.length]], 'the chunk was dropped during the presence gap');
+});
+
+test('a relay chunk from an absent device this one holds no key for is still dropped (S1.6)', async () => {
+  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
+  deliver('A', 'sig', sig('stranger', 'A', chunk));
+  deliver('A', 'sig', sig('stranger', 'A', { r: 'AAAA' }));
+  await tick(60_000);
+  await arrive('stranger');
+  assert.deepEqual(A.got, [], 'a relay frame from an unlinked absent id got through');
+});
+
+test('setup from a linked device that is briefly absent is still held, not passed straight on (S1.6)', async () => {
+  const { A } = await sigRoom(['L', 'A'], (from) => from === 'L');
+  delete presence.L; sync(); await settle();
+  deliver('A', 'sig', sig('L', 'A', offer));
+  deliver('A', 'sig', sig('L', 'A', pub(1)));
+  await settle();
+  assert.deepEqual(A.got, [], 'setup from an absent device went straight through');
+  await arrive('L');
+  assert.deepEqual(A.got, [['L', offer], ['L', pub(1)]], 'held setup is passed on once L is back');
 });
