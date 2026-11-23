@@ -271,6 +271,20 @@ try {
   const toldSender = await A.waitForFunction(() => document.getElementById('toast').textContent.includes('Couldn’t send'), null, { timeout: 20000 }).then(() => true, () => false);
   const waited = (Date.now() - asked) / 1000;
   check(toldSender && waited >= 10 && waited < 20, `send to a silent device gave up and told the sender (after ${waited.toFixed(1)} s)`);
+  // Save all on a laptop (F13): B has no share sheet, so one tap downloads all 5 received files,
+  // byte-identical, and a second tap downloads nothing again
+  await B.evaluate(() => Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true }));
+  const downloads = [];
+  B.on('download', (d) => downloads.push(d));
+  await B.click('#saveall');
+  await until(B, () => document.getElementById('toast').textContent.startsWith('Downloading'), null, 5000);
+  const saveSaid = await toastOf(B);
+  const allCame = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= 5 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length); } }, 100); });
+  const saved = await Promise.all(downloads.map(async (d) => [d.suggestedFilename(), sha(readFileSync(await d.path()))]));
+  check(allCame === 5 && saveSaid === 'Downloading 5' && saved.every(([n, h]) => expected[n] === h), `Save all downloaded ${saved.map(([n]) => n).join(', ')} byte-identical ("${saveSaid}")`);
+  await B.click('#saveall');
+  await new Promise((r) => setTimeout(r, 1500));
+  check(downloads.length === 5 && await toastOf(B) === 'Nothing new to save', `a second Save all downloads nothing again ("${await toastOf(B)}")`);
   // a send that fails for another reason (here the file can't be read) doesn't blame the device
   const why = await A.evaluate(async (ghost) => {
     const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'photo-1.jpg'), real = t.files.get(p.pid);
