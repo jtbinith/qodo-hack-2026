@@ -355,6 +355,17 @@ export function scopePlan(ids, j, onBranch, onMain) {
   return out;
 }
 
+// Gate 6 converges (Day 10: 1 of 6 PRs reached green, each new blind round found one more edge case in
+// code an earlier round had already reviewed). After the first round, a reproduced finding whose repro
+// also fails on the head the last blind round reviewed goes to a ticket; only one the fix commits
+// introduced blocks. `onPrev` maps each repro to its run on that head; null means no earlier round. A
+// repro that didn't run there (or failed on anything but an assertion) can't prove it's old: it blocks.
+export function convergePlan(blocking, onPrev) {
+  const out = { block: [], defer: [] };
+  for (const f of blocking || []) (onPrev && assertionRed(onPrev[f.repro]) ? out.defer : out.block).push(f);
+  return out;
+}
+
 // Did Qodo dismiss this finding? Only a per-finding "dismissed" (or already dismissed) that was
 // reconciled counts: a conflict, not_found or an unreadable reply means it's still open (Qodo on #120).
 export function dismissedOk(out, id) {
