@@ -18,8 +18,9 @@ const HIGH_WATER = 1 << 20;
 const SEND_TIMEOUT = 10000;      // ms a send waits on one device with no progress before giving up (S1.3)
 const DRAIN_CHECK = 1000;        // ms between checks that a full direct buffer is still draining
 // The other device drops our setup until its presence lists us (S1.6, web/net.js), so an early
-// offer can be lost. Its first key means it now sees us: if our offer is still unanswered
-// OFFER_RESEND later, it is sent once more. Without this the pair would stay on the relay
+// offer can be lost. Any key from it (first-time or reply, before or after our offer) means it
+// has seen us: once we have both its key and an offer of ours waiting, that offer is sent once
+// more OFFER_RESEND later if it is still the one waiting. Without this the pair would stay on the relay
 export const OFFER_RESEND = 3000;
 
 // A send gave up because the other device stopped answering.
@@ -65,10 +66,25 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
     pc.ondatachannel = (e) => attach(e.channel);
     pc.onicecandidate = ({ candidate }) => candidate && signal(peer, { cand: candidate.toJSON() });
     pc.onnegotiationneeded = async () => {
-      try { L.makingOffer = true; await pc.setLocalDescription(); signal(peer, { desc: pc.localDescription.toJSON() }); }
-      finally { L.makingOffer = false; }
+      try {
+        L.makingOffer = true; await pc.setLocalDescription();
+        if (pc.signalingState === 'have-local-offer') L.offerNo = (L.offerNo || 0) + 1;
+        signal(peer, { desc: pc.localDescription.toJSON() });
+        resendLater(peer, L);
+      } finally { L.makingOffer = false; }
     };
     return L;
+  }
+  // Once per link, so a device's keys can't make us repeat it. It runs when either half arrives
+  // (our offer, or any key from the other device) and sends again only the offer that was
+  // waiting then, if it is still waiting
+  function resendLater(peer, L) {
+    const pc = L.pc, n = L.offerNo;
+    if (L.offerResent || !L.heard || !n || pc.signalingState !== 'have-local-offer') return;
+    L.offerResent = true;
+    setTimeout(() => {
+      if (L.offerNo === n && pc.signalingState === 'have-local-offer' && pc.localDescription) signal(peer, { desc: pc.localDescription.toJSON() });
+    }, OFFER_RESEND);
   }
 
   async function onSignal(from, data) {
@@ -77,10 +93,8 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
       // Answer a first-time key with ours, in case our earlier one was sent before they
       // were listening (a device that just joined can miss it). Replies aren't answered.
       if (!data.reply) mine.then(({ pub }) => signal(from, { pub: b64(pub), reply: true }));
-      if (!data.reply && !L.offerResent && pc.signalingState === 'have-local-offer') {
-        L.offerResent = true;               // once per link: a stranger's keys can't make us repeat it
-        setTimeout(() => { if (pc.signalingState === 'have-local-offer' && pc.localDescription) signal(from, { desc: pc.localDescription.toJSON() }); }, OFFER_RESEND);
-      }
+      L.heard = true;                       // it has seen us: an offer it lost can be sent again
+      resendLater(from, L);
       if (L.key || L.keyFailed) return;     // first key wins; ignore later swaps
       try {
         const { kp } = await mine;
@@ -222,6 +236,7 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
   return {
     onSignal, send, sendFile,
     connect: (peer) => link(peer),
+    linked: (peer) => !!links[peer]?.key,   // holds this peer's key; asking opens nothing (web/net.js)
     on: (f) => handlers.add(f),
     onReady: (f) => readyHandlers.add(f),   // f(peer) when a peer's key arrives
     path: (peer) => { const L = links[peer]; return !L ? 'none' : L.open ? 'direct' : L.key ? 'relay (encrypted)' : 'keys…'; },

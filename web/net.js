@@ -24,7 +24,9 @@ const wall = () => performance.timeOrigin + performance.now();
 
 // `onSignal` (optional) receives messages sent with s.signal(to, data): a lane for
 // pages that set up direct device-to-device connections. Only the addressee handles them.
-export function joinRoom({ room, id, name, size, onSignal }) {
+// `linked(from)` (optional) says whether this device already holds a key for `from`: a relay
+// frame from such a device is passed on even while presence briefly doesn't list it.
+export function joinRoom({ room, id, name, size, onSignal, linked = () => false }) {
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   const ch = client.channel('stitch:' + room, { config: { broadcast: { self: false }, presence: { key: id } } });
   const joinedAt = wall();
@@ -227,6 +229,10 @@ export function joinRoom({ room, id, name, size, onSignal }) {
   if (onSignal) ch.on('broadcast', { event: 'sig' }, ({ payload }) => {
     if (!validSignal(payload) || payload.to !== id || payload.from === id) return;
     if (inRoom(s.peers, payload.from)) { onSignal(payload.from, payload.data); return; }
+    // A relay frame from a device this one already shares a key with, while presence briefly
+    // doesn't list it (a phone's socket rejoins mid-transfer). It opens nothing new: peers.js
+    // opens it with that key or drops it. Setup from an absent device is still held
+    if (payload.data.r && linked(payload.from)) { onSignal(payload.from, payload.data); return; }
     const size = utf8.encode(JSON.stringify(payload.data)).length;   // bytes, not UTF-16 code units
     let held = earlySigs.get(payload.from);
     if (held ? held.list.length >= EARLY_SIG_HOLD || held.bytes + size > EARLY_SIG_BYTES : size > EARLY_SIG_BYTES) return;
