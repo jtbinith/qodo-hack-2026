@@ -509,6 +509,11 @@ function continueRun(n, s) {
       // CI passed (acceptLocalOnly). The PR says so, and the blind review still runs.
       if (g.state === 'incomplete') {
         const a = acceptLocalOnly({ read, head: s.head, review: reviewComment(s.pr), ciOk: ciPassed(s.head) });
+        if (a.wait) {   // only CI is still running: wait for it, within the review wait (Qodo on #117)
+          if ((Date.now() - s.waitFrom) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${a.why} after ${LIMITS.reviewWaitMin} min.`);
+          if (DRY) { console.log(`DRY RUN would wait: ${a.why}`); process.exit(0); }
+          sleep(LIMITS.reviewPollSec * 1000); continue;
+        }
         if (a.ok) {
           g = a.g;
           if (s.acceptedLocal !== s.head) {

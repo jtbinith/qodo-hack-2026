@@ -37,6 +37,7 @@ export function reviewComment(pr) {
 // CI's required check on a commit: GitHub's latest `npm test` run, finished and green (Qodo on #117)
 export function ciPassed(sha) {
   const runs = JSON.parse(sh('gh', ['api', `repos/${REPO}/commits/${sha}/check-runs?check_name=${encodeURIComponent('npm test')}&filter=latest&per_page=100`])).check_runs || [];
+  if (runs.some((c) => c.status !== 'completed')) return 'pending';   // a wait, not a no (Qodo on #117)
   return runs.length > 0 && runs.every((c) => c.status === 'completed' && c.conclusion === 'success');
 }
 
