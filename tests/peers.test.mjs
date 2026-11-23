@@ -334,14 +334,29 @@ test('an unanswered offer is sent again when the only key that arrives is a repl
   assert.equal(offers(), 2, 'sent again more than once');
 });
 
-test('only the offer that was waiting is sent again, not a later one', async () => {
+// Qodo's review of cc2cc80 on #116: the resend was once per link, so after the first offer was
+// answered, a later offer (a new negotiation) that was dropped was never sent again. Each offer
+// now gets its own resend, and a timer still sends only the offer it was set for.
+test('a later unanswered offer gets its own resend, and the first offer\'s timer doesn\'t send it', async () => {
   const { peers, pc, offers } = await offering();
-  await peers.onSignal('b', await firstKey());
+  await peers.onSignal('b', await firstKey());        // first offer's timer starts now
   await peers.onSignal('b', { desc: { type: 'answer', sdp: 'answer sdp' } });
-  await pc.onnegotiationneeded(); await settle();     // a new offer before the resend timer fires
+  await tick(OFFER_RESEND / 2);
+  await pc.onnegotiationneeded(); await settle();     // a new offer before the first timer fires
   assert.equal(offers(), 2);
-  await tick(10 * OFFER_RESEND);
+  await tick(OFFER_RESEND / 2);                       // the first offer's timer fires
   assert.equal(offers(), 2, 'a different offer was sent again by the first one\'s timer');
+  await tick(OFFER_RESEND / 2);                       // the later offer's own timer fires
+  assert.equal(offers(), 3, 'the later offer was never sent again');
+  await tick(10 * OFFER_RESEND);
+  assert.equal(offers(), 3, 'the later offer was sent again more than once');
+});
+
+test('an offer is sent again at most once, however many keys arrive', async () => {
+  const { peers, offers } = await offering();
+  for (let i = 0; i < 5; i++) { await peers.onSignal('b', await firstKey()); await tick(OFFER_RESEND / 4); }
+  await tick(10 * OFFER_RESEND);
+  assert.equal(offers(), 2);
 });
 
 // Qodo's review of d264fe6 on #116: net.js passes on a relay frame from a device that is briefly
