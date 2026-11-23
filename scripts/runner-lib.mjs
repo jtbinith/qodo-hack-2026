@@ -360,6 +360,19 @@ export function dismissedOk(out, id) {
   try { const r = JSON.parse(String(out).split('\n  trace')[0]).results?.[id]; return !!r && /^(already_)?dismissed$/.test(r.status) && r.reconciled !== false; } catch { return false; }
 }
 
+// Wisdom's open questions: the ones it marks as deciding the design (an answer that changes what has
+// to be built, such as what happens on a race or a failure the acceptance doesn't settle) stop the run
+// before any code, for the owner to answer in the ticket (Day 10, #21: late presence). Plain strings
+// (the older format) and questions without text never stop it.
+export function designQuestions(result) {
+  const qs = result && Array.isArray(result.questions) ? result.questions : [];
+  const blocking = qs.filter((q) => q && typeof q === 'object' && q.decides_design === true && typeof q.question === 'string' && q.question.trim());
+  return { blocking, other: qs.filter((q) => !blocking.includes(q)) };
+}
+// A GitHub error worth one more try: a 5xx from GitHub or a dropped connection (Day 10: an HTTP 504
+// and an "error connecting to api.github.com" each stopped a run). A 4xx is a real answer.
+export const transientGh = (msg) => /HTTP 5\d\d|error connecting to|ECONNRESET|ETIMEDOUT|EAI_AGAIN|TLS handshake timeout|connection reset/i.test(String(msg || ''));
+
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.
 export function findingTypes(commentBody) {
