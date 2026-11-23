@@ -479,6 +479,27 @@ test('a kept retry or nomatch naming a device that has left is dropped, and does
   assert.equal(ownNoMatch(B).length, 1, 'B’s push ended in its own timeout, not in a result naming C');
 });
 
+// From jtbinith's blind review of f642be7: C passes through an in-between time keeper (A) on its
+// way to the real one (B). Electing A must not throw away what C kept from B
+test('a late device that hears L leave before A still shows B’s "Joined" (#96, review)', async () => {
+  const devs = await room(), { B, C } = devs;
+  const presA = presence.A;
+  leaves(devs, 'L', 'A');
+  hear('B');                                   // B hears both leave and takes over
+  await tick(100);
+  assert.equal(B.leader, 'B');
+  B.push('R', 400); C.push('L', 400);          // C still counts L as time keeper
+  await tick(1500);
+  assert.deepEqual(names(C), [], 'B’s joined reached C while C still counted L: kept');
+  presence.A = presA; hear('C');               // C hears L leave first: A looks like the time keeper
+  assert.equal(C.leader, 'A');
+  delete presence.A; hear('C');                // then A leave: B is the time keeper
+  assert.equal(C.leader, 'B');
+  await tick(6000);
+  assert.deepEqual(names(C), ['joined B-C'], names(C).join('; '));
+  assert.deepEqual(ownNoMatch(C), [], 'C’s own timeout was stopped');
+});
+
 test('a result from a device not in the room is never kept (#96, Rule 1)', async () => {
   const { B } = await room();
   channels.find((c) => c.key === 'A').send({ event: 'nomatch', payload: { dev: 'B', t: 2, from: 'X' } });
