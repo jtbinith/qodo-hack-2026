@@ -17,6 +17,10 @@ const HOLD = 400;                // relay frames held per peer while its key is 
 const HIGH_WATER = 1 << 20;
 const SEND_TIMEOUT = 10000;      // ms a send waits on one device with no progress before giving up (S1.3)
 const DRAIN_CHECK = 1000;        // ms between checks that a full direct buffer is still draining
+// The other device drops our setup until its presence lists us (S1.6, web/net.js), so an early
+// offer can be lost. Its first key means it now sees us: if our offer is still unanswered
+// OFFER_RESEND later, it is sent once more. Without this the pair would stay on the relay
+export const OFFER_RESEND = 3000;
 
 // A send gave up because the other device stopped answering.
 export class SendTimeout extends Error {
@@ -73,6 +77,10 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
       // Answer a first-time key with ours, in case our earlier one was sent before they
       // were listening (a device that just joined can miss it). Replies aren't answered.
       if (!data.reply) mine.then(({ pub }) => signal(from, { pub: b64(pub), reply: true }));
+      if (!data.reply && !L.offerResent && pc.signalingState === 'have-local-offer') {
+        L.offerResent = true;               // once per link: a stranger's keys can't make us repeat it
+        setTimeout(() => { if (pc.signalingState === 'have-local-offer' && pc.localDescription) signal(from, { desc: pc.localDescription.toJSON() }); }, OFFER_RESEND);
+      }
       if (L.key || L.keyFailed) return;     // first key wins; ignore later swaps
       try {
         const { kp } = await mine;
@@ -87,6 +95,8 @@ export function createPeers({ myId, table, signal, forceRelay = false }) {
       if (!L.key) { if (L.inbox.length < HOLD) L.inbox.push(data.r); return; }
       await openRelayed(from, L, data.r);
     } else if (data.desc) {
+      // an answer to an offer already answered (we sent it twice: OFFER_RESEND) has nothing to do
+      if (data.desc.type === 'answer' && pc.signalingState !== 'have-local-offer') return;
       const collision = data.desc.type === 'offer' && (L.makingOffer || pc.signalingState !== 'stable');
       L.ignoreOffer = !L.polite && collision;
       if (L.ignoreOffer) return;
