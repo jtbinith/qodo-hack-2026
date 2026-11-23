@@ -561,3 +561,20 @@ test('frames held while a device was away are not used if it has gone again by t
   await pause(200);
   assert.deepEqual(p.got, [], 'held frames were used while the device was away again');
 });
+
+// Blind review of 1523354 (Medium): returned() stopped the hold's ABSENT_RELAY_TTL timer only when
+// its turn came on the receive chain, so slow opens ahead of it let the timer drop the frames of a
+// device that had come back in time
+test('frames held while a device was away are used when it returns in time, even if opening is slow', async () => {
+  const p = await pair();
+  const frames = await record(p, messages(p, 2), 2);
+  const release = stallOpens();                       // a busy phone: decryption is slow
+  for (const f of frames) p.a.onSignal('b', f, true);  // b is away
+  await quiet();
+  await tick(1000);
+  p.a.returned('b');                                  // b is back 1 s later, well within ABSENT_RELAY_TTL
+  await tick(ABSENT_RELAY_TTL);                       // the frames are still being opened when the TTL passes
+  release();
+  await waitFor(() => p.got.length === 2, `frames from a device that returned in time were dropped: got ${p.got.length} of 2`, 2000);
+  assert.deepEqual(p.got.map((m) => m.n), [0, 1]);
+});
