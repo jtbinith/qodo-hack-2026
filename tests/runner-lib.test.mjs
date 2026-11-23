@@ -593,3 +593,16 @@ test("Qodo's \"something went wrong\" reply is quoted as its reason", () => {
   const body = readFileSync(new URL('./fixtures/qodo/pr-112-sorry.html', import.meta.url), 'utf8');
   assert.match(lib.qodoReason?.(body) ?? '', /weren't able to complete the code review/);
 });
+
+// #96 on Day 10: an /agent round whose agent couldn't start (expired sign-in, exit 1) still used up one
+// of the 3 instruction rounds, so the owner's last round was refused.
+test("an /agent round whose agent run didn't finish and committed nothing doesn't count", () => {
+  assert.equal(lib.roundCounts?.({ finished: false, committed: false }), false);
+  assert.equal(lib.roundCounts?.({ finished: false, committed: true }), true, 'it changed something: it counts');
+  assert.equal(lib.roundCounts?.({ finished: true, committed: false }), true, 'it ran and chose not to change anything: it counts');
+});
+test('the owner round gives its count back when the agent run didn\'t finish', () => {
+  const src = runnerSrc();
+  assert.match(src, /e\.unfinished = true/);
+  assert.match(src, /roundCounts\(\{ finished: !e\.unfinished, committed: head\(s\) !== before \}\)/);
+});
