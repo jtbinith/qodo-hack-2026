@@ -295,7 +295,8 @@ export function reaskPlan({ head, runId, asked }) {
 // ticket never resumes a new run (blind review on #113). It waits while another PR is open, as new
 // tickets do (Qodo on #113).
 export function resumePlan(s, asks, limits, { openPr = null } = {}) {
-  if (!s || s.pr || s.phase !== 'help' || !s.branch || !s.dir || !s.stoppedAt) return null;
+  // a stop for the owner's design answer is answered in the ticket and relabelled, not resumed (Qodo on #123)
+  if (!s || s.pr || s.phase !== 'help' || !s.branch || !s.dir || !s.stoppedAt || s.designStop) return null;
   if (!asks.some((a) => a.retry && a.at > s.stoppedAt)) return null;
   if (openPr) return 'wait';
   return (s.retryRounds || 0) >= limits.retryRounds ? 'limit' : 'resume';
@@ -371,7 +372,15 @@ export function designQuestions(result) {
 }
 // A GitHub error worth one more try: a 5xx from GitHub or a dropped connection (Day 10: an HTTP 504
 // and an "error connecting to api.github.com" each stopped a run). A 4xx is a real answer.
-export const transientGh = (msg) => /HTTP 5\d\d|error connecting to|ECONNRESET|ETIMEDOUT|EAI_AGAIN|TLS handshake timeout|connection reset/i.test(String(msg || ''));
+// A command that hit its own timeout isn't retried: it would hold the runner for minutes (Qodo on #123).
+export const transientGh = (msg) => /HTTP 5\d\d|error connecting to|ECONNRESET|EAI_AGAIN|TLS handshake timeout|connection reset/i.test(String(msg || '')) && !/ETIMEDOUT/.test(String(msg || ''));
+// Only reads are retried: a write whose reply was lost may have happened, so it's never repeated
+// (Qodo on #123). `gh api` is a read unless it sets a method or sends fields (which makes it a POST).
+export function ghIsRead(args) {
+  const [cmd, sub] = args;
+  if (cmd === 'api') return !args.some((a, i) => (a === '-X' || a === '--method') && args[i + 1] && args[i + 1].toUpperCase() !== 'GET') && !args.some((a) => /^(-f|-F|--field|--raw-field|--input)$/.test(a));
+  return ['issue', 'pr', 'project', 'label', 'run'].includes(cmd) && ['list', 'view', 'checks', 'field-list', 'item-list', 'status'].includes(sub);
+}
 
 // Qodo's type for each finding (Bug, Rule violation, Requirement gap...), by title. The stored review
 // doesn't carry it; Qodo's PR comment shows it after each numbered title.

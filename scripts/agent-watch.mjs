@@ -25,7 +25,7 @@ import { mkdirSync, readFileSync, realpathSync, cpSync, writeFileSync, existsSyn
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, ciPassed, reviewComment, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -59,7 +59,7 @@ const event = (n, msg) => { const line = `${now()} #${n} ${msg}`; appendFileSync
 // every gh and git call has a deadline: a hung network call becomes an error and the run stops with agent-needs-help
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: LIMITS.commandMin * 60000, killSignal: 'SIGKILL', ...opts }).trim();
 // a passing GitHub error (a 5xx, a dropped connection) is tried twice more, 5 s then 15 s later
-const gh = (...args) => { for (let i = 0; ; i++) { try { return sh('gh', args); } catch (e) { const m = `${e.stderr || ''} ${e.message || ''}`; if (i >= 2 || !transientGh(m)) throw e; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, i ? 15000 : 5000); } } };
+const gh = (...args) => { for (let i = 0; ; i++) { try { return sh('gh', args); } catch (e) { const m = `${e.stderr || ''} ${e.message || ''}`; if (i >= 2 || !ghIsRead(args) || !transientGh(m)) throw e; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, i ? 15000 : 5000); } } };
 const ghJson = (...args) => JSON.parse(gh(...args) || 'null');
 const notify = (msg) => (DRY ? console.log(`DRY RUN would notify: ${msg}`) : spawnSync('notify-send', ['Qodo factory', msg]));
 // every GitHub write and push goes through here, so a dry run can log it instead
@@ -316,11 +316,12 @@ function wisdomCheck(n, s) {
   writeFileSync(join(HOME, 'logs', `${n}-wisdom.json`), JSON.stringify({ result, verdict: w }, null, 2));
   const cite = (c) => `- ${c.claim} (\`${c.file}:${c.line}\`${c.quote ? `: "${c.quote}"` : ''})${c.note ? ` ${c.note}` : ''}`;
   event(n, `Wisdom check: ${w.state}, ${w.held?.length ?? 0} held, ${w.wrong?.length ?? 0} wrong, ${w.unverified?.length ?? 0} unverified`);
-  if (w.state === 'invalid') throw new Stop(`Codebase Wisdom's check of the ticket didn't work: ${w.why}. Nothing was built.`);
-  if (w.state === 'stop') throw new Stop(`Codebase Wisdom found the ticket wrong about the code on main, before any code was written. Each quote was checked by the runner:\n${w.wrong.map(cite).join('\n')}\n\nFix the ticket, then label it \`${L.ready}\` again.`);
+  // design questions first: a ticket with no claims can still leave the design open (Qodo on #123)
   // a question that decides the design stops the run here, before any code, for the owner to answer (#21)
   const dq = designQuestions(result);
-  if (dq.blocking.length) throw new Stop(`Codebase Wisdom found ${dq.blocking.length} question${dq.blocking.length > 1 ? 's' : ''} the ticket leaves open that decide${dq.blocking.length > 1 ? '' : 's'} the design. Nothing was built. Answer ${dq.blocking.length > 1 ? 'them' : 'it'} in the ticket, then label it \`${L.ready}\` again:\n${dq.blocking.map((q) => `- ${q.question}${q.why ? ` (${q.why})` : ''}`).join('\n')}`);
+  if (dq.blocking.length) { s.designStop = true; save(n, s); throw new Stop(`Codebase Wisdom found ${dq.blocking.length} question${dq.blocking.length > 1 ? 's' : ''} the ticket leaves open that decide${dq.blocking.length > 1 ? '' : 's'} the design. Nothing was built. Answer ${dq.blocking.length > 1 ? 'them' : 'it'} in the ticket, then label it \`${L.ready}\` again:\n${dq.blocking.map((q) => `- ${q.question}${q.why ? ` (${q.why})` : ''}`).join('\n')}`); }
+  if (w.state === 'invalid') throw new Stop(`Codebase Wisdom's check of the ticket didn't work: ${w.why}. Nothing was built.`);
+  if (w.state === 'stop') throw new Stop(`Codebase Wisdom found the ticket wrong about the code on main, before any code was written. Each quote was checked by the runner:\n${w.wrong.map(cite).join('\n')}\n\nFix the ticket, then label it \`${L.ready}\` again.`);
   const questions = dq.other.map((q) => (typeof q === 'string' ? q : q?.question)).filter((q) => typeof q === 'string' && q);
   const summary = `**Ticket checked by Codebase Wisdom** before any code (quotes checked by the runner): ${w.held.length} claim${w.held.length === 1 ? '' : 's'} held, ${w.unverified.length} unverified.` +
     (w.unverified.length ? `\nUnverified, so treated as assumptions to test:\n${w.unverified.map(cite).join('\n')}` : '') + (questions.length ? `\nOpen questions:\n${questions.map((q) => `- ${q}`).join('\n')}` : '');
