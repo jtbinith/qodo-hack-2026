@@ -758,3 +758,21 @@ test("#120 b5119c30: the owner's /agent rounds skip the local scope check", () =
   assert.match(src, /if \(local\.g\.state === 'fix' && !ownerRound\) \{/);
   assert.match(src, /checkAndPush\(n, s, 'owner comment', \{ ownerRound: true \}\)/);
 });
+
+// #121, from the blind review of #120: a blind finding the runner had already reproduced, whose
+// scope copy didn't fail, was dropped and blind-review went green.
+test('#121: a blind finding the scope copy does not reproduce stays blocking', () => {
+  const src = runnerSrc(), start = src.indexOf('const bplan = scopeCheck('), end = src.indexOf("postBlind(prHead, { state: 'success', description: `Nothing this branch introduced", start);
+  assert.ok(start > 0 && end > start, 'blind scope block found');
+  assert.match(src.slice(start, end), /bplan\.fix\.includes\(`blind-\$\{i\}`\) \|\| bplan\.unproven\.includes\(`blind-\$\{i\}`\)/);
+});
+// The blind review of #122 (1d917a8): a bad scope copy that fails everywhere could defer a reproduced blind finding
+test("#122: a blind finding is judged on main by the blind review's own repro, not the scope agent's copy", () => {
+  const p = lib.scopePlan?.(['blind-0'], { entries: [{ id: 'blind-0', repro: '.agent/blind/late.test.mjs', acceptance: false, owner: '#24' }] }, { '.agent/blind/late.test.mjs': SCOPE_RED }, { '.agent/blind/late.test.mjs': PASS }) ?? {};
+  assert.deepEqual(p.fix, ['blind-0'], 'introduced: its own repro passes on main');
+  assert.match(runnerSrc(), /if \(f\.repro\) e\.repro = f\.repro;   \/\/ the blind review's own repro/);
+});
+test('#122 (blind Low): a blind repro that fails on main too is deferred, so its path is accepted as a repro', () => {
+  const p = lib.scopePlan?.(['blind-0'], { entries: [{ id: 'blind-0', repro: '.agent/blind/late.test.mjs', acceptance: false, owner: '#24' }] }, { '.agent/blind/late.test.mjs': SCOPE_RED }, { '.agent/blind/late.test.mjs': SCOPE_RED }) ?? {};
+  assert.equal(p.defer?.[0]?.id, 'blind-0'); assert.deepEqual(p.fix, []);
+});
