@@ -766,3 +766,9 @@ test('#121: a blind finding the scope copy does not reproduce stays blocking', (
   assert.ok(start > 0 && end > start, 'blind scope block found');
   assert.match(src.slice(start, end), /bplan\.fix\.includes\(`blind-\$\{i\}`\) \|\| bplan\.unproven\.includes\(`blind-\$\{i\}`\)/);
 });
+// The blind review of #122 (1d917a8): a bad scope copy that fails everywhere could defer a reproduced blind finding
+test("#122: a blind finding is judged on main by the blind review's own repro, not the scope agent's copy", () => {
+  const p = lib.scopePlan?.(['blind-0'], { entries: [{ id: 'blind-0', repro: '.agent/blind/late.test.mjs', acceptance: false, owner: '#24' }] }, { '.agent/blind/late.test.mjs': SCOPE_RED }, { '.agent/blind/late.test.mjs': PASS }) ?? {};
+  assert.deepEqual(p.fix, ['blind-0'], 'introduced: its own repro passes on main');
+  assert.match(runnerSrc(), /if \(f\.repro\) e\.repro = f\.repro;   \/\/ the blind review's own repro/);
+});
