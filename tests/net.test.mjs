@@ -500,6 +500,30 @@ test('a late device that hears L leave before A still shows B’s "Joined" (#96,
   assert.deepEqual(ownNoMatch(C), [], 'C’s own timeout was stopped');
 });
 
+// Qodo on b927d48 (passed on by jtbinith): the same in-between time keeper must not throw away
+// B's kept layout either. Otherwise C shows B's "Joined" while its screens stay unjoined whenever
+// its layout asks are lost
+test('a late device that passes through an in-between time keeper also keeps B’s layout, even when every ask is lost (#96, Qodo)', async () => {
+  const devs = await room(), { B, C } = devs;
+  const presA = presence.A;
+  leaves(devs, 'L', 'A');
+  hear('B');
+  await tick(100);
+  B.push('R', 400); C.push('L', 400);
+  await tick(1500);
+  assert.equal(B.joins.length, 1, 'B joined B-C');
+  assert.deepEqual(C.joins, [], 'B’s layout reached C while C still counted L: kept, not used');
+  bus.drop = (event) => event === 'layoutask';   // none of C's asks get through
+  presence.A = presA; hear('C');                 // C hears L leave first: A looks like the time keeper
+  assert.equal(C.leader, 'A');
+  delete presence.A; hear('C');                  // then A leave: B is the time keeper
+  assert.equal(C.leader, 'B');
+  assert.deepEqual(C.joins, B.joins, 'C uses B’s kept layout at once, without an ask');
+  await tick(6000);
+  assert.deepEqual(names(C), ['joined B-C'], names(C).join('; '));
+  assert.deepEqual(C.joins, B.joins, 'C’s screens are joined, as its toast says');
+});
+
 test('a result from a device not in the room is never kept (#96, Rule 1)', async () => {
   const { B } = await room();
   channels.find((c) => c.key === 'A').send({ event: 'nomatch', payload: { dev: 'B', t: 2, from: 'X' } });
