@@ -272,7 +272,7 @@ function proveRed(n, s, base) {
 }
 
 // the agent's Assumptions section from its report, shown in the open (not folded away)
-const assumptions = (report) => (report.match(/^#+\s*Assumptions\s*\n([\s\S]*?)(?=^#+\s|(?![\s\S]))/m)?.[1] || '').trim();
+const assumptions = (report) => (report.match(/^(?:#+\s*Assumptions|\*\*Assumptions:?\*\*:?)\s*\n([\s\S]*?)(?=^#+\s|^\*\*[^*\n]+\*\*:?\s*$|(?![\s\S]))/m)?.[1] || '').trim();   // heading or bold, as the skill writes it (blind on #126)
 // acceptance the agent couldn't check itself: unticked boxes in its PR description
 const uncheckedCriteria = (body) => body.split('\n').filter((l) => /^\s*[-*]\s*\[ \]/.test(l)).map((l) => l.replace(/^\s*[-*]\s*\[ \]\s*/, '').trim());
 // a one-line reason for the popup: the first list item, else the first plain sentence (no headings or links)
