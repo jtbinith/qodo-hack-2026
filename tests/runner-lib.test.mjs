@@ -535,11 +535,6 @@ test('an incomplete review: ask Qodo again once per head, wait for its new run, 
   assert.equal(plan({ head: 'h1', runId: 8, asked: { head: 'h1', run: 7 } }), 'stop', 'the new run is incomplete too');
   assert.equal(plan({ head: 'h2', runId: 9, asked: { head: 'h1', run: 7 } }), 'reask', 'a new head gets its own ask');
 });
-test("Qodo's stated reason for an incomplete review is quoted from its comment (#112)", () => {
-  const body = readFileSync(new URL('./fixtures/qodo/pr-112-comment.html', import.meta.url), 'utf8');
-  assert.equal(lib.qodoReason?.(body), 'Qodo could not verify all local findings on this PR.');
-  assert.equal(lib.qodoReason?.('<h3>PR Summary</h3> all good'), '');
-});
 test('an owner /agent retry on the ticket resumes a run that stopped before its first push', () => {
   const plan = (s, asks) => lib.resumePlan?.(s, asks, { retryRounds: 5 });
   const s = { phase: 'help', branch: 'agent/96-x', dir: '/w/96', retryRounds: 0, stoppedAt: '2026-11-22T22:00:00Z' }, at = '2026-11-22T23:00:00Z';
@@ -579,6 +574,37 @@ test('#113 304ebe3f: a branch pushed without its PR gets the PR on retry, not "n
   const push = runnerSrc().match(/function checkAndPush[\s\S]*?\n\}/)?.[0] || '';
   assert.match(push, /if \(!s\.pr && s\.head && head\(s\) === s\.head\) return openPr\(n, s, why\);/);
 });
-test("#113 3bc1eb25: the stop quotes Qodo's reason only from its comment on this head", () => {
-  assert.match(runnerSrc(), /const reason = q\?\.reviewed === s\.head \? qodoReason\(q\.body\) : '';/);
+
+// #96 on Day 10: the runner asked Qodo again with `/review`, and Qodo answered "Sorry, something went
+// wrong ... Please try again manually by commenting /agentic_review on this PR." and never ran.
+test('the runner asks Qodo again with the command Qodo names: /agentic_review', () => {
+  assert.match(runnerSrc(), /'--body', '\/agentic_review'/);
+  assert.doesNotMatch(runnerSrc(), /'--body', '\/review'/);
+});
+
+// #96 on Day 10: an /agent round whose agent couldn't start (expired sign-in, exit 1) still used up one
+// of the 3 instruction rounds, so the owner's last round was refused.
+test("an /agent round whose agent run didn't finish and committed nothing doesn't count", () => {
+  assert.equal(lib.roundCounts?.({ finished: false, committed: false }), false);
+  assert.equal(lib.roundCounts?.({ finished: false, committed: true }), true, 'it changed something: it counts');
+  assert.equal(lib.roundCounts?.({ finished: true, committed: false }), true, 'it ran and chose not to change anything: it counts');
+});
+test('the owner round gives its count back when the agent run didn\'t finish', () => {
+  const src = runnerSrc();
+  assert.match(src, /e\.unfinished = true/);
+  assert.match(src, /roundCounts\(\{ finished: !e\.unfinished, committed: head\(s\) !== before \}\)/);
+});
+
+// Qodo's review and the blind review of #115 (984df74), each finding as a test before its fix
+test('#115 6b83a02c and the blind review: a run the machine check stopped before it started is unfinished', () => {
+  assert.match(runnerSrc(), /const m = machineCheck\(\); if \(!m\.ok\) \{ const e = new Stop\(m\.why\); e\.unfinished = true; throw e; \}/);
+});
+
+// #115, round 2: quoting Qodo's reason kept picking the wrong comment (Qodo edits its comments in place,
+// for later heads), and missed the "Sorry" reply on the timeout path (Qodo and the blind review on
+// #115). Both stops now link to Qodo's latest comment on the PR instead of quoting it.
+test("an incomplete-review stop links to Qodo's latest comment instead of quoting one", () => {
+  const src = runnerSrc();
+  assert.doesNotMatch(src, /qodoReason/);
+  assert.equal((src.match(/\$\{qodoLatest\(s\.pr\)\}/g) || []).length, 2, 'both stops, the second incomplete review and the timeout');
 });

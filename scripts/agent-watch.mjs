@@ -25,7 +25,7 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync, existsSync, appen
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, qodoReason, resumePlan } from './runner-lib.mjs';
+import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -132,6 +132,9 @@ function gate(n, s, sha, g) {
   write(`set qodo-gate on ${sha.slice(0, 7)} to ${st.state}`, () => postGate(sha, st));
   s.gateShown = key; save(n, s); event(n, `qodo-gate ${st.state} on ${sha.slice(0, 7)}: ${st.description}`);
 }
+// where Qodo says why its review isn't complete: a link to its newest comment on the PR, not a quote
+// (quoting picked the wrong comment: Qodo edits its comments in place for later heads, Qodo on #115)
+const qodoLatest = (pr) => { const c = issueComments(pr).filter((x) => x.user.login === QODO).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0]; return c ? `Qodo's latest comment: ${c.html_url}` : `Qodo hasn't commented on PR #${pr}`; };
 const listed = (fs) => fs.map((f) => `${severityOf(f)}: ${decodeEntities(f.title)}`);
 const ownerAsks = (s) => issueComments(s.pr).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
 // what the owner's account did on GitHub: compared before and after every agent run
@@ -193,7 +196,7 @@ class Refuse extends Error { constructor(label, msg) { super(msg); this.label = 
 function agent(n, s, what, prompt, profile = WORKER) {
   const log = join(HOME, 'logs', `${n}-${s.runs + 1}-${what}.log`), before = footprint(s), from = head(s);
   if (DRY) throw new Stop(`DRY RUN stops here: it would start agent run ${s.runs + 1} (${what}).`);
-  const m = machineCheck(); if (!m.ok) throw new Stop(m.why);   // before any agent work
+  const m = machineCheck(); if (!m.ok) { const e = new Stop(m.why); e.unfinished = true; throw e; }   // before any agent work; it never started (Qodo on #115)
   clearStale(s, 'agent-run');
   event(n, `agent run ${s.runs + 1} (${what}) started`);
   const r = spawnSync('claude', ['-p', prompt, '--setting-sources', 'project', '--settings', AGENT_SETTINGS, '--strict-mcp-config',
@@ -204,7 +207,7 @@ function agent(n, s, what, prompt, profile = WORKER) {
   writeFileSync(log, `$ claude -p ${JSON.stringify(prompt)}\n\n${r.stdout || ''}\n${r.stderr || ''}\nexit ${r.status}${r.error ? ' ' + r.error.message : ''}\n`);
   s.runs++; save(n, s);
   event(n, `agent run ${s.runs} (${what}) ended: exit ${r.status}${r.error ? ' (' + r.error.code + ')' : ''}`);
-  if (r.status !== 0) throw new Stop(`Agent run ${s.runs} (${what}) didn't finish: exit ${r.status}${r.error ? ', ' + r.error.code : ''}. Log: \`${log}\``);
+  if (r.status !== 0) { const e = new Stop(`Agent run ${s.runs} (${what}) didn't finish: exit ${r.status}${r.error ? ', ' + r.error.code : ''}. Log: \`${log}\``); e.unfinished = true; throw e; }
   // don't take the agent's word for it: check what actually changed
   const after = footprint(s);
   if (after !== before) throw new Stop(`Something changed on GitHub during agent run ${s.runs} (${what}). The agent isn't allowed to touch GitHub.\n\n${fence(before + '\n→\n' + after)}`);
@@ -479,7 +482,16 @@ function continueRun(n, s) {
       // If the agent changes nothing, the run stops and asks the owner (afterOwnerRound)
       writeReview(s, q && q.reviewed === s.head ? q : null, asks.filter((a, i) => !asked[i].retry));
       const before = head(s);
-      agent(n, s, 'owner-comment', `Unattended run. jtbinith commented on PR #${s.pr} for ticket #${n}. The comment is in .agent/review.md. Make that change test first (a test: commit, then a fix: commit), following AGENTS.md and the work-ticket skill. Update .agent/report.md.`);
+      try {
+        agent(n, s, 'owner-comment', `Unattended run. jtbinith commented on PR #${s.pr} for ticket #${n}. The comment is in .agent/review.md. Make that change test first (a test: commit, then a fix: commit), following AGENTS.md and the work-ticket skill. Update .agent/report.md.`);
+      } catch (e) {
+        // a round whose agent didn't finish and changed nothing doesn't use up the owner's limit (#96)
+        if (e instanceof Stop && !roundCounts({ finished: !e.unfinished, committed: head(s) !== before })) {
+          s.commentRounds = Math.max(0, (s.commentRounds || 0) - 1); save(n, s);
+          e.message += ` This round didn't count against the \`/agent\` limit: comment again once it's fixed.`;
+        }
+        throw e;
+      }
       if (afterOwnerRound({ committed: head(s) !== before }) === 'stop')
         throw new Stop(`The agent made no change for your /agent request. Its reasons are in the report below. Comment \`/agent retry\` on its own on PR #${s.pr} to re-run the checks.`);
       checkAndPush(n, s, 'owner comment');
@@ -501,15 +513,15 @@ function continueRun(n, s) {
         const plan = reaskPlan({ head: s.head, runId: read?.review_session?.run_id, asked: s.reasked });
         if (plan !== 'stop') {
           if (plan === 'reask') {
-            write(`ask Qodo to review PR #${s.pr} again`, () => gh('pr', 'comment', String(s.pr), '-R', REPO, '--body', '/review'));
+            // the command Qodo names when its review fails ("try again manually by commenting /agentic_review", #112)
+            write(`ask Qodo to review PR #${s.pr} again`, () => gh('pr', 'comment', String(s.pr), '-R', REPO, '--body', '/agentic_review'));
             if (!DRY) { s.reasked = { head: s.head, run: read?.review_session?.run_id }; s.waitFrom = Date.now(); save(n, s); }   // a rehearsal never records an ask it didn't make (Qodo on #113)
             event(n, `${g.why}: asked Qodo to review ${s.head.slice(0, 7)} again`);
-          } else if ((Date.now() - s.waitFrom) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why}, and Qodo hadn't started a new review ${LIMITS.reviewWaitMin} min after it was asked again.`);
+          } else if ((Date.now() - s.waitFrom) / 60000 > LIMITS.reviewWaitMin) throw new Stop(`${g.why}, and Qodo hadn't started a new review ${LIMITS.reviewWaitMin} min after it was asked again (${qodoLatest(s.pr)}).`);
           if (DRY) { console.log(`DRY RUN would wait for Qodo's new review`); process.exit(0); }
           sleep(LIMITS.reviewPollSec * 1000); continue;
         }
-        const reason = q?.reviewed === s.head ? qodoReason(q.body) : '';   // only from Qodo's comment on this head (Qodo on #113)
-        throw new Stop(`${g.why}, twice: the runner asked Qodo to review again and the new run was incomplete too${reason ? `. Qodo says: "${reason}"` : ''}. Ask Qodo to review it again, then \`/agent retry\`.`);
+        throw new Stop(`${g.why}, twice: the runner asked Qodo to review again and the new run was incomplete too (${qodoLatest(s.pr)}). Ask Qodo to review it again, then \`/agent retry\`.`);
       }
       if (g.state === 'done') {
         // Gate 4: Qodo found nothing open, so a blind reviewer reviews the same head before it's green

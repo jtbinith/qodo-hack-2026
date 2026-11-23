@@ -131,6 +131,10 @@ export function askPlan({ asked, commentRounds, retryRounds, limits }) {
   return kind === 'instruction' ? { ...r, commentRounds: commentRounds + 1 } : { ...r, retryRounds: retryRounds + 1 };
 }
 
+// Does an /agent instruction round count against the limit? Not when its agent run didn't finish and
+// changed nothing, for example a sign-in that had expired (#96 on Day 10): the owner gets it back.
+export const roundCounts = ({ finished, committed }) => finished || committed;
+
 // Rule 7: the GitHub list reads in the runner's source that stop at one page. A REST list (comments,
 // events, blocked_by, /issues, /pulls) must be the callback of allPages((page) => …), not just have a
 // page number in its URL. gh's own list commands stop at 30, so they need an explicit --limit.
@@ -284,12 +288,6 @@ export function testRetry(first, second) {
 export function reaskPlan({ head, runId, asked }) {
   if (!asked || asked.head !== head) return 'reask';
   return runId === asked.run ? 'wait' : 'stop';
-}
-// The line where Qodo says why its review isn't complete, if it gives one (#112: "Qodo could not
-// verify all local findings on this PR.")
-export function qodoReason(body) {
-  const text = decodeEntities((body || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, '\n'));
-  return text.split('\n').map((l) => l.trim()).find((l) => /^Qodo (could not|couldn't|did not|was unable)/i.test(l)) || '';
 }
 // An owner's `/agent retry` on the ticket after a stop before the first push (no PR yet): the
 // runner checks the stopped branch again from where it stopped, under the same retry limit (#111).
