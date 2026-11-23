@@ -894,3 +894,29 @@ test('gate 6 converges: a later blind round is asked about the fix commits since
   assert.match(src, /BLIND_PROMPT\(n, s\.base, s\.blindHead\)/);
   assert.match(src, /s\.blindHead = s\.head/);
 });
+
+// Qodo on #131: an acceptance case still blocks, a retry with no new commit reviews the whole diff,
+// and a deferred ticket carries a runnable repro with its helpers.
+test('#131 95de16b9: a finding in already-reviewed code that is an acceptance case still blocks', () => {
+  assert.equal(typeof lib.convergeAfterScope, 'function');
+  const items = [{ id: 'blind-0', title: 'old' }, { id: 'blind-1', title: 'old but acceptance' }, { id: 'blind-2', title: 'new' }];
+  const p = lib.convergeAfterScope(items, ['blind-0', 'blind-1'], ['blind-1']);
+  assert.deepEqual(p.defer.map((f) => f.title), ['old']);
+});
+test('#131 9aaf15c9: a blind round on the head it already reviewed reviews the whole diff, not an empty range', () => {
+  assert.equal(typeof lib.blindSince, 'function');
+  assert.equal(lib.blindSince('abc', 'abc'), null);
+  assert.equal(lib.blindSince('abc', 'def'), 'abc');
+  assert.equal(lib.blindSince(undefined, 'def'), null);
+  assert.match(runnerSrc(), /BLIND_PROMPT\(n, s\.base, blindSince\(s\.blindHead, s\.head\)\)/);
+});
+test('#131 898e53f5: a deferred ticket carries the whole repro and the helpers it imports', () => {
+  assert.equal(typeof lib.reproBundle, 'function');
+  const big = 'x'.repeat(7000);
+  const files = { 'a.test.mjs': `import { h } from './helper.mjs';\n// ${big}\n`, 'helper.mjs': 'export const h = 1;\n', 'other.mjs': 'unrelated' };
+  const md = lib.reproBundle(files, '.agent/blind/a.test.mjs');
+  assert.match(md, /\.agent\/blind\/a\.test\.mjs/);
+  assert.match(md, /\.agent\/blind\/helper\.mjs[\s\S]*export const h = 1;/);
+  assert.ok(md.includes(big), 'the repro is not cut at 6,000 characters');
+  assert.doesNotMatch(md, /unrelated/);
+});
