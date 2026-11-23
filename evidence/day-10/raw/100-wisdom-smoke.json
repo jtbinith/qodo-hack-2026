@@ -1,0 +1,90 @@
+{
+  "claims": [
+    {
+      "claim": "In the browser test, B waits up to 90 s for files.size === 4 at the first transfer",
+      "verdict": "holds",
+      "file": "tests/two-browser.mjs",
+      "line": 212,
+      "quote": "await until(B, () => window.__t.files.size === 4, null, 90000);",
+      "note": "The wait is 90000 ms."
+    },
+    {
+      "claim": "A drags 4 prints onto B before that wait",
+      "verdict": "holds",
+      "file": "tests/two-browser.mjs",
+      "line": 207,
+      "quote": "await drag(A, 'photo-0.jpg', 900 + 150);",
+      "note": "Lines 207-210 drag photo-0.jpg, clip.mp4, IMG_0001.JPG and IMG_0003.JPG with the mouse past A's right edge."
+    },
+    {
+      "claim": "The step comes right after the check 'the other device sees 10 prints with 8 thumbnails'",
+      "verdict": "holds",
+      "file": "tests/two-browser.mjs",
+      "line": 193,
+      "quote": "check(true, 'the other device sees 10 prints with 8 thumbnails');",
+      "note": "Between that check (193) and the wait (212) come only the drag helper and the 4 drags."
+    },
+    {
+      "claim": "Seen on Day 8 in evidence/day-08/raw/browsers-main-run1.txt, timing out at this step",
+      "verdict": "holds",
+      "file": "evidence/day-08/raw/browsers-main-run1.txt",
+      "line": 8,
+      "quote": "FAIL timed out after 90 s at two-browser.mjs:133: await until(B, () => window.__t.files.size === 4, null, 90000);",
+      "note": "Same wait, but at line 133 of an older test file (now line 212). The file doesn't record the commit, so 'unchanged main' rests only on the filename."
+    },
+    {
+      "claim": "Seen in 1 of 15 runs while fixing #92, in relay mode (evidence/flake-92/relay-6-transfer-timeout.txt)",
+      "verdict": "holds",
+      "file": "evidence/flake-92/relay-6-transfer-timeout.txt",
+      "line": 14,
+      "quote": "FAIL timed out after 90 s at two-browser.mjs:212: await until(B, () => window.__t.files.size === 4, null, 90000);",
+      "note": "evidence/flake-92/15-runs-summary.txt:6 'relay 6 exit=1 110s fails=1' is the only failure out of 15 (10 relay, 5 direct). The PR #93 description, read through Qodo, says the same."
+    },
+    {
+      "claim": "It stopped the factory's second #61 run (evidence/day-09/runs-61/)",
+      "verdict": "holds",
+      "file": "evidence/day-09/04-runs-61.md",
+      "line": 6,
+      "quote": "`npm test` timed out at the first transfer (`files.size === 4`), the other flake seen on main",
+      "note": "evidence/day-09/runs-61/events.txt:11 has '#61 npm test FAILED on 4947395' for run 2. The raw test output for run 2 isn't in runs-61/, only this summary."
+    },
+    {
+      "claim": "It is not the late-key race: that step comes much later in the test",
+      "verdict": "holds",
+      "file": "tests/two-browser.mjs",
+      "line": 419,
+      "quote": "// a device whose key is late: in a fresh room, B holds back its key",
+      "note": "The late-key step starts at line 419. The first transfer is at 212."
+    },
+    {
+      "claim": "The late-key race was #92, fixed in #93",
+      "verdict": "holds",
+      "file": "evidence/day-09/04-runs-61.md",
+      "line": 5,
+      "quote": "Led to #92, fixed in #93",
+      "note": "PR #93, read through Qodo, is titled 'test: the late-key step waits for A to give up, not a fixed 11 s (#92)', says 'Closes #92' and is closed. tests/two-browser.mjs:423 cites (#92)."
+    },
+    {
+      "claim": "When it gives up, the test prints nothing about B's state",
+      "verdict": "holds",
+      "file": "tests/two-browser.mjs",
+      "line": 45,
+      "quote": "throw new Error(`timed out after ${timeout / 1000} s at two-browser.mjs:${line}:",
+      "note": "until() only prints the timeout, the line number and the source line. Nothing is read from either page."
+    },
+    {
+      "claim": "No code change is needed for it to fail (it is intermittent)",
+      "verdict": "holds",
+      "file": "evidence/flake-92/15-runs-summary.txt",
+      "line": 6,
+      "quote": "relay 6 exit=1 110s fails=1 latekey=",
+      "note": "PR #93 changed only the test, and the other 14 runs on the same code passed this step."
+    }
+  ],
+  "questions": [
+    "Acceptance asks to print 'which drops A registered', but A keeps no record of its drops. On pointerup (web/index.html:311-313) A broadcasts 'move' and 'dropcheck' and calls dropped(p) locally, and nothing is stored. Should the test wrap A's peers.send or dropped to record them, or should the app expose them?",
+    "'What B is still receiving' can be read from window.__t.incoming (web/index.html:385, filled in expect() at line 172). Should the diagnostic also print B's prints' positions or onMyScreen result, so a drag that landed off B's screen (dropped() at line 270 does nothing then) can be told apart from a stalled transfer?",
+    "'15 runs in a row (direct and relay)': 15 of each mode, or 15 in total split between them as in #93 (10 relay + 5 direct)?",
+    "Should the 90 s wait stay the same once the cause is fixed, or should the ticket set a target time?"
+  ]
+}

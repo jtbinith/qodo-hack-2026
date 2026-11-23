@@ -1,0 +1,4 @@
+## qodo-gate --post on #107 with blind-review = failure
+PR #107 at 5a4d223: success. Quality gate met: no open High or Medium, 1 Low flagged
+not posted: the blind review of 5a4d223 hasn't passed (its blind-review status is pending or failed)
+exit 1

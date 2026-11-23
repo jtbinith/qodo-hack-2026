@@ -1,0 +1,184 @@
+{
+  "result": {
+    "claims": [
+      {
+        "claim": "#95 rescues the layout for a device that hears late that the time keeper changed: a layout from a non-leader in the room is kept and used when that device becomes time keeper",
+        "verdict": "holds",
+        "file": "web/net.js",
+        "line": 49,
+        "quote": "else if (early && isValidJoins(early, [...Object.keys(s.peers), id])) { s.joins = early; emit('layout'); }",
+        "note": "earlyLayouts is filled at web/net.js:184 and read in electLeader at web/net.js:46. get-pr 95 (read through Qodo) describes the same change."
+      },
+      {
+        "claim": "Join results (joined, retry, nomatch) are not rescued: they are dropped unless they come from the device this device currently counts as time keeper (fromLeader)",
+        "verdict": "holds",
+        "file": "web/net.js",
+        "line": 197,
+        "quote": "const fromLeader = (payload) => s.leader !== id && payload?.from === s.leader;",
+        "note": "The ticket writes the drop condition as `payload.from !== s.leader`. The code says it the other way round (`payload?.from === s.leader` lets a result through), and it means the same thing. Lines 198-200 apply fromLeader to all three events, and nothing keeps a dropped result the way earlyLayouts keeps a dropped layout."
+      },
+      {
+        "claim": "The late device's own no-match timer then fires and it shows \"No match\"",
+        "verdict": "holds",
+        "file": "web/net.js",
+        "line": 206,
+        "quote": "emit('nomatch', { dev: id, t: p.t, timedOut: true, latest: p.t === latest }); }, NO_MATCH_AFTER)",
+        "note": "Only result() at web/net.js:168 clears the wait, and a dropped result never reaches it. NO_MATCH_AFTER = WINDOW + DEADLINE + NET_MARGIN (web/net.js:119)."
+      },
+      {
+        "claim": "Same symptom as #89's bug 1 (Qodo c7362445), a joined followed by a nomatch",
+        "verdict": "holds",
+        "file": "evidence/day-08/repro/q3-joined-then-nomatch.mjs",
+        "line": 1,
+        "quote": "Qodo c7362445: one device pushes twice, one push pairs -> joined, then nomatch",
+        "note": "Both end with a device showing No match after a join that worked. The causes differ, as the ticket says."
+      },
+      {
+        "claim": "The reproduction script is at evidence/day-09/repro-pr95/repro.test.mjs: L leaves, A hears first, A and B push, B hears 1.5 s later",
+        "verdict": "holds",
+        "file": "evidence/day-09/repro-pr95/repro.test.mjs",
+        "line": 74,
+        "quote": "hear('B');            // B hears 1.5 s later; A's 'joined' has already been dropped",
+        "note": "The script logs its results and asserts nothing, so it can't serve as the failing test as it stands. I didn't run it (read-only run), so the output quoted in the ticket wasn't checked."
+      },
+      {
+        "claim": "Results from a device that isn't the time keeper are dropped today (the behaviour the second acceptance item keeps)",
+        "verdict": "holds",
+        "file": "tests/net.test.mjs",
+        "line": 80,
+        "quote": "test('a joined, retry or nomatch not sent by the time keeper is ignored'",
+        "note": "There is also a browser check at tests/two-browser.mjs:100."
+      },
+      {
+        "claim": "2 of #95's new unit tests still pass with the whole #95 fix removed",
+        "verdict": "unverified",
+        "file": "tests/net.test.mjs",
+        "line": 243,
+        "quote": "a device that hears late that the time keeper left still ends up with the new time keeper",
+        "note": "#95's tests are at tests/net.test.mjs:243-395. Checking the claim means taking the fix out and running the tests, which this read-only run can't do."
+      },
+      {
+        "claim": "The kept-layout check that the sender is in the room (Object.hasOwn(s.peers, payload.from)) exists, and deleting it breaks no test",
+        "verdict": "unverified",
+        "file": "web/net.js",
+        "line": 184,
+        "quote": "Object.hasOwn(s.peers, payload.from) && payload.from !== id) earlyLayouts.set(payload.from, payload.joins);",
+        "note": "The check is at web/net.js:184, so that half holds. I didn't run the tests with it deleted. Even without it, the leader is picked from s.peers (web/net.js:39) and the kept layout is checked again against who is here (web/net.js:49), so a test would struggle to see it go, which fits the claim."
+      },
+      {
+        "claim": "\"The new time keeper leaves straight away\" has a browser test only, with no unit test",
+        "verdict": "holds",
+        "file": "tests/two-browser.mjs",
+        "line": 545,
+        "quote": "// the new time keeper leaves straight away: C takes over and C and D agree on a layout without A or B",
+        "note": "A search of tests/net.test.mjs for 'straight away' finds nothing."
+      },
+      {
+        "claim": "Also seen (Low): a kept layout can be out of date for a moment before the new time keeper's own layout replaces it",
+        "verdict": "unverified",
+        "file": "web/net.js",
+        "line": 184,
+        "quote": "earlyLayouts.set(payload.from, payload.joins);",
+        "note": "Only the latest layout per device is kept, and it is used at once in electLeader (web/net.js:49) with no ask. Whether a newer one is still on its way depends on timing, and the ticket says this wasn't reproduced."
+      }
+    ],
+    "questions": [
+      "Which results get kept: should a late device keep only results that name one of its own waiting pushes (waits.has(t), web/net.js:168), and how many per sender? Keeping every result from every device in the room would open a new flood path under Rule 3. The ticket names no cap.",
+      "Acceptance says 'whatever order it hears about the change in'. If the device hears about the change only after its own NO_MATCH_AFTER timer (web/net.js:206) has fired, it has already shown No match. Should the timer wait, or be undone, while a result kept from another device names that push?",
+      "Kept results must also pass validJoined/validRetry/validNoMatch and isValidJoins when they arrive and again when used (Rule 1), as kept layouts do at web/net.js:49. Does the ticket want them checked again against who is in the room at election time?",
+      "When the time keeper changes, should kept results from devices other than the new time keeper be cleared, as earlyLayouts.clear() does at web/net.js:47?",
+      "The repro script logs and asserts nothing. Should it become the failing unit test in tests/net.test.mjs?"
+    ]
+  },
+  "verdict": {
+    "state": "proceed",
+    "held": [
+      {
+        "claim": "#95 rescues the layout for a device that hears late that the time keeper changed: a layout from a non-leader in the room is kept and used when that device becomes time keeper",
+        "verdict": "holds",
+        "file": "web/net.js",
+        "line": 49,
+        "quote": "else if (early && isValidJoins(early, [...Object.keys(s.peers), id])) { s.joins = early; emit('layout'); }",
+        "note": "earlyLayouts is filled at web/net.js:184 and read in electLeader at web/net.js:46. get-pr 95 (read through Qodo) describes the same change."
+      },
+      {
+        "claim": "Join results (joined, retry, nomatch) are not rescued: they are dropped unless they come from the device this device currently counts as time keeper (fromLeader)",
+        "verdict": "holds",
+        "file": "web/net.js",
+        "line": 197,
+        "quote": "const fromLeader = (payload) => s.leader !== id && payload?.from === s.leader;",
+        "note": "The ticket writes the drop condition as `payload.from !== s.leader`. The code says it the other way round (`payload?.from === s.leader` lets a result through), and it means the same thing. Lines 198-200 apply fromLeader to all three events, and nothing keeps a dropped result the way earlyLayouts keeps a dropped layout."
+      },
+      {
+        "claim": "The late device's own no-match timer then fires and it shows \"No match\"",
+        "verdict": "holds",
+        "file": "web/net.js",
+        "line": 206,
+        "quote": "emit('nomatch', { dev: id, t: p.t, timedOut: true, latest: p.t === latest }); }, NO_MATCH_AFTER)",
+        "note": "Only result() at web/net.js:168 clears the wait, and a dropped result never reaches it. NO_MATCH_AFTER = WINDOW + DEADLINE + NET_MARGIN (web/net.js:119)."
+      },
+      {
+        "claim": "Same symptom as #89's bug 1 (Qodo c7362445), a joined followed by a nomatch",
+        "verdict": "holds",
+        "file": "evidence/day-08/repro/q3-joined-then-nomatch.mjs",
+        "line": 1,
+        "quote": "Qodo c7362445: one device pushes twice, one push pairs -> joined, then nomatch",
+        "note": "Both end with a device showing No match after a join that worked. The causes differ, as the ticket says."
+      },
+      {
+        "claim": "The reproduction script is at evidence/day-09/repro-pr95/repro.test.mjs: L leaves, A hears first, A and B push, B hears 1.5 s later",
+        "verdict": "holds",
+        "file": "evidence/day-09/repro-pr95/repro.test.mjs",
+        "line": 74,
+        "quote": "hear('B');            // B hears 1.5 s later; A's 'joined' has already been dropped",
+        "note": "The script logs its results and asserts nothing, so it can't serve as the failing test as it stands. I didn't run it (read-only run), so the output quoted in the ticket wasn't checked."
+      },
+      {
+        "claim": "Results from a device that isn't the time keeper are dropped today (the behaviour the second acceptance item keeps)",
+        "verdict": "holds",
+        "file": "tests/net.test.mjs",
+        "line": 80,
+        "quote": "test('a joined, retry or nomatch not sent by the time keeper is ignored'",
+        "note": "There is also a browser check at tests/two-browser.mjs:100."
+      },
+      {
+        "claim": "\"The new time keeper leaves straight away\" has a browser test only, with no unit test",
+        "verdict": "holds",
+        "file": "tests/two-browser.mjs",
+        "line": 545,
+        "quote": "// the new time keeper leaves straight away: C takes over and C and D agree on a layout without A or B",
+        "note": "A search of tests/net.test.mjs for 'straight away' finds nothing."
+      }
+    ],
+    "wrong": [],
+    "unverified": [
+      {
+        "claim": "2 of #95's new unit tests still pass with the whole #95 fix removed",
+        "verdict": "unverified",
+        "file": "tests/net.test.mjs",
+        "line": 243,
+        "quote": "a device that hears late that the time keeper left still ends up with the new time keeper",
+        "note": "#95's tests are at tests/net.test.mjs:243-395. Checking the claim means taking the fix out and running the tests, which this read-only run can't do.",
+        "why": "not checked"
+      },
+      {
+        "claim": "The kept-layout check that the sender is in the room (Object.hasOwn(s.peers, payload.from)) exists, and deleting it breaks no test",
+        "verdict": "unverified",
+        "file": "web/net.js",
+        "line": 184,
+        "quote": "Object.hasOwn(s.peers, payload.from) && payload.from !== id) earlyLayouts.set(payload.from, payload.joins);",
+        "note": "The check is at web/net.js:184, so that half holds. I didn't run the tests with it deleted. Even without it, the leader is picked from s.peers (web/net.js:39) and the kept layout is checked again against who is here (web/net.js:49), so a test would struggle to see it go, which fits the claim.",
+        "why": "not checked"
+      },
+      {
+        "claim": "Also seen (Low): a kept layout can be out of date for a moment before the new time keeper's own layout replaces it",
+        "verdict": "unverified",
+        "file": "web/net.js",
+        "line": 184,
+        "quote": "earlyLayouts.set(payload.from, payload.joins);",
+        "note": "Only the latest layout per device is kept, and it is used at once in electLeader (web/net.js:49) with no ask. Whether a newer one is still on its way depends on timing, and the ticket says this wasn't reproduced.",
+        "why": "not checked"
+      }
+    ]
+  }
+}

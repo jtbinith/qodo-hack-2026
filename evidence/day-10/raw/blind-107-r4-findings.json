@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "title": "The blind reviewer can read Qodo's review through its own node --test run",
+      "severity": "Medium",
+      "file": "scripts/agent-watch.mjs",
+      "line": 187,
+      "why": "The only thing keeping the blind reviewer away from Qodo's review is Read(...) deny rules on .agent/review.md, report.md, pr-body.md and the other UNSEEN files. But BLIND also allows `Bash(node --test:*)`, and the reviewer can write any .test.mjs in .agent/blind/. That test can readFileSync('../review.md') and print it, which gets around the deny rules completely. blindReview leaves those files in the worktree for the whole run: from earlier rounds, review.md holds Qodo's findings and report.md holds the agent's report. So the gate's main promise, a reviewer that hasn't seen Qodo's review, depends on the model choosing not to look. Fix: move the UNSEEN files out of the worktree (for example to HOME/logs) before agent(), and put them back afterwards.",
+      "repro": ".agent/blind/blind-leak.test.mjs"
+    },
+    {
+      "title": "A local-review stop leaves localRounds at the limit, so every later owner round stops without a fix round",
+      "severity": "Medium",
+      "file": "scripts/agent-watch.mjs",
+      "line": 372,
+      "why": "s.localRounds is set back to 0 only after a successful push (line 384). When the local review is still at High or Medium after LIMITS.localRounds, the code throws a Stop and the saved state keeps localRounds = 2. Then the owner comments `/agent …` on the PR. The reopen path (line 542) and continueRun's owner and retry paths don't reset it, and they go back through checkAndPush. The first High or Medium from the local review stops the run at once ('still open after 2 local rounds') with no fix round for the new change. A push is the only thing that resets the count, and a push can't happen, so the PR is stuck. This also breaks Rule 7: a saved count from an earlier round decides what happens now.",
+      "repro": ".agent/blind/local-rounds-stuck.test.mjs"
+    },
+    {
+      "title": "mayPostSuccess fails open when blind-review isn't on the first page of statuses",
+      "severity": "Low",
+      "file": "scripts/qodo-gate.mjs",
+      "line": 42,
+      "why": "statusesOf reads only `statuses?per_page=100` (one page, which Rule 7 forbids), and mayPostSuccess treats a missing blind-review status as 'a PR made by hand: allowed'. GitHub lists newest first, so this only matters if more than 100 newer statuses land on one head. It still fails open, not closed. The combined `commits/{sha}/status` endpoint gives the latest status for each context and would avoid both problems."
+    },
+    {
+      "title": "The blind reviewer can still learn Qodo's findings from git log and the tests",
+      "severity": "Low",
+      "file": "scripts/agent-watch.mjs",
+      "line": 187,
+      "why": "BLIND allows git log and git show, and the branch's commit messages and test names cite Qodo's findings word for word (for example 'fix: Qodo's findings on #107: exit codes, write scope, blind status, proofs, local rounds' and the '#107 <id>: …' tests). So the reviewer isn't really blind to what Qodo found. The repo's convention of citing findings in commits is what makes this so, and a unit test can't show it."
+    },
+    {
+      "title": "A real assertion failure is thrown away if the output mentions SyntaxError",
+      "severity": "Low",
+      "file": "scripts/runner-lib.mjs",
+      "line": 253,
+      "why": "red() rejects any run whose output contains 'SyntaxError' or 'Cannot find module' anywhere, including in an assertion message or expected and actual values (for example a repro about a parser that should throw SyntaxError). That run then doesn't count as reproduced. Matching on node:test's failure type (for example the 'failureType' or error code lines) would be more precise."
+    }
+  ]
+}

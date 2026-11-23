@@ -1,0 +1,18 @@
+2026-11-23T13:32:47Z #72 picked up (F13 · Save all)
+2026-11-23T13:32:54Z #72 agent run 1 (wisdom) started
+2026-11-23T13:34:07Z #72 agent run 1 (wisdom) ended: exit 0
+2026-11-23T13:34:11Z #72 Wisdom check: proceed, 6 held, 0 wrong, 0 unverified
+2026-11-23T13:34:22Z #72 agent-needs-help: Codebase Wisdom found 3 questions the ticket leaves open that decide the design. Nothing was built. Answer them in the ticket, then label it `ready-for-agent` again. If navigator.canShare({ files: all }) says no for the whole batch (too many, too large in total, or a type suc
+2026-11-23T13:44:45Z #72 picked up (F13 · Save all)
+2026-11-23T13:44:52Z #72 agent run 1 (wisdom) started
+2026-11-23T13:46:27Z #72 agent run 1 (wisdom) ended: exit 0
+2026-11-23T13:46:31Z #72 Wisdom check: proceed, 13 held, 0 wrong, 0 unverified
+2026-11-23T13:46:42Z #72 agent-needs-help: Codebase Wisdom found 2 questions the ticket leaves open that decide the design. Nothing was built. Answer them in the ticket, then label it `ready-for-agent` again. Which photos count as 'still arriving': only full-photo transfers in incoming (not the 'thumb:' entries), or e
+2026-11-23T13:57:03Z #72 picked up (F13 · Save all)
+2026-11-23T13:57:10Z #72 agent run 1 (wisdom) started
+2026-11-23T13:58:21Z #72 agent run 1 (wisdom) ended: exit 0
+2026-11-23T13:58:26Z #72 Wisdom check: proceed, 11 held, 0 wrong, 0 unverified
+2026-11-23T13:58:36Z #72 agent-needs-help: Codebase Wisdom found 3 questions the ticket leaves open that decide the design. Nothing was built. Answer them in the ticket, then label it `ready-for-agent` again. When the share sheet is used, when is 'Saved N · M still arriving' shown: right after the tap, or only once na
+2026-11-23T14:18:52Z #72 waiting: PR #126 is still open
+2026-11-23T14:28:59Z #72 waiting: PR #126 is still open
+2026-11-23T14:39:08Z #72 waiting: PR #126 is still open
