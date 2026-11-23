@@ -606,3 +606,16 @@ test('the owner round gives its count back when the agent run didn\'t finish', (
   assert.match(src, /e\.unfinished = true/);
   assert.match(src, /roundCounts\(\{ finished: !e\.unfinished, committed: head\(s\) !== before \}\)/);
 });
+
+// Qodo's review and the blind review of #115 (984df74), each finding as a test before its fix
+test('#115 bf3ed708: Qodo\'s error is quoted whole, with the command inside <code>, and with either apostrophe', () => {
+  const body = readFileSync(new URL('./fixtures/qodo/pr-112-sorry.html', import.meta.url), 'utf8');
+  assert.match(lib.qodoReason?.(body) ?? '', /by commenting \/agentic_review on this PR\./);
+  assert.match(lib.qodoReason?.('<p>We weren’t able to complete the code review on our side.</p>') ?? '', /weren’t able/);
+});
+test('#115 6b83a02c and the blind review: a run the machine check stopped before it started is unfinished', () => {
+  assert.match(runnerSrc(), /const m = machineCheck\(\); if \(!m\.ok\) \{ const e = new Stop\(m\.why\); e\.unfinished = true; throw e; \}/);
+});
+test('#115 ab8e0f03: the reason comes from any Qodo comment posted since the push, not only one marked with the head', () => {
+  assert.match(runnerSrc(), /const reason = qodoReasonSince\(s\.pr, s\.pushedAt\);/);
+});
