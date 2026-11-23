@@ -337,7 +337,7 @@ export function acceptLocalOnly({ read, head, review, ciOk }) {
 //   fails here and on main, not an acceptance case   -> pre-existing: defer to its owner ticket
 //   doesn't fail here                                -> not reproduced: open for the owner
 // A finding with no scope entry or an unsafe repro is fixed, as before.
-const SCOPE_REPRO = /^\.agent\/scope\/[\w.-]+\.test\.mjs$/;
+const SCOPE_REPRO = /^\.agent\/(scope|blind)\/[\w.-]+\.test\.mjs$/;   // blind findings keep their own repro (blind review on #122)
 const assertionRed = (r) => !!r && !r.ok && /AssertionError|ERR_ASSERTION/.test(r.out || '') && !/SyntaxError|ERR_MODULE_NOT_FOUND|Cannot find module/.test(r.out || '');
 export const scopeRepros = (j) => [...new Set(((j && Array.isArray(j.entries)) ? j.entries : []).map((e) => e?.repro).filter((r) => typeof r === 'string' && SCOPE_REPRO.test(r) && !r.includes('..')))];
 export function scopePlan(ids, j, onBranch, onMain) {

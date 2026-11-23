@@ -359,6 +359,10 @@ function scopeCheck(n, s, items, kind) {
   if (head(s) !== before) throw new Stop('The scope check made commits. It may only read and write .agent/scope/.');
   let j; try { j = JSON.parse(readFileSync(join(dir, 'scope.json'), 'utf8')); } catch { j = null; }
   // an entry whose repro file was never written counts as no entry, so its finding is fixed (Qodo on #120)
+  // a blind finding is judged on main by the blind review's own repro, which the runner already saw fail
+  // here; the scope run only says whether it's an acceptance case (blind review on #122)
+  if (j && Array.isArray(j.entries)) for (const e of j.entries) { const f = items.find((x) => x.id === e?.id); if (f && e) { if (f.repro) e.repro = f.repro;   // the blind review's own repro
+  } }
   if (j && Array.isArray(j.entries)) j.entries = j.entries.filter((e) => e && typeof e.repro === 'string' && !e.repro.includes('..') && existsSync(join(s.dir, e.repro)));
   const run = (cwd, f) => { const r = spawnSync(SANDBOX, ['node', '--test', f], { cwd, encoding: 'utf8', timeout: LIMITS.testRunMin * 60000 }); return { ok: r.status === 0, out: (r.stdout || '') + (r.stderr || '') }; };
   const repros = scopeRepros(j), onBranch = Object.fromEntries(repros.map((f) => [f, run(s.dir, f)]));
@@ -368,6 +372,7 @@ function scopeCheck(n, s, items, kind) {
   sh('git', ['worktree', 'add', '--detach', mainDir, 'origin/main'], { cwd: MAIN });
   symlinkSync(join(MAIN, 'node_modules'), join(mainDir, 'node_modules'));
   cpSync(dir, join(mainDir, '.agent', 'scope'), { recursive: true });   // the repros and any helper they import
+  if (existsSync(join(s.dir, '.agent', 'blind'))) cpSync(join(s.dir, '.agent', 'blind'), join(mainDir, '.agent', 'blind'), { recursive: true });
   const onMain = Object.fromEntries(repros.map((f) => [f, run(mainDir, f)]));
   sh('git', ['worktree', 'remove', '--force', mainDir], { cwd: MAIN });
   const plan = scopePlan(items.map((f) => f.id), j, onBranch, onMain);
