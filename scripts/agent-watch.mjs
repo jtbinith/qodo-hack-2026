@@ -508,7 +508,10 @@ function openPr(n, s, why) {
 
 // the PR description is always the agent's latest description plus every proof so far,
 // so the PR and the finished-run comment read from the same text
-const prBody = (n, s) => shown((agentFile(s, 'pr-body.md') || `Closes #${n}`) + '\n\n' + (s.proofs || []).join('\n\n'));
+// When design questions were handed to the agent, its choices (its report's Assumptions) go into the PR
+// description too, so the owner sees them at merge whatever the agent wrote there (Qodo on #126)
+const choices = (s) => ((s.designAssumptions || []).length && assumptions(agentFile(s, 'report.md')) ? `**The agent's choices for the handed-over design questions** (from its report):\n${assumptions(agentFile(s, 'report.md'))}` : '');
+const prBody = (n, s) => shown([agentFile(s, 'pr-body.md') || `Closes #${n}`, choices(s), ...(s.proofs || [])].filter(Boolean).join('\n\n'));
 // Posts what's pushed but not yet on the PR: the description, and each new proof as a comment.
 // It's resumable: a crash between push and post is caught up on the next step or /agent retry.
 // (gh api, not gh pr edit: gh pr edit fails on this repo with a classic-projects error.)
