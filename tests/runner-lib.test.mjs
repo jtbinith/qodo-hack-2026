@@ -927,3 +927,9 @@ test('#131 898e53f5: a deferred ticket carries the whole repro and the helpers i
   assert.ok(md.includes(big), 'the repro is not cut at 6,000 characters');
   assert.doesNotMatch(md, /unrelated/);
 });
+test('#131 de8f4908 / 340576f0: the last scope entry per finding decides, and an unproven finding is never deferred', () => {
+  assert.equal(typeof lib.notAcceptanceIds, 'function');
+  const j = { entries: [{ id: 'blind-0', acceptance: false }, { id: 'blind-0', acceptance: true }, { id: 'blind-1', acceptance: false }] };
+  assert.deepEqual(lib.notAcceptanceIds(j), ['blind-1']);
+  assert.match(runnerSrc(), /\.filter\(\(f\) => bplan\.fix\.includes\(f\.id\)\), b\.older, bplan\.notAcceptance\)/);
+});
