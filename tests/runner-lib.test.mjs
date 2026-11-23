@@ -900,8 +900,15 @@ test('gate 6 converges: a later blind round is asked about the fix commits since
 test('#131 95de16b9: a finding in already-reviewed code that is an acceptance case still blocks', () => {
   assert.equal(typeof lib.convergeAfterScope, 'function');
   const items = [{ id: 'blind-0', title: 'old' }, { id: 'blind-1', title: 'old but acceptance' }, { id: 'blind-2', title: 'new' }];
-  const p = lib.convergeAfterScope(items, ['blind-0', 'blind-1'], ['blind-1']);
+  // the third argument lists the findings the scope run judged NOT an acceptance case
+  const p = lib.convergeAfterScope(items, ['blind-0', 'blind-1'], ['blind-0']);
   assert.deepEqual(p.defer.map((f) => f.title), ['old']);
+});
+test('#131 62f6bbc3: a finding in already-reviewed code with no acceptance judgment still blocks', () => {
+  const items = [{ id: 'blind-0', title: 'judged not acceptance' }, { id: 'blind-1', title: 'no scope entry' }];
+  const p = lib.convergeAfterScope(items, ['blind-0', 'blind-1'], ['blind-0']);
+  assert.deepEqual(p.defer.map((f) => f.title), ['judged not acceptance']);
+  assert.match(runnerSrc(), /plan\.notAcceptance = /);
 });
 test('#131 9aaf15c9: a blind round on the head it already reviewed reviews the whole diff, not an empty range', () => {
   assert.equal(typeof lib.blindSince, 'function');
