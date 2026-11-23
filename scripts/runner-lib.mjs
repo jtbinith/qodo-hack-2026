@@ -311,8 +311,12 @@ export function acceptLocalOnly({ read, head, review, ciOk }) {
   const r = read?.review_session;
   if (!r || r.commit_sha !== head || r.status !== 'completed' || r.review_complete !== false) return { ok: false, why: 'not an incomplete finished review of the head' };
   if (!review || review.reviewed !== head) return { ok: false, why: "Qodo's review comment isn't for this head" };
+  // the comment must be newer than this review run, so an older run's text can't stand in (Qodo on #117)
+  if (!(review.at >= Date.parse(r.started_at || 0))) return { ok: false, why: "Qodo's review comment is older than this review run" };
+  // and the local findings must be its only stated reason (Qodo and the blind review on #117)
   const text = decodeEntities((review.body || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, '\n'));
-  if (!text.split('\n').some((l) => l.trim() === LOCAL_ONLY_REASON)) return { ok: false, why: "Qodo didn't say the local findings were the reason" };
+  const reasons = text.split('\n').map((l) => l.trim()).filter((l) => /^Qodo (could not|couldn't|did not|was unable)|weren['’]t able to complete|something went wrong/i.test(l));
+  if (reasons.length !== 1 || reasons[0] !== LOCAL_ONLY_REASON) return { ok: false, why: reasons.length ? `Qodo gave other reasons: ${reasons.filter((x) => x !== LOCAL_ONLY_REASON).join(' ') || reasons.join(' ')}` : "Qodo didn't say the local findings were the reason" };
   if (!ciOk) return { ok: false, why: "CI's npm test hasn't passed on the head" };
   const g = gateVerdict({ ...read, review_session: { ...r, review_complete: true } }, head);
   if (g.state !== 'done') return { ok: false, why: g.why || `${g.blocking?.length ?? 0} High or Medium open` };

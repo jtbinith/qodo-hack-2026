@@ -23,7 +23,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, realpathSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { qodoRead, postGate, postBlind, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
+import { qodoRead, postGate, postBlind, ciPassed, reviewComment, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { homedir, userInfo } from 'node:os';
 import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON } from './runner-lib.mjs';
 
@@ -135,9 +135,6 @@ function gate(n, s, sha, g) {
 // where Qodo says why its review isn't complete: a link to its newest comment on the PR, not a quote
 // (quoting picked the wrong comment: Qodo edits its comments in place for later heads, Qodo on #115)
 const qodoLatest = (pr) => { const c = issueComments(pr).filter((x) => x.user.login === QODO).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0]; return c ? `Qodo's latest comment: ${c.html_url}` : `Qodo hasn't commented on PR #${pr}`; };
-// CI's required check on a commit, read fresh: the newest `npm test` run passed
-const ciPassed = (sha) => { const runs = ghJson('api', `repos/${REPO}/commits/${sha}/check-runs?check_name=${encodeURIComponent('npm test')}&per_page=100`)?.check_runs || [];
-  const last = runs.sort((a, b) => Date.parse(b.started_at || 0) - Date.parse(a.started_at || 0))[0]; return last?.status === 'completed' && last.conclusion === 'success'; };
 const listed = (fs) => fs.map((f) => `${severityOf(f)}: ${decodeEntities(f.title)}`);
 const ownerAsks = (s) => issueComments(s.pr).filter((x) => x.user.login === OWNER && /^\/agent\s/.test(x.body) && x.id > (s.lastAsk || 0));
 // what the owner's account did on GitHub: compared before and after every agent run
@@ -511,7 +508,7 @@ function continueRun(n, s) {
       // all local findings"): that one stated reason is accepted when nothing High or Medium is open and
       // CI passed (acceptLocalOnly). The PR says so, and the blind review still runs.
       if (g.state === 'incomplete') {
-        const a = acceptLocalOnly({ read, head: s.head, review: q, ciOk: ciPassed(s.head) });
+        const a = acceptLocalOnly({ read, head: s.head, review: reviewComment(s.pr), ciOk: ciPassed(s.head) });
         if (a.ok) {
           g = a.g;
           if (s.acceptedLocal !== s.head) {
