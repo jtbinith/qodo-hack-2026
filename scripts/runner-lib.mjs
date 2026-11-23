@@ -366,11 +366,12 @@ export function convergePlan(blocking, onPrev) {
   return out;
 }
 
-// After the scope check: a finding in already-reviewed code goes to a ticket only if it isn't one of the
-// ticket's acceptance cases; an acceptance case always blocks (Qodo on #131). Items carry `id`.
-export function convergeAfterScope(items, olderIds, acceptanceIds) {
-  const older = new Set(olderIds || []), acc = new Set(acceptanceIds || []);
-  return { defer: (items || []).filter((f) => older.has(f.id) && !acc.has(f.id)) };
+// After the scope check: a finding in already-reviewed code goes to a ticket only if the scope run
+// judged it NOT one of the ticket's acceptance cases. An acceptance case, or one with no judgment (no
+// scope entry), still blocks (Qodo on #131). Items carry `id`.
+export function convergeAfterScope(items, olderIds, notAcceptanceIds) {
+  const older = new Set(olderIds || []), notAcc = new Set(notAcceptanceIds || []);
+  return { defer: (items || []).filter((f) => older.has(f.id) && notAcc.has(f.id)) };
 }
 
 // The head a later blind round reviews from: the head the last round reviewed, unless that is still the
