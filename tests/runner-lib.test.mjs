@@ -855,3 +855,6 @@ test("#126: the skill tells the agent to decide handed-over design questions, no
 test('#126 (blind Low): only the runner\'s own NOT DONE stop comments count as design stops', () => {
   assert.match(runnerSrc(), /c\.body\.startsWith\('\*\*NOT DONE\.\*\*'\) && \/decide\(s\)\? the design/);
 });
+test("#126 6c0d7b41: when design questions were handed over, the PR description carries the agent's Assumptions", () => {
+  assert.match(runnerSrc(), /\(s\.designAssumptions \|\| \[\]\)\.length && assumptions\(agentFile\(s, 'report\.md'\)\)/);
+});
