@@ -716,3 +716,36 @@ test('every fix round (local review, Qodo PR review, blind review) goes through 
   const src = runnerSrc();
   for (const kind of ['local', 'pr', 'blind']) assert.match(src, new RegExp(`scopeCheck\\(n, s, [\\s\\S]{0,400}?'${kind}'\\)`), kind);
 });
+
+// Qodo's review of #120 (1b5cafe), each finding as a test before its fix
+test('#120 29c2bc77 and a05bf49e: blind findings go through the scope agent too, which judges acceptance and copies repros with their helpers', () => {
+  const sc = runnerSrc().match(/function scopeCheck[\s\S]*?\n\}/)?.[0] || '';
+  assert.doesNotMatch(sc, /items\.every\(\(f\) => f\.repro\)/); assert.match(SCOPE_PROMPT_SRC(), /already has a repro/);
+});
+function SCOPE_PROMPT_SRC() { return runnerSrc().match(/const SCOPE_PROMPT = [\s\S]*?`;/)?.[0] || ''; }
+test('#120 76614eeb: when every blind finding is deferred, blind-review is posted as success', () => {
+  assert.match(runnerSrc(), /postBlind\(prHead, \{ state: 'success', description: `Nothing this branch introduced/);
+});
+test('#120 19be3a47: a local finding\'s review id is read from either shape, and one without an id is never deferred', () => {
+  const sc = runnerSrc();
+  assert.match(sc, /f\.local_review_id \|\| local\.ids\[f\.id\]/); assert.match(sc, /if \(kind === 'local' && !it\?\.localReviewId\) return false;/);
+});
+test('#120 14fb16a8: a deferral counts only when Qodo says the finding was dismissed', () => {
+  assert.match(lib.dismissedOk?.('{"results":{"a":{"status":"dismissed","reconciled":true}}}', 'a') ? 'ok' : 'no', /ok/);
+  assert.equal(lib.dismissedOk?.('{"results":{"a":{"status":"conflict","reconciled":false}}}', 'a'), false);
+  assert.equal(lib.dismissedOk?.('not json', 'a'), false);
+});
+test('#120 f08bd064: a scope entry whose repro file was never written counts as no entry', () => {
+  assert.match(runnerSrc(), /existsSync\(join\(s\.dir, e\.repro\)\)/);
+});
+test('#120 cd258e23: the fix round sees only the in-scope findings, and is told which were deferred', () => {
+  assert.match(runnerSrc(), /writeReview\(s, q && q\.reviewed === s\.head \? \{ \.\.\.q, open: q\.open\.filter/);
+  assert.match(runnerSrc(), /Deferred, don't fix these/);
+});
+test('#120 f35d5586: the review-round limit is checked after the scope check', () => {
+  const src = runnerSrc(), sc = src.indexOf("'pr');"), lim = src.indexOf('High or Medium findings still open after');
+  assert.ok(sc > 0 && lim > sc, 'scope check before the limit');
+});
+test('#120 fe9292c1: each deferral proof names its head and titles in its first line', () => {
+  assert.match(runnerSrc(), /\*\*Deferred by the scope rule\*\* \(\$\{kind\}, \$\{s\.head\.slice\(0, 7\)\}\): \$\{plan\.defer\.map/);
+});
