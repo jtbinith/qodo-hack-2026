@@ -7,3 +7,7 @@ SHA-256 of my private answer key (the planted gap with a salt, what counts as ca
 Figma stretch answer key (the design expectation, what counts as caught, 5 predictions), hashed before its run:
 
 `f6b73c0c9fbf2f1920c6ae9715ebe1b71c7b73fc668a937a8a66d74d29960ca2`
+
+Test 2 (the one-batch rule) answer key, hashed before its runs:
+
+`13db15a8715b3e1f7cf811052e06791e419ca5b19e46ad2517276691c6bce9eb`
