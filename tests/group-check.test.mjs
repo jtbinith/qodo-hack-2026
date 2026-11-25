@@ -76,3 +76,20 @@ test('#145 dbd18078: a shared check compares the shared files\' bytes with what 
 test('#145 ac96c3a2: the skill resolves a build to a commit id before using it in a command', () => {
   assert.match(skill(), /sha=\$\(git rev-parse --verify "/);
 });
+
+// Qodo's re-review of #145 (0e9ce51)
+test('#145 dcae310b: a build that exists only on origin resolves from what was just fetched', () => {
+  assert.match(skill(), /sha=\$\(git rev-parse --verify FETCH_HEAD\^\{commit\}\)/);
+  assert.doesNotMatch(skill(), /rev-parse --verify "<branch-or-sha>\^\{commit\}"/);
+});
+test('#145 1aec7fe3: a shared file whose bytes were never hashed fails the check', () => {
+  assert.equal(typeof lib.sharedBytesProblems, 'function');
+  const sent = new Map([['1.jpg', 'aa'], ['2.jpg', 'bb']]);
+  assert.deepEqual(lib.sharedBytesProblems(['1.jpg', '2.jpg'], [['1.jpg', 'aa'], ['2.jpg', 'bb']], sent), []);
+  assert.ok(lib.sharedBytesProblems(['1.jpg', '2.jpg'], [], sent).length);                 // hashing not finished
+  assert.ok(lib.sharedBytesProblems(['1.jpg', '2.jpg'], [['1.jpg', 'aa']], sent).length);  // one missing
+  assert.ok(lib.sharedBytesProblems(['1.jpg'], [['1.jpg', 'zz']], sent).length);           // wrong bytes
+  assert.ok(lib.sharedBytesProblems(['1.jpg'], [['1.jpg', null]], sent).length);           // hashing failed
+  // the share is recorded only once its bytes are hashed, so a check never reads a call without hashes
+  assert.match(runner(), /const hashed = await Promise\.all/);
+});
