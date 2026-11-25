@@ -11,10 +11,10 @@
 import { chromium } from 'playwright';
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, realpathSync } from 'node:fs';
 import { join, normalize, extname, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { SIZES, EXIT, scenarioProblems, sameText, verdict, joinProblems } from './group-check-lib.mjs';
+import { SIZES, EXIT, scenarioProblems, sameText, verdict, joinProblems, insideRoot } from './group-check-lib.mjs';
 
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : undefined; };
 const APP = resolve(arg('--app') || '.'), OUT = arg('--out'), SCEN = arg('--scenario'), ABSENT = arg('--absent');
@@ -29,12 +29,14 @@ const problems = scenarioProblems(s); if (problems.length) stop(`the scenario ha
 const commit = (() => { try { return execFileSync('git', ['-C', APP, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { return 'unknown'; } })();
 
 // web/ of the build under test, on 127.0.0.1 only (never on the network)
-const ROOT = join(APP, 'web') + '/';
+const ROOT = join(APP, 'web') + '/', ROOT_REAL = realpathSync(ROOT) + '/';
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const server = http.createServer((req, res) => {
   let f; try { f = join(ROOT, normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^[/\\]+/, '') || 'index.html'); } catch { return res.writeHead(400).end(); }
   if (!f.startsWith(ROOT)) return res.writeHead(403).end();
-  try { res.writeHead(200, { 'content-type': TYPES[extname(f)] || 'application/octet-stream' }).end(readFileSync(f)); } catch { res.writeHead(404).end(); }
+  let real; try { real = realpathSync(f); } catch { return res.writeHead(404).end(); }
+  if (!insideRoot(ROOT_REAL, real)) return res.writeHead(403).end();   // a symlink out of web/ (Qodo on #145)
+  try { res.writeHead(200, { 'content-type': TYPES[extname(f)] || 'application/octet-stream' }).end(readFileSync(real)); } catch { res.writeHead(404).end(); }
 });
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', code = () => [...randomBytes(10)].map((b) => ALPHABET[b & 31]).join('');
@@ -47,7 +49,12 @@ const sha = (b) => createHash('sha256').update(b).digest('hex');
 // the first share with NotAllowedError, as a phone does when the tap no longer counts, then works
 const shareStub = (mode) => `(() => { const s = window.__shares = []; let first = ${mode === 'fail-once'};
   navigator.canShare = () => true;
-  navigator.share = async ({ files }) => { s.push(files.map((f) => f.name)); if (first) { first = false; throw new DOMException('not allowed', 'NotAllowedError'); } }; })();`;
+  const h = window.__sharedHashes = [];
+  navigator.share = async ({ files }) => {
+    s.push(files.map((f) => f.name));
+    // the bytes handed over, so the check can compare them with what the sender holds (Qodo on #145)
+    h.push(await Promise.all(files.map(async (f) => [f.name, [...new Uint8Array(await crypto.subtle.digest('SHA-256', await f.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('')])));
+    if (first) { first = false; throw new DOMException('not allowed', 'NotAllowedError'); } }; })();`;
 const dev = [];
 for (const [i, d] of s.devices.entries()) {
   const [w, h] = SIZES[d.size];
@@ -132,10 +139,10 @@ for (const [n, st] of s.steps.entries()) {
   if (st.do === 'pick') { await drawPick(d, st.count, picked); picked += st.count; }
   else if (st.do === 'drag') { const why = await drag(dev[st.from], dev[st.to], st.photo); if (why) facts.points.push({ step: n, check: 'drag', state: 'stop', why }); }
   else if (st.do === 'wait') { if (!(await until(d.page, (k) => window.__t.files.size >= k && [...window.__t.incoming.keys()].filter((f) => !f.startsWith('thumb:')).length === 0, st.files, 30000))) facts.points.push({ step: n, check: 'wait', state: 'stop', why: `device ${st.device} didn't receive ${st.files} files in 30 s` }); }
-  else if (st.do === 'tap') { d.mark = d.downloads.length; await d.page.click(st.selector); await new Promise((r) => setTimeout(r, st.settle ?? 600)); }
+  else if (st.do === 'tap') { d.mark = d.downloads.length; const missing = await d.page.click(st.selector).catch(() => true); if (missing) { facts.points.push({ step: n, check: 'tap', state: 'stop', why: `device ${d.i} has no ${st.selector} to tap` }); break; } await new Promise((r) => setTimeout(r, st.settle ?? 600)); }
   else if (st.do === 'pause') await new Promise((r) => setTimeout(r, st.ms));
   else if (st.check === 'toast') {
-    await until(d.page, (want) => document.getElementById('toast')?.textContent.trim() === want, st.equals, st.within ?? 4000);
+    await until(d.page, (want) => { const q = (t) => String(t || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').trim(); return q(document.getElementById('toast')?.textContent) === q(want); }, st.equals, st.within ?? 4000);   // the same quotes rule as sameText (Qodo on #145)
     const actual = (await toastOf(d.page)).trim();
     facts.points.push({ step: n, check: 'toast', device: st.device, source: st.source, expected: st.equals, actual, state: sameText(st.equals, actual) ? 'pass' : 'fail' });
   } else if (st.check === 'downloads') {
@@ -146,8 +153,10 @@ for (const [n, st] of s.steps.entries()) {
     facts.points.push({ step: n, check: 'downloads', device: st.device, source: st.source, expected: `${st.count} downloads, each byte-identical to what the sender holds`, actual: `${got.length} downloads${got.length ? (same ? ', all byte-identical' : ', NOT all byte-identical') : ''}`, hashes, state: got.length === st.count && same ? 'pass' : 'fail' });
   } else if (st.check === 'shared') {
     const shares = await d.page.evaluate(() => window.__shares || []);
+    const hashes = (await d.page.evaluate(() => window.__sharedHashes || [])).at(-1) || [];
+    const wrongBytes = hashes.filter(([name, h]) => sent.get(name) !== h).map(([name]) => name);
     const last = shares.at(-1) || [], withFiles = Number.isInteger(st.files);
-    facts.points.push({ step: n, check: 'shared', device: st.device, source: st.source, expected: `${st.calls} share sheet calls${withFiles ? `, the last with ${st.files} files` : ''}`, actual: `${shares.length} share sheet calls${withFiles ? `, the last with ${last.length} files` : ''}`, state: shares.length === st.calls && (!withFiles || last.length === st.files) ? 'pass' : 'fail' });
+    facts.points.push({ step: n, check: 'shared', device: st.device, source: st.source, expected: `${st.calls} share sheet calls${withFiles ? `, the last with ${st.files} files` : ''}`, actual: `${shares.length} share sheet calls${withFiles ? `, the last with ${last.length} files` : ''}`, sharedHashes: hashes, state: shares.length === st.calls && (!withFiles || last.length === st.files) && !wrongBytes.length ? 'pass' : 'fail', ...(wrongBytes.length ? { why: `not byte-identical to the sender's: ${wrongBytes.join(', ')}` } : {}) });
   }
   if (st.check) await shots(`${String(n).padStart(2, '0')}-${st.check}`, d);
 }

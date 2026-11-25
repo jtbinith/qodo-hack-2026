@@ -27,10 +27,12 @@ You check one or more **builds** (a commit, branch or PR head) against one **tic
 2. **Write the scenario** as `<evidence>/scenario.json`, following [references/scenario.md](references/scenario.md). Every `check` has `"source"`: the ticket section its expected value comes from. Where the ticket gives an example ("Downloading 10"), use the number your scenario produces ("Downloading 3"). Cover **every** ticket statement a person can see. If the ticket has a decision about failures, the scenario has to make that failure happen.
    **Never drop a statement because one detail is missing.** Check the part you can: for "the tap after that tries the share sheet again", count the share sheet calls (`calls` alone, without `files`). Anything you still can't check goes on a **Not checked** list, with the reason.
 3. **Check out each build** in its own worktree, from the repo root:
+   Resolve the build to a commit id first and use only that id in commands, never a branch name typed into the shell (a branch name can carry shell characters):
    ```sh
-   git fetch origin <branch-or-sha>
-   git worktree add --detach /tmp/gdc-<ticket>-<sha7> <sha>
-   ln -s "$PWD/node_modules" /tmp/gdc-<ticket>-<sha7>/node_modules
+   git fetch origin "<branch-or-sha>"
+   sha=$(git rev-parse --verify "<branch-or-sha>^{commit}")   # 40 hex characters, or stop
+   git worktree add --detach "/tmp/gdc-<ticket>-${sha:0:7}" "$sha"
+   ln -s "$PWD/node_modules" "/tmp/gdc-<ticket>-${sha:0:7}/node_modules"
    ```
 4. **Run the script once per build**, always from **this** checkout (the build under test may not have it):
    ```sh

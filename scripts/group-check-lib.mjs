@@ -6,7 +6,7 @@ export const MAX_DEVICES = 20;
 export const EXIT = { pass: 0, fail: 1, stop: 2 };
 
 const DO = new Set(['pick', 'drag', 'wait', 'tap', 'pause']);
-const CHECK = new Set(['toast', 'downloads', 'shared', 'joined']);
+const CHECK = new Set(['toast', 'downloads', 'shared']);   // joins are checked by the runner itself (Qodo on #145)
 
 // A scenario says where every expected text came from. Expected text copied from the code proves
 // nothing about the ticket, so a scenario must name the ticket section each check is from.
@@ -25,7 +25,7 @@ export function scenarioProblems(s) {
     if (st?.do && !DO.has(st.do)) p.push(`step ${i}: unknown action "${st.do}"`);
     if (st?.check && !CHECK.has(st.check)) p.push(`step ${i}: unknown check "${st.check}"`);
     if (!kind) p.push(`step ${i}: needs "do" or "check"`);
-    if (st?.check && st.check !== 'joined' && typeof st.source !== 'string') p.push(`step ${i}: a check needs "source": the ticket section its expected value is copied from`);
+    if (st?.check && typeof st.source !== 'string') p.push(`step ${i}: a check needs "source": the ticket section its expected value is copied from`);
     if (st?.check === 'shared' && !Number.isInteger(st.calls)) p.push(`step ${i}: a shared check needs "calls"`);
     if (st?.check && typeof st.source === 'string' && /\b(web|src|tests?)\/|\.m?js\b|\.html\b/.test(st.source)) p.push(`step ${i}: "source" points at code (${st.source}); expected text must come from the ticket`);
   });
@@ -63,3 +63,7 @@ export function joinProblems(seen) {
   });
   return p;
 }
+
+// The server serves a file only if its real path (symlinks followed) is inside web/: a build under
+// test can't read the reviewer's files through a symlink (Qodo on #145). Both paths already real.
+export const insideRoot = (rootReal, fileReal) => fileReal.startsWith(rootReal.endsWith('/') ? rootReal : rootReal + '/');

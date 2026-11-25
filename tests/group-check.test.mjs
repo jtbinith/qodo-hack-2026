@@ -74,5 +74,5 @@ test('#145 dbd18078: a shared check compares the shared files\' bytes with what 
   assert.match(runner(), /sharedHashes/);
 });
 test('#145 ac96c3a2: the skill resolves a build to a commit id before using it in a command', () => {
-  assert.match(skill(), /git rev-parse --verify "\$/);
+  assert.match(skill(), /sha=\$\(git rev-parse --verify "/);
 });
