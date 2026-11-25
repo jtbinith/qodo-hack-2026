@@ -49,8 +49,8 @@ test('a run the machine slept through is "paused", whatever its output says', ()
   assert.ok(lib.PAUSE_MS >= 10000 && lib.PAUSE_MS <= 60000);
 });
 
-test('a run killed by the runner\'s timeout couldn\'t run: it is not a test failure', () => {
-  assert.equal(outcomeOf({ exit: null, output: 'PASS a', signature: S, timedOut: true, wallMs: 600000, monoMs: 600000 }), 'error');
+test('a run killed by the runner\'s timeout is not a test failure: it is a hang (changed by 9308876e)', () => {
+  assert.equal(outcomeOf({ exit: null, output: 'PASS a', signature: S, timedOut: true, wallMs: 600000, monoMs: 600000 }), 'hang');
 });
 
 test('paused runs are run again and never counted', () => {
@@ -62,4 +62,44 @@ test('paused runs are run again and never counted', () => {
 
 test('the skill says what to do when the given output is from an older version of the test', () => {
   assert.match(skill(), /older version of the test/);
+});
+
+// Qodo on #146 (2b16259)
+test('#146 91c08d41: the signature counts only on a failure line, never on a PASS line', () => {
+  const sig = 'tapping a print on your screen says';
+  assert.equal(outcomeOf({ exit: 0, output: `PASS ${sig} "Receiving…"`, signature: sig }), 'pass');
+  assert.equal(outcomeOf({ exit: 1, output: `PASS ${sig} "Receiving…"\nFAIL something else`, signature: sig }), 'other');
+  assert.equal(outcomeOf({ exit: 1, output: `FAIL ${sig} "Receiving..."`, signature: sig }), 'hit');
+  assert.equal(outcomeOf({ exit: 1, output: `FAIL timed out after 90 s at two-browser.mjs:229: try { ${S} } catch`, signature: S }), 'hit');
+});
+test('#146 8d430f60: each comparison gets its own new temporary folder; no fixed path is deleted', () => {
+  assert.match(runner(), /mkdtempSync\(/);
+  assert.doesNotMatch(runner(), /rmSync\(s\.dir/);
+  assert.doesNotMatch(runner(), /`\/tmp\/for-\$\{name\}/);
+});
+test('#146 f2adccb3: a signature in one side\'s test but not the other\'s stops the comparison', () => {
+  assert.equal(typeof lib.signatureProblem, 'function');
+  const sig = 'await until(B, () => window.__t.files.size === 4, null, 90000);';
+  const old = `try { ${sig} } catch {}`, edited = 'try { await until(B, () => window.__t.files.size === 4, null, 30000); } catch {}';
+  assert.equal(lib.signatureProblem(sig, { main: old, branch: old }), null);
+  assert.match(lib.signatureProblem(sig, { main: old, branch: edited }), /branch/);
+  assert.equal(lib.signatureProblem('FAIL tapping a print on your screen says', { main: 'check(x, `tapping a print on your screen says "Receiving…"`)', branch: 'check(x, `tapping a print on your screen says "Receiving…"`)' }), null);   // "FAIL " is printed, not in the source
+  assert.match(runner(), /signatureProblem\(/);
+});
+test('#146 73260a59: a stop removes the worktrees it made', () => {
+  assert.match(runner(), /process\.on\('exit'/);
+});
+test('#146 09627b3c: different dependencies on the two sides stop the comparison', () => {
+  assert.match(runner(), /package-lock\.json/);
+  assert.match(runner(), /dependencies differ/);
+});
+test('#146 9308876e: a run killed for taking too long is a hang, counted per side, not "fix the setup"', () => {
+  assert.equal(outcomeOf({ exit: null, output: 'PASS a', signature: S, timedOut: true, wallMs: 600000, monoMs: 600000 }), 'hang');
+  assert.equal(decide({ k: 3, main: side(0, 3), branch: { hit: 0, pass: 2, other: 0, error: 0, hang: 1 } }).verdict, 'inconclusive');
+  assert.match(runner(), /hung/);
+});
+test('#146 cae80b0c: a test that couldn\'t start or was killed by a signal couldn\'t run', () => {
+  assert.equal(outcomeOf({ exit: null, output: '', signature: S, spawnError: 'ENOENT' }), 'error');
+  assert.equal(outcomeOf({ exit: null, output: 'PASS a', signature: S, killedBy: 'SIGSEGV' }), 'error');
+  assert.match(runner(), /spawnError: r\.error/);
 });
