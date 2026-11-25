@@ -30,6 +30,7 @@ const sides = { main: { ref: MAIN, sha: sha(MAIN) }, branch: { ref: BRANCH, sha:
 // included (Qodo on #146)
 const work = mkdtempSync(join(tmpdir(), 'for-'));
 process.on('exit', () => { for (const s of Object.values(sides)) if (s.dir) { try { git('worktree', 'remove', '--force', s.dir); } catch {} } try { rmSync(work, { recursive: true, force: true }); git('worktree', 'prune'); } catch {} });
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => process.exit(130));   // so the exit handler runs
 // both sides run with this checkout's node_modules, so a fair comparison needs both to declare the
 // same dependencies (Qodo on #146). If both differ from this checkout, verdict.md says so.
 try { git('diff', '--quiet', sides.main.sha, sides.branch.sha, '--', 'package.json', 'package-lock.json'); } catch { stop(`dependencies differ: main (${sides.main.sha.slice(0, 7)}) and the branch (${sides.branch.sha.slice(0, 7)}) have a different package.json or package-lock.json, so they can't both run with one node_modules. Compare by hand`); }
