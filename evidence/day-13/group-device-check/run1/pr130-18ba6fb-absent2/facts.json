@@ -1,0 +1,59 @@
+{
+ "ticket": 72,
+ "commit": "18ba6fb0cf8bdc546b932383e50463cac3c6031e",
+ "devices": [
+  {
+   "size": "laptop"
+  },
+  {
+   "size": "phone",
+   "share": "fail-once"
+  },
+  {
+   "size": "tablet",
+   "share": "works"
+  }
+ ],
+ "absent": "2",
+ "share_stub": "phone-size windows use a stand-in share sheet (headless Chromium has none)",
+ "points": [],
+ "started": "2026-11-25T00:35:20.275Z",
+ "joinAttempts": [],
+ "join": {
+  "seen": [
+   {
+    "devices": 2,
+    "joinsTotal": 0,
+    "joinsMine": 0,
+    "toast": ""
+   },
+   {
+    "devices": 2,
+    "joinsTotal": 0,
+    "joinsMine": 0,
+    "toast": ""
+   },
+   {
+    "devices": 1,
+    "joinsTotal": 0,
+    "joinsMine": 0,
+    "toast": ""
+   }
+  ],
+  "problems": [
+   "device 0 sees 2 devices, expected 3",
+   "device 0 lists 0 joins, expected 2",
+   "device 0 is in 0 joins, expected 1",
+   "device 1 sees 2 devices, expected 3",
+   "device 1 lists 0 joins, expected 2",
+   "device 1 is in 0 joins, expected 2",
+   "device 2 sees 1 devices, expected 3",
+   "device 2 lists 0 joins, expected 2",
+   "device 2 is in 0 joins, expected 1"
+  ]
+ },
+ "verdict": {
+  "state": "stop",
+  "why": "not every device joined: device 0 sees 2 devices, expected 3; device 0 lists 0 joins, expected 2; device 0 is in 0 joins, expected 1; device 1 sees 2 devices, expected 3; device 1 lists 0 joins, expected 2; device 1 is in 0 joins, expected 2; device 2 sees 1 devices, expected 3; device 2 lists 0 joins, expected 2; device 2 is in 0 joins, expected 1"
+ }
+}

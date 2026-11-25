@@ -1,0 +1,45 @@
+{
+  "ticket": 72,
+  "devices": [{ "size": "laptop" }, { "size": "phone", "share": "fail-once" }, { "size": "tablet", "share": "works" }],
+  "steps": [
+    { "do": "pick", "device": 0, "count": 8 },
+    { "do": "drag", "from": 0, "to": 1, "photo": "1.jpg" },
+    { "do": "drag", "from": 0, "to": 1, "photo": "2.jpg" },
+    { "do": "drag", "from": 0, "to": 1, "photo": "3.jpg" },
+    { "do": "drag", "from": 0, "to": 2, "photo": "4.jpg" },
+    { "do": "drag", "from": 0, "to": 2, "photo": "5.jpg" },
+    { "do": "drag", "from": 0, "to": 2, "photo": "6.jpg" },
+    { "do": "wait", "device": 1, "files": 3 },
+    { "do": "wait", "device": 2, "files": 3 },
+
+    { "do": "tap", "device": 2, "selector": "#saveall" },
+    { "check": "shared", "device": 2, "calls": 1, "files": 3, "source": "#72 Acceptance: when \"Save all\" is tapped, then the share sheet opens once with all 12" },
+    { "check": "toast", "device": 2, "equals": "Shared 3", "source": "#72 Decisions, When the message shows: only after the share sheet reports success. It says \"Shared 10 · 2 still arriving\", not \"Saved\"" },
+    { "check": "downloads", "device": 2, "count": 0, "source": "#72 Acceptance: the share sheet opens (no downloads on a device whose share sheet takes the batch)" },
+
+    { "do": "tap", "device": 1, "selector": "#saveall" },
+    { "check": "toast", "device": 1, "equals": "Couldn't open the share sheet. Tap Save all again to download", "source": "#72 Decisions, Cancel or failure: a toast says \"Couldn't open the share sheet. Tap Save all again to download\"" },
+    { "check": "shared", "device": 1, "calls": 1, "files": 3, "source": "#72 Acceptance: the share sheet opens once with all 12 (here it fails with NotAllowedError)" },
+    { "check": "downloads", "device": 1, "count": 0, "source": "#72 Decisions, Cancel or failure: any other failure doesn't start downloads by itself" },
+
+    { "do": "drag", "from": 0, "to": 1, "photo": "7.jpg" },
+    { "do": "wait", "device": 1, "files": 4 },
+    { "do": "tap", "device": 1, "selector": "#saveall" },
+    { "check": "toast", "device": 1, "equals": "Downloading 4", "source": "#72 Decisions, Downloads: the message says \"Downloading 10\", not \"Saved 10\"" },
+    { "check": "downloads", "device": 1, "count": 4, "source": "#72 Decisions, After the share sheet fails: the next tap downloads everything not yet handed over: the failed batch plus anything that finished arriving since" },
+    { "check": "shared", "device": 1, "calls": 1, "source": "#72 Decisions, Cancel or failure: the next tap downloads them all (no second share sheet call)" },
+
+    { "do": "drag", "from": 0, "to": 1, "photo": "8.jpg" },
+    { "do": "wait", "device": 1, "files": 5 },
+    { "do": "tap", "device": 1, "selector": "#saveall" },
+    { "check": "shared", "device": 1, "calls": 2, "source": "#72 Decisions, After the share sheet fails: Download mode ends after one download batch: the tap after that tries the share sheet again" },
+    { "check": "downloads", "device": 1, "count": 0, "source": "#72 Decisions, After the share sheet fails: Download mode ends after one download batch; a per-photo handed over flag means nothing is downloaded twice" },
+
+    { "do": "pick", "device": 2, "count": 1 },
+    { "do": "drag", "from": 2, "to": 0, "photo": "9.jpg" },
+    { "do": "wait", "device": 0, "files": 9 },
+    { "do": "tap", "device": 0, "selector": "#saveall" },
+    { "check": "toast", "device": 0, "equals": "Downloading 1", "source": "#72 Acceptance: On a laptop they download; Decisions, Which photos: only fully received ones (not this device's own); Downloads: \"Downloading 10\"" },
+    { "check": "downloads", "device": 0, "count": 1, "source": "#72 Acceptance: On a laptop they download; Decisions, Which photos: not this device's own" }
+  ]
+}

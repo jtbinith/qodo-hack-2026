@@ -1,0 +1,225 @@
+{
+ "ticket": 72,
+ "commit": "18ba6fb0cf8bdc546b932383e50463cac3c6031e",
+ "devices": [
+  {
+   "size": "laptop"
+  },
+  {
+   "size": "phone",
+   "share": "fail-once"
+  },
+  {
+   "size": "tablet",
+   "share": "works"
+  }
+ ],
+ "absent": null,
+ "share_stub": "phone-size windows use a stand-in share sheet (headless Chromium has none)",
+ "points": [
+  {
+   "step": 10,
+   "check": "shared",
+   "device": 2,
+   "source": "#72 Acceptance: when \"Save all\" is tapped, then the share sheet opens once with all 12",
+   "expected": "1 share sheet calls, the last with 3 files",
+   "actual": "1 share sheet calls, the last with 3 files",
+   "state": "pass"
+  },
+  {
+   "step": 11,
+   "check": "toast",
+   "device": 2,
+   "source": "#72 Decisions, When the message shows: only after the share sheet reports success. It says \"Shared 10 · 2 still arriving\", not \"Saved\"",
+   "expected": "Shared 3",
+   "actual": "Shared 3",
+   "state": "pass"
+  },
+  {
+   "step": 12,
+   "check": "downloads",
+   "device": 2,
+   "source": "#72 Acceptance: the share sheet opens (no downloads on a device whose share sheet takes the batch)",
+   "expected": "0 downloads, each byte-identical to what the sender holds",
+   "actual": "0 downloads",
+   "hashes": [],
+   "state": "pass"
+  },
+  {
+   "step": 14,
+   "check": "toast",
+   "device": 1,
+   "source": "#72 Decisions, Cancel or failure: a toast says \"Couldn't open the share sheet. Tap Save all again to download\"",
+   "expected": "Couldn't open the share sheet. Tap Save all again to download",
+   "actual": "Couldn’t open the share sheet. Tap Save all again to download",
+   "state": "pass"
+  },
+  {
+   "step": 15,
+   "check": "shared",
+   "device": 1,
+   "source": "#72 Acceptance: the share sheet opens once with all 12 (here it fails with NotAllowedError)",
+   "expected": "1 share sheet calls, the last with 3 files",
+   "actual": "1 share sheet calls, the last with 3 files",
+   "state": "pass"
+  },
+  {
+   "step": 16,
+   "check": "downloads",
+   "device": 1,
+   "source": "#72 Decisions, Cancel or failure: any other failure doesn't start downloads by itself",
+   "expected": "0 downloads, each byte-identical to what the sender holds",
+   "actual": "0 downloads",
+   "hashes": [],
+   "state": "pass"
+  },
+  {
+   "step": 20,
+   "check": "toast",
+   "device": 1,
+   "source": "#72 Decisions, Downloads: the message says \"Downloading 10\", not \"Saved 10\"",
+   "expected": "Downloading 4",
+   "actual": "Downloading 4",
+   "state": "pass"
+  },
+  {
+   "step": 21,
+   "check": "downloads",
+   "device": 1,
+   "source": "#72 Decisions, After the share sheet fails: the next tap downloads everything not yet handed over: the failed batch plus anything that finished arriving since",
+   "expected": "4 downloads, each byte-identical to what the sender holds",
+   "actual": "4 downloads, all byte-identical",
+   "hashes": [
+    {
+     "name": "1.jpg",
+     "sha256": "207e90616b1162907fca00489ba20e09e9ec77caca859cdf08ab2cdd7e93615d",
+     "sent": "207e90616b1162907fca00489ba20e09e9ec77caca859cdf08ab2cdd7e93615d"
+    },
+    {
+     "name": "2.jpg",
+     "sha256": "cf7ffb9481c3c90fdd631440b74ccee75219170e52e29a3e81fca39d27aa3be5",
+     "sent": "cf7ffb9481c3c90fdd631440b74ccee75219170e52e29a3e81fca39d27aa3be5"
+    },
+    {
+     "name": "3.jpg",
+     "sha256": "47668fd23fb5af81151f7f56d939fa74ed7b4f916e45f9a1fbd0c70a8205e8b1",
+     "sent": "47668fd23fb5af81151f7f56d939fa74ed7b4f916e45f9a1fbd0c70a8205e8b1"
+    },
+    {
+     "name": "7.jpg",
+     "sha256": "9a32436f6ae23618ef797e8cf7d342912aceda5ca4998bd8e1b6b0ef1046bc26",
+     "sent": "9a32436f6ae23618ef797e8cf7d342912aceda5ca4998bd8e1b6b0ef1046bc26"
+    }
+   ],
+   "state": "pass"
+  },
+  {
+   "step": 22,
+   "check": "shared",
+   "device": 1,
+   "source": "#72 Decisions, Cancel or failure: the next tap downloads them all (no second share sheet call)",
+   "expected": "1 share sheet calls",
+   "actual": "1 share sheet calls",
+   "state": "pass"
+  },
+  {
+   "step": 26,
+   "check": "shared",
+   "device": 1,
+   "source": "#72 Decisions, After the share sheet fails: Download mode ends after one download batch: the tap after that tries the share sheet again",
+   "expected": "2 share sheet calls",
+   "actual": "2 share sheet calls",
+   "state": "pass"
+  },
+  {
+   "step": 27,
+   "check": "downloads",
+   "device": 1,
+   "source": "#72 Decisions, After the share sheet fails: Download mode ends after one download batch; a per-photo handed over flag means nothing is downloaded twice",
+   "expected": "0 downloads, each byte-identical to what the sender holds",
+   "actual": "0 downloads",
+   "hashes": [],
+   "state": "pass"
+  },
+  {
+   "step": 32,
+   "check": "toast",
+   "device": 0,
+   "source": "#72 Acceptance: On a laptop they download; Decisions, Which photos: only fully received ones (not this device's own); Downloads: \"Downloading 10\"",
+   "expected": "Downloading 1",
+   "actual": "Downloading 1",
+   "state": "pass"
+  },
+  {
+   "step": 33,
+   "check": "downloads",
+   "device": 0,
+   "source": "#72 Acceptance: On a laptop they download; Decisions, Which photos: not this device's own",
+   "expected": "1 downloads, each byte-identical to what the sender holds",
+   "actual": "1 downloads, all byte-identical",
+   "hashes": [
+    {
+     "name": "9.jpg",
+     "sha256": "2881943053bb1a7dd0db412a3dbcf222a54f53cab707900f49357aa9a6778818",
+     "sent": "2881943053bb1a7dd0db412a3dbcf222a54f53cab707900f49357aa9a6778818"
+    }
+   ],
+   "state": "pass"
+  }
+ ],
+ "started": "2026-11-25T00:42:50.236Z",
+ "joinAttempts": [
+  {
+   "pair": [
+    0,
+    1
+   ],
+   "attempt": 1,
+   "joined": true,
+   "said": [
+    "Joined with Noodle, on your right",
+    "Joined with Mango, on your left"
+   ]
+  },
+  {
+   "pair": [
+    1,
+    2
+   ],
+   "attempt": 1,
+   "joined": true,
+   "said": [
+    "Joined with Mango, on your right",
+    "Joined with Noodle, on your left"
+   ]
+  }
+ ],
+ "join": {
+  "seen": [
+   {
+    "devices": 3,
+    "joinsTotal": 2,
+    "joinsMine": 1,
+    "toast": "Joined with Noodle, on your right"
+   },
+   {
+    "devices": 3,
+    "joinsTotal": 2,
+    "joinsMine": 2,
+    "toast": "Joined with Mango, on your right"
+   },
+   {
+    "devices": 3,
+    "joinsTotal": 2,
+    "joinsMine": 1,
+    "toast": "Joined with Noodle, on your left"
+   }
+  ],
+  "problems": []
+ },
+ "verdict": {
+  "state": "pass",
+  "why": "13 check points passed"
+ },
+ "finished": "2026-11-25T00:43:41.732Z"
+}
