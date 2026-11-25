@@ -62,13 +62,18 @@ for (const [i, d] of s.devices.entries()) {
 const until = (p, fn, arg, t = 30000) => p.waitForFunction(fn, arg, { timeout: t }).then(() => true, () => false);
 const toastOf = (p) => p.evaluate(() => document.getElementById('toast')?.textContent || '');
 const facts = { ticket: s.ticket, commit, devices: s.devices, absent: ABSENT ?? null, share_stub: s.devices.some((d) => d.share) ? 'phone-size windows use a stand-in share sheet (headless Chromium has none)' : null, points: [], started: new Date().toISOString() };
-async function shots(tag) {
-  for (const d of dev) {
-    await d.page.evaluate((code) => { const h = document.getElementById('hud'); if (h) for (const n of h.querySelectorAll('*')) if (n.childElementCount === 0 && n.textContent.includes(code)) n.textContent = n.textContent.replaceAll(code, '••••••••••'); }, room).catch(() => {});
-    await d.page.screenshot({ path: join(OUT, `${tag}-device${d.i}-${d.size}.png`) });
-  }
-}
-
+// The app redraws its status text every frame, so replacing the code's text doesn't last: cover it
+// with a black box instead (found by the first fresh run, which saw the code in every screenshot).
+const cover = (p) => p.evaluate((code) => {
+  const hud = document.getElementById('hud'); if (!hud) return;
+  const w = document.createTreeWalker(hud, NodeFilter.SHOW_TEXT); let t, r = null;
+  while ((t = w.nextNode())) { const k = t.textContent.indexOf(code); if (k >= 0) { const g = document.createRange(); g.setStart(t, k); g.setEnd(t, k + code.length); r = g.getBoundingClientRect(); break; } }
+  let box = document.getElementById('__gdc_cover'); if (!r) { if (box) box.remove(); return; }
+  if (!box) { box = document.createElement('div'); box.id = '__gdc_cover'; box.style.cssText = 'position:fixed;background:#000;z-index:2147483647;pointer-events:none'; document.body.appendChild(box); }
+  Object.assign(box.style, { left: `${r.left - 3}px`, top: `${r.top - 2}px`, width: `${r.width + 6}px`, height: `${r.height + 4}px` });
+}, room).catch(() => {});
+async function shot(d, tag) { await cover(d.page); await d.page.screenshot({ path: join(OUT, `${tag}-device${d.i}-${d.size}.png`) }); }
+async function shots(tag, first) { if (first) await shot(first, tag); for (const d of dev) if (d !== first) await shot(d, tag); }
 // 1. everyone in the room, then join neighbours with the orbs: device i's right edge to device i+1's left
 const inRoom = await Promise.all(dev.map((d) => until(d.page, (n) => window.__t && Object.keys(window.__t.net.peers).length === n, dev.length, 20000)));
 async function orbJoin(a, b) {
@@ -141,10 +146,10 @@ for (const [n, st] of s.steps.entries()) {
     facts.points.push({ step: n, check: 'downloads', device: st.device, source: st.source, expected: `${st.count} downloads, each byte-identical to what the sender holds`, actual: `${got.length} downloads${got.length ? (same ? ', all byte-identical' : ', NOT all byte-identical') : ''}`, hashes, state: got.length === st.count && same ? 'pass' : 'fail' });
   } else if (st.check === 'shared') {
     const shares = await d.page.evaluate(() => window.__shares || []);
-    const last = shares.at(-1) || [];
-    facts.points.push({ step: n, check: 'shared', device: st.device, source: st.source, expected: `${st.calls} share sheet calls, the last with ${st.files} files`, actual: `${shares.length} share sheet calls, the last with ${last.length} files`, state: shares.length === st.calls && last.length === st.files ? 'pass' : 'fail' });
+    const last = shares.at(-1) || [], withFiles = Number.isInteger(st.files);
+    facts.points.push({ step: n, check: 'shared', device: st.device, source: st.source, expected: `${st.calls} share sheet calls${withFiles ? `, the last with ${st.files} files` : ''}`, actual: `${shares.length} share sheet calls${withFiles ? `, the last with ${last.length} files` : ''}`, state: shares.length === st.calls && (!withFiles || last.length === st.files) ? 'pass' : 'fail' });
   }
-  if (st.check) await shots(`${String(n).padStart(2, '0')}-${st.check}`);
+  if (st.check) await shots(`${String(n).padStart(2, '0')}-${st.check}`, d);
 }
 const errs = dev.flatMap((d) => d.errors.map((e) => `device ${d.i}: ${e}`));
 if (errs.length) facts.points.push({ step: 'all', check: 'page errors', expected: 'none', actual: errs.join(' | '), state: 'fail' });

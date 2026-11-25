@@ -23,7 +23,7 @@ A JSON file:
 - Checks: each needs `"source"`, the ticket section its expected value is copied from (never a code path).
   - `{"check":"toast","device":1,"equals":"…","source":"#12 Acceptance"}`: the message shown. Exact text, except curly and straight quotes count as equal.
   - `{"check":"downloads","device":1,"count":3,"source":"…"}`: how many downloads since the last tap on that device, each byte-identical to what the sender holds.
-  - `{"check":"shared","device":1,"calls":1,"files":3,"source":"…"}`: on a stand-in share sheet, the number of calls so far and the number of files in the last one.
+  - `{"check":"shared","device":1,"calls":1,"files":3,"source":"…"}`: on a stand-in share sheet, the number of calls so far and the number of files in the last one. `files` is optional: leave it out to check only that the share sheet was (or wasn't) opened again.
 
 ## Example (a different, made-up ticket: "a tapped print says Receiving… once")
 

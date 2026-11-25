@@ -24,7 +24,8 @@ You check one or more **builds** (a commit, branch or PR head) against one **tic
 
 ## Steps
 1. **Read the ticket.** List every expectation a person could see: a message, a count, a button, a download, a share sheet. Copy each one's exact wording and the section it's in.
-2. **Write the scenario** as `<evidence>/scenario.json`, following [references/scenario.md](references/scenario.md). Every `check` has `"source"`: the ticket section its expected value comes from. Where the ticket gives an example ("Downloading 10"), use the number your scenario produces ("Downloading 3"). Run each part of the ticket that a person can see. If the ticket has a decision about failures, the scenario has to make that failure happen.
+2. **Write the scenario** as `<evidence>/scenario.json`, following [references/scenario.md](references/scenario.md). Every `check` has `"source"`: the ticket section its expected value comes from. Where the ticket gives an example ("Downloading 10"), use the number your scenario produces ("Downloading 3"). Cover **every** ticket statement a person can see. If the ticket has a decision about failures, the scenario has to make that failure happen.
+   **Never drop a statement because one detail is missing.** Check the part you can: for "the tap after that tries the share sheet again", count the share sheet calls (`calls` alone, without `files`). Anything you still can't check goes on a **Not checked** list, with the reason.
 3. **Check out each build** in its own worktree, from the repo root:
    ```sh
    git fetch origin <branch-or-sha>
@@ -38,7 +39,7 @@ You check one or more **builds** (a commit, branch or PR head) against one **tic
    To check that a missing device stops the run, add `--absent <i>`: device i opens a different room, as if it never joined. That run must STOP.
    It needs the internet (the room server). Exit codes: **0 PASS, 1 FAIL, 2 STOP.** It prints one line per check point and writes `<out>/facts.json` and screenshots. Use the same `scenario.json` for every build.
 5. **Read `facts.json`** for each build, not only the last line. For a FAIL, name the check point: its ticket source, expected and actual. Look at the screenshot for that check point and say whether it shows the same thing.
-6. **Report** a table: build, commit, verdict, the first failing or stopping check (expected vs actual), evidence folder. Say which windows used the stand-in share sheet (see below).
+6. **Report** a table: build, commit, verdict, the first failing or stopping check (expected vs actual), evidence folder. If the Not checked list isn't empty, a passing build is **"PASS on what was checked"**, never a plain PASS. List what wasn't checked under the table, because a build can break exactly that. Say which windows used the stand-in share sheet (see below).
 7. **Clean up:** `git worktree remove --force /tmp/gdc-<ticket>-<sha7>` for each build.
 
 ## What the script does (so you can check it did it)
@@ -48,7 +49,7 @@ You check one or more **builds** (a commit, branch or PR head) against one **tic
 - Photos are numbered cards (`1.jpg`, `2.jpg` …) drawn on the sending device and picked through the real file input.
 - Downloads are hashed against the bytes the sender holds.
 - **Stand-in share sheet:** headless Chromium has none. A device with `"share": "fail-once"` or `"share": "works"` gets a stand-in that records each call (and with `fail-once`, rejects the first with `NotAllowedError`). Say so in your report. It shows the app's logic, not a real phone.
-- Room codes are replaced with dots before every screenshot.
+- Room codes are covered with a black box before every screenshot. The checked device's screenshot is taken at the moment of the check, so a message that fades is still in it.
 
 ## Evidence to save
 - `<evidence>/scenario.json`;

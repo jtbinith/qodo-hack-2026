@@ -40,3 +40,9 @@ test('every device must see the others and be in its share of the chain of joins
   const leftOut = [{ devices: 2, joinsTotal: 1, joinsMine: 1 }, { devices: 2, joinsTotal: 1, joinsMine: 1 }, { devices: 1, joinsTotal: 0, joinsMine: 0 }];
   assert.ok(joinProblems(leftOut).length >= 3);
 });
+
+test('a shared check needs a call count, and the file count is optional', () => {
+  const base = { ticket: 72, devices: [{ size: 'laptop' }, { size: 'phone', share: 'works' }] };
+  assert.deepEqual(scenarioProblems({ ...base, steps: [{ check: 'shared', device: 1, calls: 2, source: '#72 Decisions' }] }), []);
+  assert.match(scenarioProblems({ ...base, steps: [{ check: 'shared', device: 1, source: '#72 Decisions' }] }).join(), /needs "calls"/);
+});

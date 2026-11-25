@@ -26,6 +26,7 @@ export function scenarioProblems(s) {
     if (st?.check && !CHECK.has(st.check)) p.push(`step ${i}: unknown check "${st.check}"`);
     if (!kind) p.push(`step ${i}: needs "do" or "check"`);
     if (st?.check && st.check !== 'joined' && typeof st.source !== 'string') p.push(`step ${i}: a check needs "source": the ticket section its expected value is copied from`);
+    if (st?.check === 'shared' && !Number.isInteger(st.calls)) p.push(`step ${i}: a shared check needs "calls"`);
     if (st?.check && typeof st.source === 'string' && /\b(web|src|tests?)\/|\.m?js\b|\.html\b/.test(st.source)) p.push(`step ${i}: "source" points at code (${st.source}); expected text must come from the ticket`);
   });
   return p;
