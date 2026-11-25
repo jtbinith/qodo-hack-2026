@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { classify, firstFailure, decide, order } from '../scripts/flake-lib.mjs';
 
 const S = 'timed out after 90 s at two-browser.mjs:229';
@@ -32,4 +33,33 @@ test('errored runs do not count; fewer than K usable runs on a side is inconclus
 
 test('runs alternate main and branch', () => {
   assert.deepEqual(order(2), ['main', 'branch', 'main', 'branch']);
+});
+
+// Fresh run 1, case C, run 16: the laptop slept mid-run (1724 s for an ~85 s test). Node's timers
+// stop during sleep, so the 10-minute timeout never fired and the run counted as "other failure".
+import * as lib from '../scripts/flake-lib.mjs';
+const outcomeOf = (r) => lib.outcomeOf(r);
+const runner = () => readFileSync(new URL('../scripts/flake-or-regression.mjs', import.meta.url), 'utf8');
+const skill = () => readFileSync(new URL('../.claude/skills/flake-or-regression/SKILL.md', import.meta.url), 'utf8');
+
+test('a run the machine slept through is "paused", whatever its output says', () => {
+  assert.equal(outcomeOf({ exit: 1, output: 'FAIL 20 needs listing every piece', signature: S, wallMs: 1724000, monoMs: 85000 }), 'paused');
+  assert.equal(outcomeOf({ exit: 1, output: `${S}`, signature: S, wallMs: 1724000, monoMs: 85000 }), 'paused');
+  assert.equal(outcomeOf({ exit: 1, output: 'FAIL x', signature: S, wallMs: 86000, monoMs: 85000 }), 'other');
+  assert.ok(lib.PAUSE_MS >= 10000 && lib.PAUSE_MS <= 60000);
+});
+
+test('a run killed by the runner\'s timeout couldn\'t run: it is not a test failure', () => {
+  assert.equal(outcomeOf({ exit: null, output: 'PASS a', signature: S, timedOut: true, wallMs: 600000, monoMs: 600000 }), 'error');
+});
+
+test('paused runs are run again and never counted', () => {
+  assert.equal(decide({ k: 3, main: { hit: 0, pass: 3, other: 0, error: 0, paused: 2 }, branch: side(0, 3) }).verdict, 'inconclusive');
+  assert.match(runner(), /outcomeOf\(/);
+  assert.match(runner(), /'paused'/);
+  assert.match(runner(), /process\.hrtime\.bigint\(\)/);
+});
+
+test('the skill says what to do when the given output is from an older version of the test', () => {
+  assert.match(skill(), /older version of the test/);
 });
