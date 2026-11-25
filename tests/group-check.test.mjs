@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as lib from '../scripts/group-check-lib.mjs';
 import { scenarioProblems, sameText, verdict, joinProblems, MAX_DEVICES } from '../scripts/group-check-lib.mjs';
 
 const ok = { ticket: 72, devices: [{ size: 'laptop' }, { size: 'phone', share: 'fail-once' }], steps: [{ do: 'tap', device: 1, selector: '#saveall' }, { check: 'toast', device: 1, equals: 'Downloading 3', source: '#72 Decisions: Downloads' }] };
@@ -45,4 +47,32 @@ test('a shared check needs a call count, and the file count is optional', () => 
   const base = { ticket: 72, devices: [{ size: 'laptop' }, { size: 'phone', share: 'works' }] };
   assert.deepEqual(scenarioProblems({ ...base, steps: [{ check: 'shared', device: 1, calls: 2, source: '#72 Decisions' }] }), []);
   assert.match(scenarioProblems({ ...base, steps: [{ check: 'shared', device: 1, source: '#72 Decisions' }] }).join(), /needs "calls"/);
+});
+
+// Qodo on #145
+const runner = () => readFileSync(new URL('../scripts/group-check.mjs', import.meta.url), 'utf8');
+const skill = () => readFileSync(new URL('../.claude/skills/group-device-check/SKILL.md', import.meta.url), 'utf8');
+test('#145 27321b84: a "joined" check is not accepted, because the runner checks joins itself', () => {
+  const s = { ticket: 72, devices: [{ size: 'laptop' }, { size: 'phone' }], steps: [{ check: 'joined', device: 1, source: '#72' }] };
+  assert.match(scenarioProblems(s).join(), /unknown check "joined"/);
+});
+test('#145 d39a1b24: the server serves only files whose real path is inside web/', () => {
+  assert.equal(typeof lib.insideRoot, 'function');
+  assert.ok(lib.insideRoot('/b/web/', '/b/web/index.html'));
+  assert.ok(!lib.insideRoot('/b/web/', '/home/someone/.ssh/id_rsa'));
+  assert.ok(!lib.insideRoot('/b/web/', '/b/webby/x.js'));
+  assert.match(runner(), /realpathSync\(f\)/);
+});
+test('#145 98244d32: a missing button is a recorded STOP for that build, not a crash', () => {
+  assert.match(runner(), /page\.click\(st\.selector\)\.catch/);
+});
+test('#145 741051b7: the toast wait treats curly and straight quotes as the same, like the comparison', () => {
+  assert.match(runner(), /replace\(\/\[‘’\]\/g, "'"\)/);
+});
+test('#145 dbd18078: a shared check compares the shared files\' bytes with what the sender holds', () => {
+  assert.match(runner(), /crypto\.subtle\.digest/);
+  assert.match(runner(), /sharedHashes/);
+});
+test('#145 ac96c3a2: the skill resolves a build to a commit id before using it in a command', () => {
+  assert.match(skill(), /git rev-parse --verify "\$/);
 });
