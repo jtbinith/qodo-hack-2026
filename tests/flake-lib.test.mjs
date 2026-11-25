@@ -103,3 +103,6 @@ test('#146 cae80b0c: a test that couldn\'t start or was killed by a signal could
   assert.equal(outcomeOf({ exit: null, output: 'PASS a', signature: S, killedBy: 'SIGSEGV' }), 'error');
   assert.match(runner(), /spawnError: r\.error/);
 });
+test('#146 73260a59 (found checking the fix): Ctrl-C or a kill also removes the worktrees', () => {
+  assert.match(runner(), /for \(const sig of \['SIGINT', 'SIGTERM', 'SIGHUP'\]\) process\.on\(sig/);
+});
