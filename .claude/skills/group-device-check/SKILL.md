@@ -30,7 +30,7 @@ You check one or more **builds** (a commit, branch or PR head) against one **tic
    Resolve the build to a commit id first and use only that id in commands, never a branch name typed into the shell (a branch name can carry shell characters):
    ```sh
    git fetch origin "<branch-or-sha>"
-   sha=$(git rev-parse --verify "<branch-or-sha>^{commit}")   # 40 hex characters, or stop
+   sha=$(git rev-parse --verify FETCH_HEAD^{commit})   # what was just fetched: 40 hex characters, or stop
    git worktree add --detach "/tmp/gdc-<ticket>-${sha:0:7}" "$sha"
    ln -s "$PWD/node_modules" "/tmp/gdc-<ticket>-${sha:0:7}/node_modules"
    ```

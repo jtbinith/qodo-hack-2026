@@ -14,7 +14,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, realpathSync } from 'node:fs';
 import { join, normalize, extname, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { SIZES, EXIT, scenarioProblems, sameText, verdict, joinProblems, insideRoot } from './group-check-lib.mjs';
+import { SIZES, EXIT, scenarioProblems, sameText, verdict, joinProblems, insideRoot, sharedBytesProblems } from './group-check-lib.mjs';
 
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : undefined; };
 const APP = resolve(arg('--app') || '.'), OUT = arg('--out'), SCEN = arg('--scenario'), ABSENT = arg('--absent');
@@ -51,9 +51,10 @@ const shareStub = (mode) => `(() => { const s = window.__shares = []; let first 
   navigator.canShare = () => true;
   const h = window.__sharedHashes = [];
   navigator.share = async ({ files }) => {
-    s.push(files.map((f) => f.name));
-    // the bytes handed over, so the check can compare them with what the sender holds (Qodo on #145)
-    h.push(await Promise.all(files.map(async (f) => [f.name, [...new Uint8Array(await crypto.subtle.digest('SHA-256', await f.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('')])));
+    // the bytes handed over, so the check can compare them with what the sender holds; the call is
+    // recorded only once they're hashed, so a check never reads a call without its hashes (Qodo on #145)
+    const hashed = await Promise.all(files.map(async (f) => { try { return [f.name, [...new Uint8Array(await crypto.subtle.digest('SHA-256', await f.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('')]; } catch { return [f.name, null]; } }));
+    s.push(files.map((f) => f.name)); h.push(hashed);
     if (first) { first = false; throw new DOMException('not allowed', 'NotAllowedError'); } }; })();`;
 const dev = [];
 for (const [i, d] of s.devices.entries()) {
@@ -154,9 +155,9 @@ for (const [n, st] of s.steps.entries()) {
   } else if (st.check === 'shared') {
     const shares = await d.page.evaluate(() => window.__shares || []);
     const hashes = (await d.page.evaluate(() => window.__sharedHashes || [])).at(-1) || [];
-    const wrongBytes = hashes.filter(([name, h]) => sent.get(name) !== h).map(([name]) => name);
     const last = shares.at(-1) || [], withFiles = Number.isInteger(st.files);
-    facts.points.push({ step: n, check: 'shared', device: st.device, source: st.source, expected: `${st.calls} share sheet calls${withFiles ? `, the last with ${st.files} files` : ''}`, actual: `${shares.length} share sheet calls${withFiles ? `, the last with ${last.length} files` : ''}`, sharedHashes: hashes, state: shares.length === st.calls && (!withFiles || last.length === st.files) && !wrongBytes.length ? 'pass' : 'fail', ...(wrongBytes.length ? { why: `not byte-identical to the sender's: ${wrongBytes.join(', ')}` } : {}) });
+    const wrongBytes = sharedBytesProblems(last, hashes, sent);
+    facts.points.push({ step: n, check: 'shared', device: st.device, source: st.source, expected: `${st.calls} share sheet calls${withFiles ? `, the last with ${st.files} files` : ''}`, actual: `${shares.length} share sheet calls${withFiles ? `, the last with ${last.length} files` : ''}`, sharedHashes: hashes, state: shares.length === st.calls && (!withFiles || last.length === st.files) && !wrongBytes.length ? 'pass' : 'fail', ...(wrongBytes.length ? { why: wrongBytes.join('; ') } : {}) });
   }
   if (st.check) await shots(`${String(n).padStart(2, '0')}-${st.check}`, d);
 }

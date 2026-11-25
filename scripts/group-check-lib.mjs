@@ -67,3 +67,11 @@ export function joinProblems(seen) {
 // The server serves a file only if its real path (symlinks followed) is inside web/: a build under
 // test can't read the reviewer's files through a symlink (Qodo on #145). Both paths already real.
 export const insideRoot = (rootReal, fileReal) => fileReal.startsWith(rootReal.endsWith('/') ? rootReal : rootReal + '/');
+
+// A shared check's bytes: every file handed to the share sheet must have been hashed, and each hash
+// must match what the sender holds. No hash (not finished, or hashing failed) is a problem, never a
+// match (Qodo on #145).
+export function sharedBytesProblems(names, hashes, sent) {
+  const got = new Map(hashes);
+  return names.flatMap((n) => !got.has(n) || !got.get(n) ? [`${n}: its bytes weren't hashed`] : got.get(n) !== sent.get(n) ? [`${n}: not byte-identical to the sender's`] : []);
+}
