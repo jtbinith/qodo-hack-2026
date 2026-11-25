@@ -9,7 +9,7 @@
 import { spawnSync, execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { classify, firstFailure, decide, order, MAX_K } from './flake-lib.mjs';
+import { outcomeOf, firstFailure, decide, order, MAX_K } from './flake-lib.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const OUT = arg('--out'), SIG = arg('--signature'), MAIN = arg('--main'), BRANCH = arg('--branch'), MODE = arg('--mode', 'direct'), K = Number(arg('--k', '10'));
@@ -30,22 +30,31 @@ for (const [name, s] of Object.entries(sides)) {
   git('worktree', 'add', '--detach', s.dir, s.sha);
   symlinkSync(join(repo, 'node_modules'), join(s.dir, 'node_modules'));
   if (!existsSync(join(s.dir, 'tests', 'two-browser.mjs'))) stop(`${name} (${s.sha.slice(0, 7)}) has no tests/two-browser.mjs`);
-  s.counts = { hit: 0, pass: 0, other: 0, error: 0 }; s.firstHit = null; s.firstOther = null;
+  s.counts = { hit: 0, pass: 0, other: 0, error: 0, paused: 0 }; s.firstHit = null; s.firstOther = null;
 }
 const rows = ['run,side,commit,outcome,seconds,first_failure'];
-for (const [i, name] of order(K).entries()) {
-  const s = sides[name], t0 = Date.now();
-  const r = spawnSync('node', ['tests/two-browser.mjs', ...(MODE === 'relay' ? ['--relay'] : [])], { cwd: s.dir, encoding: 'utf8', timeout: 10 * 60000 });
-  const out = (r.stdout || '') + (r.stderr || ''), secs = Math.round((Date.now() - t0) / 1000);
-  const outcome = r.error?.code === 'ETIMEDOUT' ? 'other' : classify(r.status, out, SIG);
-  s.counts[outcome]++;
-  const file = `run-${String(i + 1).padStart(2, '0')}-${name}.txt`;
-  writeFileSync(join(OUT, file), out.replaceAll(repo, '<repo>').replaceAll(s.dir, '<worktree>'));
-  if (outcome === 'hit' && !s.firstHit) s.firstHit = file;
-  if (outcome === 'other' && !s.firstOther) s.firstOther = file;
-  rows.push([i + 1, name, s.sha.slice(0, 7), outcome, secs, JSON.stringify(firstFailure(out))].join(','));
-  console.log(`run ${i + 1}/${2 * K} ${name.padEnd(6)} ${outcome.padEnd(5)} ${secs} s ${firstFailure(out).slice(0, 90)}`);
-  if (outcome === 'error' && s.counts.error >= 2) { writeFileSync(join(OUT, 'runs.csv'), rows.join('\n') + '\n'); stop(`the test couldn't run twice on ${name} (see ${file}): fix the setup, not the verdict`); }
+let n = 0;
+for (const name of order(K)) {
+  const s = sides[name];
+  // a run the machine slept through is run again (at most 3 tries for the slot), never counted
+  for (let attempt = 1; ; attempt++) {
+    n++;
+    const t0 = Date.now(), m0 = process.hrtime.bigint();
+    const r = spawnSync('node', ['tests/two-browser.mjs', ...(MODE === 'relay' ? ['--relay'] : [])], { cwd: s.dir, encoding: 'utf8', timeout: 10 * 60000, killSignal: 'SIGKILL' });
+    const out = (r.stdout || '') + (r.stderr || ''), wallMs = Date.now() - t0, monoMs = Number((process.hrtime.bigint() - m0) / 1000000n), secs = Math.round(wallMs / 1000);
+    const outcome = outcomeOf({ exit: r.status, output: out, signature: SIG, timedOut: r.error?.code === 'ETIMEDOUT', wallMs, monoMs });
+    s.counts[outcome]++;
+    const file = `run-${String(n).padStart(2, '0')}-${name}.txt`;
+    writeFileSync(join(OUT, file), out.replaceAll(repo, '<repo>').replaceAll(s.dir, '<worktree>'));
+    if (outcome === 'hit' && !s.firstHit) s.firstHit = file;
+    if (outcome === 'other' && !s.firstOther) s.firstOther = file;
+    const note = outcome === 'paused' ? `the machine was asleep for ${Math.round((wallMs - monoMs) / 1000)} s of it` : firstFailure(out);
+    rows.push([n, name, s.sha.slice(0, 7), outcome, secs, JSON.stringify(note)].join(','));
+    console.log(`run ${n} ${name.padEnd(6)} ${outcome.padEnd(6)} ${secs} s ${note.slice(0, 90)}`);
+    if (outcome === 'error' && s.counts.error >= 2) { writeFileSync(join(OUT, 'runs.csv'), rows.join('\n') + '\n'); stop(`the test couldn't run twice on ${name} (see ${file}): fix the setup, not the verdict`); }
+    if (outcome !== 'paused') break;
+    if (attempt >= 3) { writeFileSync(join(OUT, 'runs.csv'), rows.join('\n') + '\n'); stop(`the machine slept through 3 tries of one run on ${name}: keep it awake and run again`); }
+  }
 }
 writeFileSync(join(OUT, 'runs.csv'), rows.join('\n') + '\n');
 const d = decide({ k: K, main: sides.main.counts, branch: sides.branch.counts });
@@ -53,8 +62,8 @@ const md = `# flake-or-regression: ${d.verdict}
 
 - Signature: \`${SIG}\`
 - Mode: ${MODE}, K = ${K} runs per side, alternating (main first)
-- main: \`${sides.main.ref}\` = ${sides.main.sha.slice(0, 7)} · hit ${sides.main.counts.hit}, pass ${sides.main.counts.pass}, other failure ${sides.main.counts.other}, couldn't run ${sides.main.counts.error}${sides.main.firstHit ? ` · first hit: ${sides.main.firstHit}` : ''}
-- branch: \`${sides.branch.ref}\` = ${sides.branch.sha.slice(0, 7)} · hit ${sides.branch.counts.hit}, pass ${sides.branch.counts.pass}, other failure ${sides.branch.counts.other}, couldn't run ${sides.branch.counts.error}${sides.branch.firstHit ? ` · first hit: ${sides.branch.firstHit}` : ''}
+- main: \`${sides.main.ref}\` = ${sides.main.sha.slice(0, 7)} · hit ${sides.main.counts.hit}, pass ${sides.main.counts.pass}, other failure ${sides.main.counts.other}, couldn't run ${sides.main.counts.error}${sides.main.counts.paused ? `, paused and run again ${sides.main.counts.paused}` : ''}${sides.main.firstHit ? ` · first hit: ${sides.main.firstHit}` : ''}
+- branch: \`${sides.branch.ref}\` = ${sides.branch.sha.slice(0, 7)} · hit ${sides.branch.counts.hit}, pass ${sides.branch.counts.pass}, other failure ${sides.branch.counts.other}, couldn't run ${sides.branch.counts.error}${sides.branch.counts.paused ? `, paused and run again ${sides.branch.counts.paused}` : ''}${sides.branch.firstHit ? ` · first hit: ${sides.branch.firstHit}` : ''}
 
 **Verdict: ${d.verdict}.** ${d.why}.
 

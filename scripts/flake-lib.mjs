@@ -15,6 +15,19 @@ export function classify(exit, output, signature) {
   return 'other';
 }
 
+// A run the machine slept through: wall-clock time ran on while the monotonic clock (and with it
+// node's timers, including the runner's timeout) stood still. Its output says nothing about the
+// code, so it's "paused": not counted, and the runner runs that slot again. Found by fresh run 1
+// (case C, run 16: 1724 s for an ~85 s test, counted as "other failure").
+export const PAUSE_MS = 30000;
+// A run the runner killed for taking too long couldn't run: that's the harness, not the test (the
+// test's own waits are 90 s at most).
+export function outcomeOf({ exit, output, signature, timedOut = false, wallMs = 0, monoMs = 0 }) {
+  if (wallMs - monoMs > PAUSE_MS) return 'paused';
+  if (timedOut) return 'error';
+  return classify(exit, output, signature);
+}
+
 // The first line that says what failed: a FAIL line or a timeout, for the run table.
 export const firstFailure = (output) => (String(output || '').split('\n').find((l) => /^FAIL |timed out after|Error:/.test(l)) || '').slice(0, 200);
 
@@ -23,7 +36,7 @@ export const firstFailure = (output) => (String(output || '').split('\n').find((
 //   branch broke it main never hit, the branch hit at least 3 times
 //   made worse      both hit, and the branch's rate is at least 3 times main's
 //   inconclusive    anything else, including neither side hitting it: stop and report, don't guess
-// Runs that errored don't count as either; with fewer than K usable runs on a side it's inconclusive.
+// Runs that errored or were paused don't count as either; with fewer than K usable runs on a side it's inconclusive.
 export function decide({ k, main, branch }) {
   const usable = (s) => s.hit + s.pass + s.other;
   if (usable(main) !== k || usable(branch) !== k) return { verdict: 'inconclusive', why: `fewer than ${k} usable runs on a side (main ${usable(main)}, branch ${usable(branch)})` };

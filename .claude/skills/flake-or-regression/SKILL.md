@@ -17,13 +17,15 @@ A browser test failed. Before you fix anything or stop, find out whose failure i
 ## Stop and ask, don't guess
 - You can't say what failed: there's no failure output.
 - The failing check doesn't exist on main. It's a new test, so there's nothing to compare. Check the test's own red-then-green proof instead.
-- The script exits 2: the test couldn't run (browser, server or setup). Fix the setup. That's not a verdict.
+- The script exits 2: the test couldn't run (browser, server or setup), or the machine slept through 3 tries of one run. Fix the setup or keep the machine awake. That's not a verdict.
+- A run the machine slept through is marked **paused** in `runs.csv` and run again; it never counts. Report how many there were.
 - The verdict is **inconclusive** (exit 3). Report the table and stop. Don't call it flaky because you'd like to carry on.
 - K over 30.
 
 ## Steps
 1. **Choose the signature:** a piece of the failure's output that names *this* failure and is the same on both sides.
-   - For a timeout (`timed out after 90 s at two-browser.mjs:229: await until(B, …)`), use the time and the quoted code: `timed out after 90 s at two-browser.mjs:` plus the code after the line number. Don't use the line number: it moves when the branch edits the test.
+   - For a timeout (`timed out after 90 s at two-browser.mjs:229: await until(B, …)`), use the quoted code after the line number by itself, for example `await until(B, () => window.__t.files.size === 4, null, 90000);`. The signature is matched as one piece of text, so it can't skip the line number in the middle; and the line number moves when a branch edits the test.
+   - If the output you were given is from an **older version of the test** (a different line number, or the code has changed around it), find that wait in the current `tests/two-browser.mjs` on main and use its code as it is now. Say so in the report.
    - For a `FAIL …` line, use the words that don't change between runs (no counts, ids or timings).
    - Check the signature appears in the failure output you were given.
 2. **Run it** from the repo root (this checkout):
