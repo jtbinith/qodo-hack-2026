@@ -19,6 +19,9 @@ A browser test failed. Before you fix anything or stop, find out whose failure i
 - The failing check doesn't exist on main. It's a new test, so there's nothing to compare. Check the test's own red-then-green proof instead.
 - The script exits 2: the test couldn't run (browser, server or setup), or the machine slept through 3 tries of one run. Fix the setup or keep the machine awake. That's not a verdict.
 - A run the machine slept through is marked **paused** in `runs.csv` and run again; it never counts. Report how many there were.
+- The script stops because the signature is in one side's `tests/two-browser.mjs` but not the other's: the branch changed that check, so the same failure prints differently on each side. Compare the two failures by hand and report it.
+- The script stops because main and the branch declare different dependencies (`package.json` or `package-lock.json`). Report it.
+- The script stops because the test **hung** (killed after 10 minutes) twice on one side. If only the branch hangs, the branch may cause it: read that run and report it. Don't call it a setup problem.
 - The verdict is **inconclusive** (exit 3). Report the table and stop. Don't call it flaky because you'd like to carry on.
 - K over 30.
 

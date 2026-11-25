@@ -9,23 +9,39 @@ export const MAX_K = 30;
 // run (the browser or the server), "pass" otherwise.
 export function classify(exit, output, signature) {
   const out = String(output || '');
-  if (signature && out.includes(signature)) return 'hit';
+  // the signature counts only on a line that reports a failure, never on a PASS line that happens
+  // to share its words (Qodo on #146)
+  if (signature && out.split('\n').some((l) => isFailureLine(l) && l.includes(signature))) return 'hit';
   if (/Executable doesn't exist|EADDRINUSE|Cannot find module|browserType\.launch|ERR_MODULE_NOT_FOUND/.test(out)) return 'error';
   if (exit === 0) return 'pass';
   return 'other';
 }
+const isFailureLine = (l) => /^FAIL |timed out after|Error:/.test(l);
 
 // A run the machine slept through: wall-clock time ran on while the monotonic clock (and with it
 // node's timers, including the runner's timeout) stood still. Its output says nothing about the
 // code, so it's "paused": not counted, and the runner runs that slot again. Found by fresh run 1
 // (case C, run 16: 1724 s for an ~85 s test, counted as "other failure").
 export const PAUSE_MS = 30000;
-// A run the runner killed for taking too long couldn't run: that's the harness, not the test (the
-// test's own waits are 90 s at most).
-export function outcomeOf({ exit, output, signature, timedOut = false, wallMs = 0, monoMs = 0 }) {
+// A run the runner killed for taking too long is a "hang": not a test failure and not counted, but
+// counted per side, because a branch can make the test hang (Qodo on #146). A test that couldn't
+// start, or was killed by a signal the runner didn't send, couldn't run (Qodo on #146).
+export function outcomeOf({ exit, output, signature, timedOut = false, spawnError = null, killedBy = null, wallMs = 0, monoMs = 0 }) {
   if (wallMs - monoMs > PAUSE_MS) return 'paused';
-  if (timedOut) return 'error';
+  if (timedOut) return 'hang';
+  if (spawnError || killedBy) return 'error';
   return classify(exit, output, signature);
+}
+
+// A signature that's in one side's test but not the other's: the branch changed that check, so the
+// same failure would print different text on each side and the counts can't be compared (Qodo on
+// #146). A FAIL line's "FAIL " is printed by the test, not written in it, so it's left off here.
+export function signatureProblem(signature, sources) {
+  const bare = String(signature).replace(/^FAIL /, '');
+  const has = Object.fromEntries(Object.entries(sources).map(([side, src]) => [side, String(src).includes(bare)]));
+  if (has.main === has.branch) return null;
+  const without = has.main ? 'branch' : 'main';
+  return `the signature is in one side's tests/two-browser.mjs but not the ${without}'s: the ${without} changed that check, so the counts can't be compared. Compare by hand`;
 }
 
 // The first line that says what failed: a FAIL line or a timeout, for the run table.
@@ -36,7 +52,7 @@ export const firstFailure = (output) => (String(output || '').split('\n').find((
 //   branch broke it main never hit, the branch hit at least 3 times
 //   made worse      both hit, and the branch's rate is at least 3 times main's
 //   inconclusive    anything else, including neither side hitting it: stop and report, don't guess
-// Runs that errored or were paused don't count as either; with fewer than K usable runs on a side it's inconclusive.
+// Runs that errored, hung or were paused don't count as either; with fewer than K usable runs on a side it's inconclusive.
 export function decide({ k, main, branch }) {
   const usable = (s) => s.hit + s.pass + s.other;
   if (usable(main) !== k || usable(branch) !== k) return { verdict: 'inconclusive', why: `fewer than ${k} usable runs on a side (main ${usable(main)}, branch ${usable(branch)})` };
