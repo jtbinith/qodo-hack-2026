@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
-const WORDS = [new RegExp('bed' + 'rock', 'i'), new RegExp('\\.mid' + 'way'), new RegExp('\\.tool' + 'box\\b'), new RegExp('awsCredential' + 'Export'), new RegExp('msg_bd' + 'rk_'), new RegExp('AWS_' + 'REGION')];
+const WORDS = [new RegExp('bed' + 'rock', 'i'), new RegExp('\\.mid' + 'way'), new RegExp('\\.tool' + 'box\\b'), new RegExp('awsCredential' + 'Export'), new RegExp('msg_bd' + 'rk_'), new RegExp('toolu_bd' + 'rk_'), new RegExp('global\\.anthro' + 'pic\\.'), new RegExp('AWS_' + 'REGION')];
 // every file in the checkout, read from disk (not git: the factory's test container has no git directory)
 function* files(dir) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
