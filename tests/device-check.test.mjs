@@ -37,7 +37,7 @@ const runner = () => readFileSync(new URL('../scripts/agent-watch.mjs', import.m
 test('the runner checks the scenario against the ticket before it runs anything, and a refusal is an error, not a pass', () => {
   const src = runner();
   assert.match(src, /ticketTextProblems\(/);
-  assert.ok(src.indexOf('ticketTextProblems(') < src.indexOf("'scripts/group-check.mjs'"), 'the guard comes before the run');
+  assert.ok(src.indexOf('ticketTextProblems(scenario') < src.indexOf("spawnSync(SANDBOX, ['node', join(rc, 'group-check.mjs')"), 'the guard comes before the run');   // the run moved into the container with 4d86635f
   assert.match(src, /throw new Stop\(`The scenario's expected text isn't quoted in #/);
 });
 test('the runner runs the device check only for area: ui and area: sharing tickets, after npm test passes', () => {
