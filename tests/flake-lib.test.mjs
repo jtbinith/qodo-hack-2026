@@ -106,3 +106,8 @@ test('#146 cae80b0c: a test that couldn\'t start or was killed by a signal could
 test('#146 73260a59 (found checking the fix): Ctrl-C or a kill also removes the worktrees', () => {
   assert.match(runner(), /for \(const sig of \['SIGINT', 'SIGTERM', 'SIGHUP'\]\) process\.on\(sig/);
 });
+test('#146 dba5dfcb: a test run doesn\'t block the runner, so a signal stops the run in progress and the rest', () => {
+  assert.doesNotMatch(runner(), /spawnSync\('node'/);
+  assert.match(runner(), /await runTest\(/);
+  assert.match(runner(), /current\?\.kill\('SIGKILL'\)/);
+});
