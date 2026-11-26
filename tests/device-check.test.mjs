@@ -56,10 +56,19 @@ test('the work-ticket skill tells an unattended agent to write the scenario, quo
   assert.match(skill, /\.agent\/scenario\.json/);
   assert.match(skill, /quoted in the ticket/);
 });
-test('the limit, on purpose: the guard proves the text came from the ticket, not that it is the right line of it', () => {
-  // #72 quotes "Saved 10" in "not 'Saved 10'", so "Saved 3" passes the guard. The check's `source`
-  // and the skill's rules cover which line is right; #135's "Saved N" was caught by the run, not here.
-  assert.deepEqual(problems(scen('Saved 3')), []);
+test('a quote the ticket rules out ("not", "never", "instead of", "rather than") is refused, naming it', () => {
+  // #72: 'The message says "Downloading 10", not "Saved 10"' (the hole: "Saved 3" used to pass)
+  const p = problems(scen('Saved 3'));
+  assert.ok(p.length);
+  assert.match(p.join(), /Saved 10/);
+  for (const word of ['never', 'instead of', 'rather than']) assert.ok(lib.ticketTextProblems(scen('Saved 3'), `It says "Downloading 10" ${word} "Saved 10".`).length, word);
+});
+test('a ruled-out quote wins over the same text quoted as an example elsewhere', () => {
+  const t = `For example "Saved 10 · 2 still arriving". The message says "Downloading 10", not "Saved 10".`;
+  assert.match(lib.ticketTextProblems(scen('Saved 3'), t).join(), /Saved 10/);
+});
+test('"Downloading 3" is still accepted', () => {
+  assert.deepEqual(problems(scen('Downloading 3')), []);
 });
 test('the "Not checked" boxes in the runner\'s device proof also set needs-manual-check', () => {
   assert.match(runner(), /uncheckedCriteria\(prBody\(n, s\)\)/);
