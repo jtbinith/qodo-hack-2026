@@ -413,3 +413,25 @@ test('a share that finishes after SHARE_TIMEOUT still marks its photos handed ov
   assert.deepEqual([...s.handed].sort(), ['r0', 'r1']);
   assert.equal(toasts.at(-1), 'Shared 2');
 });
+
+// Qodo on #130 at f857768 (Medium, "Late share failures download new photos"): a hung share whose
+// photos were released and downloaded after the ask failed late, showed a stale retry toast and
+// turned download mode on, so the next new photo downloaded instead of opening the share sheet
+test('a hung share that fails after its photos were downloaded leaves no download mode behind', async () => {
+  const t = table({ n: 2 });
+  const { s, log, settle } = hungThenSettles(t);
+  const first = s.tap();   // the share sheet hangs
+  await new Promise((r) => setTimeout(r, 10));
+  await s.tap();           // the ask
+  await s.tap();           // downloads r0, r1
+  assert.deepEqual(log.downloads.sort(), ['r0.jpg', 'r1.jpg']);
+  const toastsBefore = log.toasts.length;
+  settle().no(Object.assign(new Error('no tap'), { name: 'NotAllowedError' }));   // the hung sheet fails late
+  await first;
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(log.toasts.length, toastsBefore, 'no stale retry toast for photos already downloaded');
+  t.prints.set('r2', { pid: 'r2', owner: THEM, name: 'r2.jpg' }); t.files.set('r2', { name: 'r2.jpg' });
+  await s.tap();
+  assert.deepEqual(log.downloads.sort(), ['r0.jpg', 'r1.jpg'], 'the new photo is not downloaded');
+  assert.deepEqual(log.shares[1], ['r2.jpg'], 'the new photo goes to the share sheet');
+});
