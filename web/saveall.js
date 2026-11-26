@@ -37,6 +37,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
   // only opens inside the tap (iOS rule)
   async function tap() {
     if (busy) return toast('Still saving');
+    for (const pid of pending) if (handed.has(pid)) pending.delete(pid);   // saved by tapping it: nothing left to hold
     if (!pending.size) release = false;   // the hung share settled since: nothing left to release or download
     // a share that outlived SHARE_TIMEOUT may still finish: its photos aren't offered again
     // until it settles, or until the person has been told and taps again
@@ -49,7 +50,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
       return toast(arriving ? `Nothing to save yet${more(arriving)}` : 'Nothing new to save');
     }
     const downloading = downloadNext || release;   // a failed sheet, or the ask about a hung one
-    if (release) { release = false; released = shares; for (const r of ready) pending.delete(r.pid); }   // no longer held
+    if (release) { release = false; released = shares; pending.clear(); }   // every share so far is released: none of their photos is held
     const list = ready.map((r) => r.file);
     let sharing = false;
     if (!downloading) { try { sharing = !!canShare(list); } catch { sharing = false; } }
