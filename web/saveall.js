@@ -58,20 +58,26 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
     try {
       if (sharing) {
         // called now, inside the tap; a share that throws at once becomes a failure like any other
-        const sheet = (async () => share(list))();
+        let sheet;
+        try { sheet = Promise.resolve(share(list)); } catch (e) { sheet = Promise.reject(e); }
         const id = ++shares;
         for (const r of ready) pending.add(r.pid);
-        // a share that never settles frees Save all after SHARE_TIMEOUT; if it finishes later it still counts
-        wait(SHARE_TIMEOUT).then(() => { if (busy === mine) busy = null; });
-        try { await sheet; } catch (e) {
-          if (id <= released) return;   // its photos were downloaded after the ask: nothing left to retry
+        // what the share's end does, whenever it comes: before SHARE_TIMEOUT or after it
+        const settled = sheet.then(() => {
+          for (const r of ready) { handed.add(r.pid); if (id > released) pending.delete(r.pid); }   // released: a newer share may hold them
+          toast(`Shared ${ready.length}${more(arriving)}`);
+          return 'shared';
+        }, (e) => {
+          if (id <= released) return 'released';   // its photos were downloaded after the ask: nothing left to retry
           for (const r of ready) pending.delete(r.pid);   // settled: cancelled or failed, the photos stay available
-          if (e?.name === 'AbortError') return;   // cancelled: nothing happens, the photos stay available
+          if (e?.name === 'AbortError') return 'cancelled';   // cancelled: nothing happens, the photos stay available
           downloadNext = true;
-          return toast('Couldn’t open the share sheet. Tap Save all again to download');
-        }
-        for (const r of ready) { handed.add(r.pid); if (id > released) pending.delete(r.pid); }   // released: a newer share may hold them
-        return toast(`Shared ${ready.length}${more(arriving)}`);
+          toast('Couldn’t open the share sheet. Tap Save all again to download');
+          return 'failed';
+        });
+        // a share that never settles ends the tap and frees Save all after SHARE_TIMEOUT. Its photos stay
+        // held until it settles, or until the person is told and taps again (the ask above)
+        return await Promise.race([settled, wait(SHARE_TIMEOUT).then(() => 'timeout')]);
       }
       downloadNext = false;   // download mode lasts one batch
       toast(`Downloading ${ready.length}${more(arriving)}`);
