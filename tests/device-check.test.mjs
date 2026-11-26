@@ -102,3 +102,8 @@ test('#148 13cc7d6e: a one-character quoted message is accepted', () => {
 test('#148 75ba6d73: changed spacing is refused, as the checker compares it exactly', () => {
   assert.ok(problems(scen('Downloading  3')).length);
 });
+test('a message whose part before " · " is ruled out is refused, even if the ticket quotes it whole as an example', () => {
+  const t = `For example "Saved 10 · 2 still arriving". The message says "Downloading 10", not "Saved 10".`;
+  assert.match(lib.ticketTextProblems(scen('Saved 3 · 1 still arriving'), t).join(), /Saved 10/);
+  assert.deepEqual(lib.ticketTextProblems(scen('Downloading 3'), t), []);
+});
