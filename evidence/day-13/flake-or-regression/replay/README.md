@@ -11,4 +11,4 @@ Each case reruns `tests/two-browser.mjs` 5 times on main as it was when the bran
 
 **Result:** at K = 5 the skill would have settled 0 of the 5 stops, and got none wrong. It never said "branch broke it" about a failure that went green on a rerun. To call something "already flaky", the rule needs main to hit the flake at least once, and at about 1 in 10 runs, 5 runs a side rarely shows it. The skill's default is K = 10 and its maximum is 30.
 
-One run may have overlapped a 2-minute browser run of mine that I started by mistake while checking a fix (in case 61a, about 23:40Z). It passed.
+Runs 1–3 of case 61a (23:29–23:34Z) may have overlapped a 2-minute browser run of mine that I started by mistake while checking a fix. All three passed.
