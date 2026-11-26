@@ -247,6 +247,13 @@ const head = (s) => sh('git', ['rev-parse', 'HEAD'], { cwd: s.dir });
 const agentFile = (s, f) => { const p = join(s.dir, '.agent', f); return existsSync(p) ? readFileSync(p, 'utf8') : ''; };
 const clearStale = (s, when) => staleFiles(when).forEach((f) => write(`remove .agent/${f}`, () => rmSync(join(s.dir, '.agent', f), { force: true })));
 const putAgentFile = (s, f, text) => { mkdirSync(join(s.dir, '.agent'), { recursive: true }); writeFileSync(join(s.dir, '.agent', f), text); };
+// The ticket for the agent, from GitHub as it is now (Rule 7): at the first pickup and every time a
+// run is reopened, never a copy saved earlier. On #72 a reopened run kept the 23 Nov copy, without
+// the owner's new Decision (the factory's first device-check run, 26 Nov).
+function freshTicket(n, s) {
+  const t = issue(n);
+  putAgentFile(s, 'ticket.md', `# #${t.number} ${t.title}\n${t.html_url}\nWritten by ${t.user.login}. Labels: ${t.labels.map((l) => l.name).join(', ')}\n\n${t.body}\n`);
+}
 
 const testNames = (s, sha) => namesInDiff(sh('git', ['show', '--format=', '-U0', sha], { cwd: s.dir }));
 // Every `test:` commit since `base` must change only tests and must fail on its own new tests.
@@ -808,7 +815,8 @@ try {
     current = { n, s };
     const has = issue(n).labels.map((l) => l.name);
     setLabels(n, [L.working], [L.done, L.help, L.manual].filter((l) => has.includes(l)));
-    s.phase = 'review'; save(n, s); clearStale(s, 'reopen');   // the owner's comment overrides the last stop
+    s.phase = 'review'; s.localRounds = 0; save(n, s); clearStale(s, 'reopen');   // the owner's comment overrides the last stop, and its round gets its own local fix rounds
+    freshTicket(n, s);
     event(n, `reopened by an /agent comment on PR #${s.pr}`); notify(`#${n}: working on your /agent comment`);
     continueRun(n, s);
     process.exit(0);
@@ -828,7 +836,8 @@ try {
     current = { n, s };
     s.lastAsk = asks.at(-1).id; save(n, s);
     if (plan === 'limit') throw new Stop(`\`/agent retry\` was used ${LIMITS.retryRounds} times on this run. Label the ticket \`${L.ready}\` again for a fresh run.`);
-    s.retryRounds = (s.retryRounds || 0) + 1; s.phase = 'work'; save(n, s); clearStale(s, 'reopen');
+    s.retryRounds = (s.retryRounds || 0) + 1; s.phase = 'work'; s.localRounds = 0; save(n, s); clearStale(s, 'reopen');
+    freshTicket(n, s);
     const has = issue(n).labels.map((l) => l.name);
     setLabels(n, [L.working], [L.help, L.manual].filter((l) => has.includes(l)));
     event(n, `resumed by /agent retry on the ticket: checking ${s.branch} again from where it stopped`); notify(`#${n}: resuming on your /agent retry`);
@@ -864,7 +873,7 @@ try {
     sh('git', ['worktree', 'add', '-B', s.branch, s.dir, 'origin/main'], { cwd: MAIN });
     symlinkSync(join(MAIN, 'node_modules'), join(s.dir, 'node_modules'));
     s.base = head(s); save(n, s);
-    putAgentFile(s, 'ticket.md', `# #${t.number} ${t.title}\n${t.html_url}\nWritten by ${t.user.login}. Labels: ${t.labels.map((l) => l.name).join(', ')}\n\n${t.body}\n`);
+    freshTicket(n, s);
     wisdomCheck(n, s);
     agent(n, s, 'work', `Work ticket #${n} using the skill at .claude/skills/work-ticket/SKILL.md. This is an unattended run: follow its "Unattended runs" section. The ticket is in .agent/ticket.md.`);
     checkAndPush(n, s, 'first push');

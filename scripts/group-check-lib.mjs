@@ -3,6 +3,8 @@
 
 export const SIZES = { phone: [390, 700], tablet: [768, 1000], laptop: [900, 600] };
 export const MAX_DEVICES = 20;
+// stand-in share sheets: hang-then-* hangs its first call for hangMs, then settles (works or cancels)
+export const SHARES = ['fail-once', 'works', 'hang-then-works', 'hang-then-cancel'];
 export const EXIT = { pass: 0, fail: 1, stop: 2 };
 
 const DO = new Set(['pick', 'drag', 'wait', 'tap', 'pause']);
@@ -17,7 +19,7 @@ export function scenarioProblems(s) {
   if (!Array.isArray(s.devices) || s.devices.length < 2) p.push('"devices" needs at least 2 devices');
   else {
     if (s.devices.length > MAX_DEVICES) p.push(`more than ${MAX_DEVICES} devices`);
-    s.devices.forEach((d, i) => { if (!SIZES[d?.size]) p.push(`device ${i}: size must be one of ${Object.keys(SIZES).join(', ')}`); if (d?.share && d.share !== 'fail-once' && d.share !== 'works') p.push(`device ${i}: share must be "fail-once" or "works"`); });
+    s.devices.forEach((d, i) => { if (!SIZES[d?.size]) p.push(`device ${i}: size must be one of ${Object.keys(SIZES).join(', ')}`); if (d?.share && !SHARES.includes(d.share)) p.push(`device ${i}: share must be one of ${SHARES.join(', ')}`); if (/^hang-then-/.test(d?.share || '') && !(Number.isInteger(d.hangMs) && d.hangMs > 0 && d.hangMs <= 180000)) p.push(`device ${i}: a hanging share sheet needs "hangMs" (1 to 180000): how long its first call hangs before it settles`); });
   }
   if (!Array.isArray(s.steps) || !s.steps.length) p.push('"steps" is empty');
   else s.steps.forEach((st, i) => {
