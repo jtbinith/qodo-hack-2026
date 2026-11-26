@@ -1,0 +1,63 @@
+// The runner runs group-device-check itself for ui and sharing tickets, from a scenario the agent
+// writes. Its guard: every expected text must be quoted in the ticket, so a scenario can't take its
+// expected text from the code (the mistake the skill exists to prevent).
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as lib from '../scripts/group-check-lib.mjs';
+
+const ticket = `- **Downloads:** The message says "Downloading 10", not "Saved 10".
+- **When the message shows:** It says "Shared 10 · 2 still arriving".
+- **Failure:** a toast says "Couldn't open the share sheet. Tap Save all again to download".`;
+const scen = (...equals) => ({ ticket: 72, devices: [{ size: 'laptop' }, { size: 'phone' }], steps: equals.map((e) => ({ check: 'toast', device: 1, equals: e, source: '#72 Decisions' })) });
+const problems = (s) => lib.ticketTextProblems(s, ticket);
+
+test('a made-up toast is refused', () => {
+  assert.equal(typeof lib.ticketTextProblems, 'function');
+  assert.match(problems(scen('Photos saved!')).join(), /Photos saved!/);
+});
+test('loose words from a sentence are refused: only the ticket\'s quoted text counts', () => {
+  assert.ok(problems(scen('The message says')).length);
+  assert.ok(problems(scen('Tap Save all again')).length);
+});
+test('the ticket\'s quoted text is accepted, with its numbers changed and quote styles mixed', () => {
+  assert.deepEqual(problems(scen('Downloading 3', 'Shared 1', 'Couldn’t open the share sheet. Tap Save all again to download')), []);
+  assert.deepEqual(problems(scen('Shared 3 · 1 still arriving')), []);
+});
+test('a word changed in quoted text is refused', () => {
+  assert.ok(problems(scen('Downloaded 3')).length);
+  assert.ok(problems(scen("Couldn't open the share sheet. Tap Save all to download")).length);
+});
+test('checks without expected text (shared, downloads) need nothing from the ticket', () => {
+  const s = { ...scen(), steps: [{ check: 'downloads', device: 0, count: 3, source: '#72' }, { check: 'shared', device: 1, calls: 2, source: '#72' }] };
+  assert.deepEqual(problems(s), []);
+});
+
+const runner = () => readFileSync(new URL('../scripts/agent-watch.mjs', import.meta.url), 'utf8');
+test('the runner checks the scenario against the ticket before it runs anything, and a refusal is an error, not a pass', () => {
+  const src = runner();
+  assert.match(src, /ticketTextProblems\(/);
+  assert.ok(src.indexOf('ticketTextProblems(') < src.indexOf("'scripts/group-check.mjs'"), 'the guard comes before the run');
+  assert.match(src, /throw new Stop\(`The scenario's expected text isn't quoted in #/);
+});
+test('the runner runs the device check only for area: ui and area: sharing tickets, after npm test passes', () => {
+  const src = runner();
+  assert.match(src, /DEVICE_LABELS = \['area: ui', 'area: sharing'\]/);
+  assert.ok(src.indexOf('deviceCheck(n, s)') > src.indexOf('if (t.ok) break;'));
+});
+test('PASS goes in the PR\'s proof, FAIL goes back to the agent, STOP stops the run', () => {
+  const src = runner();
+  assert.match(src, /\*\*Device check \(group-device-check\), run by the runner\*\*/);
+  assert.match(src, /agent\(n, s, 'fix-device'/);
+  assert.match(src, /throw new Stop\(`The device check stopped/);
+});
+test('the work-ticket skill tells an unattended agent to write the scenario, quoting the ticket', () => {
+  const skill = readFileSync(new URL('../.claude/skills/work-ticket/SKILL.md', import.meta.url), 'utf8');
+  assert.match(skill, /\.agent\/scenario\.json/);
+  assert.match(skill, /quoted in the ticket/);
+});
+test('the limit, on purpose: the guard proves the text came from the ticket, not that it is the right line of it', () => {
+  // #72 quotes "Saved 10" in "not 'Saved 10'", so "Saved 3" passes the guard. The check's `source`
+  // and the skill's rules cover which line is right; #135's "Saved N" was caught by the run, not here.
+  assert.deepEqual(problems(scen('Saved 3')), []);
+});
