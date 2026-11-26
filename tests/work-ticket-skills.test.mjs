@@ -40,3 +40,20 @@ test('an unattended run names the skills for the owner instead of running them',
   assert.match(s, /flake-or-regression/); assert.match(s, /group-device-check/);
   assert.match(s, /can't run (them|either)/i);
 });
+
+// Qodo on #147 (162e35b)
+test('#147 50c924fd: "already flaky" with more branch hits than main goes to the owner, not straight on', () => {
+  const s = step(4);
+  assert.match(s, /hit it more often than main/);
+  assert.match(s, /- \[ \]/);
+});
+test('#147 e5c52867: an unattended run never fixes a browser step it didn\'t write, and an unrun device check is an unticked box', () => {
+  const s = unattended();
+  assert.match(s, /don't fix it and don't decide whose it is/i);
+  assert.match(s, /- \[ \] .*group-device-check/);
+  assert.match(s, /needs-manual-check/);
+});
+test('#147 f3cc8324 (Low, settled by e5c52867): the Not checked items go to one place, as unticked boxes under Notes', () => {
+  assert.match(step(4), /each item on that list goes under Notes as an unticked `- \[ \]`/);
+  assert.doesNotMatch(step(6), /and its Not checked list\) under Tested/);
+});
