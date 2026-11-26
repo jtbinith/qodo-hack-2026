@@ -27,6 +27,7 @@ export function scenarioProblems(s) {
     if (!kind) p.push(`step ${i}: needs "do" or "check"`);
     if (st?.check && typeof st.source !== 'string') p.push(`step ${i}: a check needs "source": the ticket section its expected value is copied from`);
     if (st?.check === 'shared' && !Number.isInteger(st.calls)) p.push(`step ${i}: a shared check needs "calls"`);
+    if (st?.check === 'toast' && typeof st.equals !== 'string') p.push(`step ${i}: a toast check needs "equals": the exact text from the ticket (an empty toast must never pass)`);   // Qodo on #148
     if (st?.check && typeof st.source === 'string' && /\b(web|src|tests?)\/|\.m?js\b|\.html\b/.test(st.source)) p.push(`step ${i}: "source" points at code (${st.source}); expected text must come from the ticket`);
   });
   return p;
@@ -75,4 +76,41 @@ export function sharedBytesProblems(names, hashes, sent) {
   // one by one, in the order they were handed over, so two files with the same name are each
   // checked (Qodo on #145)
   return names.flatMap((n, i) => { const [name, h] = hashes[i] || []; return name !== n || !h ? [`${n} (file ${i + 1}): its bytes weren't hashed`] : h !== sent.get(n) ? [`${n} (file ${i + 1}): not byte-identical to the sender's`] : []; });
+}
+
+// The runner's guard on a scenario the agent wrote: every expected text must be one of the ticket's
+// quoted strings (or the part of one before a " · "), so it can't have come from the code. Quote
+// styles count as the same and numbers may differ: the skill tells the agent to use the numbers its
+// scenario produces ("Downloading 3" for the ticket's "Downloading 10"). It proves the text came from
+// the ticket, not that it is the right line of it: the check's `source` and the skill cover that.
+// Spaces inside the text are kept: the checker compares them exactly (Qodo on #148).
+const shape = (t) => plainQuotes(t).replace(/\d+/g, '#');
+// A quote the ticket rules out ("not", "never", "instead of" or "rather than" right before it) can't
+// be expected text, and that wins over the same text quoted elsewhere: #72 says 'The message says
+// "Downloading 10", not "Saved 10"' and also gives "Saved 10 · 2 still arriving" as an example
+// (owner's review of #148).
+const RULED_OUT = /\b(not|never|instead of|rather than)\s*$/i;
+export function ticketQuotes(body) {
+  const text = plainQuotes(body), allowed = new Set(), ruledOut = new Map();
+  for (const m of text.matchAll(/"([^"\n]{1,300})"/g)) {
+    const q = m[1], before = text.slice(Math.max(0, m.index - 20), m.index);
+    if (RULED_OUT.test(before)) { ruledOut.set(shape(q), q); continue; }
+    allowed.add(shape(q)); allowed.add(shape(q.split(' · ')[0]));
+  }
+  for (const k of ruledOut.keys()) allowed.delete(k);
+  return Object.assign(allowed, { ruledOut });
+}
+export function ticketTextProblems(scenario, body) {
+  // a malformed scenario is refused here, never a crash (Qodo on #148)
+  if (!scenario || typeof scenario !== 'object' || !Array.isArray(scenario.steps)) return ['the scenario has no list of steps'];
+  const quotes = ticketQuotes(body);
+  return scenario.steps.flatMap((st, i) => {
+    if (!st || typeof st !== 'object') return [`step ${i} isn't an object`];
+    if (st.check === 'toast' && typeof st.equals !== 'string') return [`step ${i}: a toast check has no expected text`];   // Qodo on #148
+    if (typeof st.equals !== 'string') return [];
+    const k = shape(st.equals), lead = shape(st.equals.split(' · ')[0]);
+    if (quotes.ruledOut.has(lead) && !quotes.ruledOut.has(k)) return [`"${st.equals}" (device ${st.device}): the ticket rules out its first part ("${quotes.ruledOut.get(lead)}" follows a "not", "never", "instead of" or "rather than")`];
+    if (quotes.ruledOut.has(k)) return [`"${st.equals}" (device ${st.device}): the ticket rules it out ("${quotes.ruledOut.get(k)}" follows a "not", "never", "instead of" or "rather than")`];
+    return quotes.has(k) ? [] : [`"${st.equals}" (device ${st.device}) isn't quoted in the ticket`];
+  });
 }
