@@ -298,6 +298,53 @@ test('after SHARE_TIMEOUT, a tap that finds only the hung share’s photos asks 
   assert.deepEqual(log.shares[1], ['r3.jpg']);
 });
 
+// jtbinith on #130, from Qodo's local review of fa38632 (High, "Settled sheets still force downloads"):
+// the ask set download mode, and a hung sheet that settled before the next tap left it on
+function hungThenSettles(t) {
+  const log = { shares: [], downloads: [], toasts: [] };
+  let settle;
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true,
+    share: (l) => {
+      log.shares.push(l.map((f) => f.name));
+      return log.shares.length === 1 ? new Promise((ok, no) => { settle = { ok, no }; }) : Promise.resolve();
+    },
+    download: (f) => log.downloads.push(f.name),
+    wait: async () => {},   // the timeout is up at once
+    toast: (m) => log.toasts.push(m),
+  });
+  return { s, log, settle: () => settle };
+}
+
+test('the hung sheet succeeds after the ask: the next new photo opens the share sheet, nothing downloads', async () => {
+  const t = table({ n: 2 });
+  const { s, log, settle } = hungThenSettles(t);
+  const first = s.tap();
+  await new Promise((r) => setTimeout(r, 10));
+  await s.tap();
+  assert.equal(log.toasts.at(-1), 'The share sheet didn’t finish. Tap Save all again to download them');
+  settle().ok(); await first;
+  assert.deepEqual([...s.handed].sort(), ['r0', 'r1'], 'the late success hands them over');
+  t.prints.set('r2', { pid: 'r2', owner: THEM, name: 'r2.jpg' }); t.files.set('r2', { name: 'r2.jpg' });
+  await s.tap();
+  assert.deepEqual(log.downloads, [], 'nothing downloads: the sheet settled, so there is nothing left to download');
+  assert.deepEqual(log.shares[1], ['r2.jpg'], 'the new photo goes to the share sheet');
+});
+
+test('the hung sheet is cancelled after the ask: the next tap offers the photos to the share sheet again', async () => {
+  const t = table({ n: 2 });
+  const { s, log, settle } = hungThenSettles(t);
+  const first = s.tap();
+  await new Promise((r) => setTimeout(r, 10));
+  await s.tap();
+  assert.equal(log.toasts.at(-1), 'The share sheet didn’t finish. Tap Save all again to download them');
+  settle().no(Object.assign(new Error('cancelled'), { name: 'AbortError' })); await first;
+  await s.tap();
+  assert.deepEqual(log.downloads, [], 'a cancel does nothing: the photos are not downloaded');
+  assert.deepEqual(log.shares[1].sort(), ['r0.jpg', 'r1.jpg'], 'they stay available to the share sheet');
+});
+
 test('before SHARE_TIMEOUT a tap still says "Still saving" and asks nothing', async () => {
   const t = table({ n: 2 });
   const toasts = [];
