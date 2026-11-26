@@ -52,13 +52,17 @@ const sha = (b) => createHash('sha256').update(b).digest('hex');
 const shareStub = (mode, hangMs = 0) => `(() => { const s = window.__shares = []; let first = ${mode === 'fail-once'}, hang = ${/^hang-then-/.test(mode) ? Number(hangMs) : 0}; const cancel = ${mode === 'hang-then-cancel'};
   navigator.canShare = () => true;
   const h = window.__sharedHashes = [];
+  let open = false;   // a real browser refuses a second share while one is open (Qodo on #149)
   navigator.share = async ({ files }) => {
+    if (open) throw new DOMException('a share is already in progress', 'InvalidStateError');
+    open = true; try {
     // the bytes handed over, so the check can compare them with what the sender holds; the call is
     // recorded only once they're hashed, so a check never reads a call without its hashes (Qodo on #145)
     const hashed = await Promise.all(files.map(async (f) => { try { return [f.name, [...new Uint8Array(await crypto.subtle.digest('SHA-256', await f.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('')]; } catch { return [f.name, null]; } }));
     s.push(files.map((f) => f.name)); h.push(hashed);
     if (first) { first = false; throw new DOMException('not allowed', 'NotAllowedError'); }
-    if (hang) { const ms = hang; hang = 0; await new Promise((r) => setTimeout(r, ms)); if (cancel) throw new DOMException('cancelled', 'AbortError'); } }; })();`;
+    if (hang) { const ms = hang; hang = 0; await new Promise((r) => setTimeout(r, ms)); if (cancel) throw new DOMException('cancelled', 'AbortError'); }
+    } finally { open = false; } }; })();`;
 const dev = [];
 for (const [i, d] of s.devices.entries()) {
   const [w, h] = SIZES[d.size];
