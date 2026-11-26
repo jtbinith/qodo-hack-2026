@@ -12,3 +12,6 @@ Each case reruns `tests/two-browser.mjs` 5 times on main as it was when the bran
 **Result:** at K = 5 the skill would have settled 0 of the 5 stops, and got none wrong. It never said "branch broke it" about a failure that went green on a rerun. To call something "already flaky", the rule needs main to hit the flake at least once, and at about 1 in 10 runs, 5 runs a side rarely shows it. The skill's default is K = 10 and its maximum is 30.
 
 Runs 1–3 of case 61a (23:29–23:34Z) may have overlapped a 2-minute browser run of mine that I started by mistake while checking a fix. All three passed.
+
+## Follow-up: #96 at K = 20 (26 Nov, merged runner `465ea1f`)
+To test the "too few runs" explanation I reran the #96 stop at K = 20 (relay). **Still inconclusive: main 0 of 20, branch 0 of 20.** The first-transfer timeout didn't appear once in 40 runs. So it wasn't only K: the flake was rarer than 1 in 10 on these runs. Across Day 13 it appeared once in 20 runs (the exam's clean case) and 0 times in the 80 runs of #96's replays. A flake this rare can't be settled by reruns at 5 or 20 a side, and the skill says "inconclusive" instead of guessing. `96-4453961-k20/` has the verdict, the run table and the first run of each side (all 40 passed).
