@@ -57,7 +57,7 @@ test('#149 8437ce20: a second share while the stand-in sheet hangs is refused, a
   assert.match(runner, /InvalidStateError/);
   assert.match(runner, /if \(open\) throw new DOMException/);
 });
-test('#149 ede3c67f: a reopened run whose ticket changed has its claims checked again (Wisdom)', () => {
-  assert.match(fnOf('freshTicket'), /return /);   // says whether the ticket changed
-  for (const p of PATHS) assert.match(reopenPath(p), /if \(freshTicket\(n, s\)\) wisdomCheck\(n, s\)/, p);
+test('#149 ede3c67f deferred to #150: reopening doesn\'t run the Wisdom check in the run\'s worktree (it\'s the feature branch, not main: 9dc75a28)', () => {
+  for (const p of PATHS) assert.doesNotMatch(reopenPath(p), /wisdomCheck\(n, s\)/, p);
+  for (const p of PATHS) assert.match(reopenPath(p), /\n    freshTicket\(n, s\);/, p);
 });
