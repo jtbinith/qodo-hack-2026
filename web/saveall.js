@@ -29,6 +29,8 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
   const pending = new Set();  // pids in a share sheet that hasn't settled, even after SHARE_TIMEOUT
   let release = false;        // the person was told a share didn't finish: the next tap downloads its photos too.
                               // This is its own download mode, gone if the share settles before that tap
+  let shares = 0;             // share sheets opened so far, each numbered
+  let released = 0;           // shares up to this number had their photos released to download after the ask
   const more = (n) => (n ? ` · ${n} still arriving` : '');
 
   // Everything is decided, and the share sheet opened, before the first await: the share sheet
@@ -47,7 +49,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
       return toast(arriving ? `Nothing to save yet${more(arriving)}` : 'Nothing new to save');
     }
     const downloading = downloadNext || release;   // a failed sheet, or the ask about a hung one
-    if (release) { release = false; for (const r of ready) pending.delete(r.pid); }   // no longer held
+    if (release) { release = false; released = shares; for (const r of ready) pending.delete(r.pid); }   // no longer held
     const list = ready.map((r) => r.file);
     let sharing = false;
     if (!downloading) { try { sharing = !!canShare(list); } catch { sharing = false; } }
@@ -57,16 +59,18 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
       if (sharing) {
         // called now, inside the tap; a share that throws at once becomes a failure like any other
         const sheet = (async () => share(list))();
+        const id = ++shares;
         for (const r of ready) pending.add(r.pid);
         // a share that never settles frees Save all after SHARE_TIMEOUT; if it finishes later it still counts
         wait(SHARE_TIMEOUT).then(() => { if (busy === mine) busy = null; });
         try { await sheet; } catch (e) {
+          if (id <= released) return;   // its photos were downloaded after the ask: nothing left to retry
           for (const r of ready) pending.delete(r.pid);   // settled: cancelled or failed, the photos stay available
           if (e?.name === 'AbortError') return;   // cancelled: nothing happens, the photos stay available
           downloadNext = true;
           return toast('Couldn’t open the share sheet. Tap Save all again to download');
         }
-        for (const r of ready) { handed.add(r.pid); pending.delete(r.pid); }
+        for (const r of ready) { handed.add(r.pid); if (id > released) pending.delete(r.pid); }   // released: a newer share may hold them
         return toast(`Shared ${ready.length}${more(arriving)}`);
       }
       downloadNext = false;   // download mode lasts one batch
