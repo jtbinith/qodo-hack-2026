@@ -1,0 +1,24 @@
+[
+ {
+  "severity": "action_required",
+  "title": "Settled sheets still force downloads",
+  "description": "When `tap()` prompts about a timed-out share, it sets `downloadNext = true`, but a later settlement clears `pending` without clearing that download mode. If the sheet then succeeds, the next newly received photo downloads instead of opening the share sheet; if it is cancelled, the next tap downloads the original photos despite the cancellation.",
+  "location": {
+   "file_path": "web/saveall.js",
+   "start_line": 42,
+   "end_line": 44,
+   "side": "right"
+  }
+ },
+ {
+  "severity": "remediation_recommended",
+  "title": "Hung share keeps its photos out of Save all",
+  "description": "`tap()` adds every ready pid to `pending` before awaiting the share sheet, and `batch(new Set([...handed, ...pending]))` then excludes those pids from all later batches. When `SHARE_TIMEOUT` expires, the timer only clears `busy`; it does not remove the `pending` entries, so a sheet that never settles leaves its photos permanently excluded for the session. Once no other photos are ready, every later tap returns `Still saving` and those photos can never be downloaded or shared again.",
+  "location": {
+   "file_path": "web/saveall.js",
+   "start_line": 37,
+   "end_line": 39,
+   "side": "right"
+  }
+ }
+]
