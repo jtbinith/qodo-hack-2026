@@ -250,12 +250,9 @@ const putAgentFile = (s, f, text) => { mkdirSync(join(s.dir, '.agent'), { recurs
 // The ticket for the agent, from GitHub as it is now (Rule 7): at the first pickup and every time a
 // run is reopened, never a copy saved earlier. On #72 a reopened run kept the 23 Nov copy, without
 // the owner's new Decision (the factory's first device-check run, 26 Nov).
-// It returns whether the ticket changed since the agent's last copy: a changed ticket has its claims
-// checked again by the Wisdom check before the agent works on it (Qodo on #149).
 function freshTicket(n, s) {
-  const t = issue(n), before = agentFile(s, 'ticket.md');
+  const t = issue(n);
   putAgentFile(s, 'ticket.md', `# #${t.number} ${t.title}\n${t.html_url}\nWritten by ${t.user.login}. Labels: ${t.labels.map((l) => l.name).join(', ')}\n\n${t.body}\n`);
-  return agentFile(s, 'ticket.md') !== before;
 }
 
 const testNames = (s, sha) => namesInDiff(sh('git', ['show', '--format=', '-U0', sha], { cwd: s.dir }));
@@ -819,7 +816,7 @@ try {
     const has = issue(n).labels.map((l) => l.name);
     setLabels(n, [L.working], [L.done, L.help, L.manual].filter((l) => has.includes(l)));
     s.phase = 'review'; s.localRounds = 0; save(n, s); clearStale(s, 'reopen');   // the owner's comment overrides the last stop, and its round gets its own local fix rounds
-    if (freshTicket(n, s)) wisdomCheck(n, s);
+    freshTicket(n, s);   // its claims aren't checked again here: #150 (the run's worktree is the feature branch, not main)
     event(n, `reopened by an /agent comment on PR #${s.pr}`); notify(`#${n}: working on your /agent comment`);
     continueRun(n, s);
     process.exit(0);
@@ -840,7 +837,7 @@ try {
     s.lastAsk = asks.at(-1).id; save(n, s);
     if (plan === 'limit') throw new Stop(`\`/agent retry\` was used ${LIMITS.retryRounds} times on this run. Label the ticket \`${L.ready}\` again for a fresh run.`);
     s.retryRounds = (s.retryRounds || 0) + 1; s.phase = 'work'; s.localRounds = 0; save(n, s); clearStale(s, 'reopen');
-    if (freshTicket(n, s)) wisdomCheck(n, s);
+    freshTicket(n, s);   // its claims aren't checked again here: #150 (the run's worktree is the feature branch, not main)
     const has = issue(n).labels.map((l) => l.name);
     setLabels(n, [L.working], [L.help, L.manual].filter((l) => has.includes(l)));
     event(n, `resumed by /agent retry on the ticket: checking ${s.branch} again from where it stopped`); notify(`#${n}: resuming on your /agent retry`);
