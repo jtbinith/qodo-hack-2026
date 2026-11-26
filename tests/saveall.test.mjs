@@ -453,3 +453,40 @@ test('a tap whose share sheet never settles settles itself once SHARE_TIMEOUT is
   await new Promise((r) => setTimeout(r, 50));
   assert.ok(settled, 'the tap settles (resolves or rejects) at SHARE_TIMEOUT');
 });
+
+// Qodo's local review of fe3c94f (Medium, "New photos download after a stale prompt"): a photo of
+// the hung share saved by tapping it before the release tap stayed held, so Save all kept asking
+// about a share with nothing left to download and the next new photo downloaded instead of sharing
+test('a hung share photo saved by tapping it before the release tap is not held after it', async () => {
+  const t = table({ n: 2 });
+  const { s, log, settle } = hungThenSettles(t);
+  const first = s.tap();   // the share sheet hangs with r0, r1
+  await new Promise((r) => setTimeout(r, 10));
+  await s.tap();           // the ask
+  s.handed.add('r0');      // r0 saved by tapping it
+  await s.tap();           // downloads r1 only
+  assert.deepEqual(log.downloads, ['r1.jpg']);
+  settle().ok(); await first;   // the old share succeeds late
+  await s.tap();
+  assert.equal(log.toasts.at(-1), 'Nothing new to save', 'no stale ask: nothing is held any more');
+  t.prints.set('r2', { pid: 'r2', owner: THEM, name: 'r2.jpg' }); t.files.set('r2', { name: 'r2.jpg' });
+  await s.tap();
+  assert.deepEqual(log.downloads, ['r1.jpg'], 'the new photo is not downloaded');
+  assert.deepEqual(log.shares[1], ['r2.jpg'], 'the new photo goes to the share sheet');
+});
+
+test('a hung share whose photos were all saved by tapping them asks nothing', async () => {
+  const t = table({ n: 2 });
+  const { s, log } = hungThenSettles(t);
+  s.tap();   // the share sheet hangs with r0, r1
+  await new Promise((r) => setTimeout(r, 10));
+  s.handed.add('r0'); s.handed.add('r1');   // both saved by tapping them
+  await s.tap();
+  assert.equal(log.toasts.at(-1), 'Nothing new to save', 'nothing left to download: no ask');
+  await s.tap();
+  assert.equal(log.toasts.at(-1), 'Nothing new to save');
+  t.prints.set('r2', { pid: 'r2', owner: THEM, name: 'r2.jpg' }); t.files.set('r2', { name: 'r2.jpg' });
+  await s.tap();
+  assert.deepEqual(log.downloads, [], 'the new photo is not downloaded');
+  assert.deepEqual(log.shares[1], ['r2.jpg'], 'the new photo goes to the share sheet');
+});
