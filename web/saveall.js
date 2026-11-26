@@ -27,28 +27,30 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
   let downloadNext = false;   // the share sheet failed: the next tap downloads instead
   let busy = null;            // the tap whose share sheet or download batch is still running
   const pending = new Set();  // pids in a share sheet that hasn't settled, even after SHARE_TIMEOUT
-  let release = false;        // the person was told a share didn't finish: the next tap downloads its photos too
+  let release = false;        // the person was told a share didn't finish: the next tap downloads its photos too.
+                              // This is its own download mode, gone if the share settles before that tap
   const more = (n) => (n ? ` · ${n} still arriving` : '');
 
   // Everything is decided, and the share sheet opened, before the first await: the share sheet
   // only opens inside the tap (iOS rule)
   async function tap() {
     if (busy) return toast('Still saving');
-    if (!pending.size) release = false;   // the hung share settled since: nothing left to release
+    if (!pending.size) release = false;   // the hung share settled since: nothing left to release or download
     // a share that outlived SHARE_TIMEOUT may still finish: its photos aren't offered again
     // until it settles, or until the person has been told and taps again
     const { ready, arriving } = batch(release ? handed : new Set([...handed, ...pending]));
     if (!ready.length) {
       if (pending.size) {   // only the timed-out share's photos are left: ask first
-        release = true; downloadNext = true;
+        release = true;
         return toast('The share sheet didn’t finish. Tap Save all again to download them');
       }
       return toast(arriving ? `Nothing to save yet${more(arriving)}` : 'Nothing new to save');
     }
+    const downloading = downloadNext || release;   // a failed sheet, or the ask about a hung one
     if (release) { release = false; for (const r of ready) pending.delete(r.pid); }   // no longer held
     const list = ready.map((r) => r.file);
     let sharing = false;
-    if (!downloadNext) { try { sharing = !!canShare(list); } catch { sharing = false; } }
+    if (!downloading) { try { sharing = !!canShare(list); } catch { sharing = false; } }
     const mine = {};
     busy = mine;
     try {
