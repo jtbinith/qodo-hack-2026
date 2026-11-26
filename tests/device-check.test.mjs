@@ -64,3 +64,32 @@ test('the limit, on purpose: the guard proves the text came from the ticket, not
 test('the "Not checked" boxes in the runner\'s device proof also set needs-manual-check', () => {
   assert.match(runner(), /uncheckedCriteria\(prBody\(n, s\)\)/);
 });
+
+// Qodo on #148 (c41dc71)
+test('#148 4d86635f: the device check runs in the same throwaway container as npm test, never on the host', () => {
+  const src = runner(), fn = src.slice(src.indexOf('function deviceCheck('), src.indexOf('function checkAndPush('));
+  assert.match(fn, /spawnSync\(SANDBOX, \['node', /);
+  assert.doesNotMatch(fn, /spawnSync\('node'/);
+});
+test('#148 8c5661fb: a toast check without expected text is refused, so an empty toast can\'t pass', () => {
+  const s = { ...scen(), steps: [{ check: 'toast', device: 1, source: '#72' }] };
+  assert.ok(problems(s).length);
+  assert.match(lib.scenarioProblems(s).join(), /toast check needs "equals"/);
+  assert.ok(problems({ ...scen(), steps: [{ check: 'toast', device: 1, equals: null, source: '#72' }] }).length);
+});
+test('#148 d08960b0: a headless pass always leaves the real-phone check as an unticked box', () => {
+  assert.match(runner(), /- \[ \] Checked on real phones/);
+});
+test('#148 40d1bde0: a malformed scenario is refused, never a crash', () => {
+  assert.doesNotThrow(() => lib.ticketTextProblems(null, ticket));
+  assert.ok(lib.ticketTextProblems(null, ticket).length);
+  assert.doesNotThrow(() => lib.ticketTextProblems({ steps: [null] }, ticket));
+  assert.ok(lib.ticketTextProblems({ steps: [null] }, ticket).length);
+  assert.match(runner(), /scenarioProblems\(scenario\)/);
+});
+test('#148 13cc7d6e: a one-character quoted message is accepted', () => {
+  assert.deepEqual(lib.ticketTextProblems(scen('0'), 'It shows "0" when empty.'), []);
+});
+test('#148 75ba6d73: changed spacing is refused, as the checker compares it exactly', () => {
+  assert.ok(problems(scen('Downloading  3')).length);
+});
