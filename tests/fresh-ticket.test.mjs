@@ -50,3 +50,14 @@ test('a stand-in share sheet can hang, then settle', () => {
   assert.match(runner, /hang-then-/);
   assert.match(runner, /AbortError/);
 });
+
+// Qodo on #149 (b494781)
+test('#149 8437ce20: a second share while the stand-in sheet hangs is refused, as a browser does', () => {
+  const runner = readFileSync(new URL('../scripts/group-check.mjs', import.meta.url), 'utf8');
+  assert.match(runner, /InvalidStateError/);
+  assert.match(runner, /if \(open\) throw new DOMException/);
+});
+test('#149 ede3c67f: a reopened run whose ticket changed has its claims checked again (Wisdom)', () => {
+  assert.match(fnOf('freshTicket'), /return /);   // says whether the ticket changed
+  for (const p of PATHS) assert.match(reopenPath(p), /if \(freshTicket\(n, s\)\) wisdomCheck\(n, s\)/, p);
+});
