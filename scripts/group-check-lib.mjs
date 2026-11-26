@@ -85,10 +85,20 @@ export function sharedBytesProblems(names, hashes, sent) {
 // the ticket, not that it is the right line of it: the check's `source` and the skill cover that.
 // Spaces inside the text are kept: the checker compares them exactly (Qodo on #148).
 const shape = (t) => plainQuotes(t).replace(/\d+/g, '#');
+// A quote the ticket rules out ("not", "never", "instead of" or "rather than" right before it) can't
+// be expected text, and that wins over the same text quoted elsewhere: #72 says 'The message says
+// "Downloading 10", not "Saved 10"' and also gives "Saved 10 · 2 still arriving" as an example
+// (owner's review of #148).
+const RULED_OUT = /\b(not|never|instead of|rather than)\s*$/i;
 export function ticketQuotes(body) {
-  const text = plainQuotes(body), out = new Set();
-  for (const [, q] of text.matchAll(/"([^"\n]{1,300})"/g)) { out.add(shape(q)); out.add(shape(q.split(' · ')[0])); }
-  return out;
+  const text = plainQuotes(body), allowed = new Set(), ruledOut = new Map();
+  for (const m of text.matchAll(/"([^"\n]{1,300})"/g)) {
+    const q = m[1], before = text.slice(Math.max(0, m.index - 20), m.index);
+    if (RULED_OUT.test(before)) { ruledOut.set(shape(q), q); continue; }
+    allowed.add(shape(q)); allowed.add(shape(q.split(' · ')[0]));
+  }
+  for (const k of ruledOut.keys()) allowed.delete(k);
+  return Object.assign(allowed, { ruledOut });
 }
 export function ticketTextProblems(scenario, body) {
   // a malformed scenario is refused here, never a crash (Qodo on #148)
@@ -97,6 +107,10 @@ export function ticketTextProblems(scenario, body) {
   return scenario.steps.flatMap((st, i) => {
     if (!st || typeof st !== 'object') return [`step ${i} isn't an object`];
     if (st.check === 'toast' && typeof st.equals !== 'string') return [`step ${i}: a toast check has no expected text`];   // Qodo on #148
-    return typeof st.equals === 'string' && !quotes.has(shape(st.equals)) ? [`"${st.equals}" (device ${st.device}) isn't quoted in the ticket`] : [];
+    if (typeof st.equals !== 'string') return [];
+    const k = shape(st.equals), lead = shape(st.equals.split(' · ')[0]);
+    if (quotes.ruledOut.has(lead) && !quotes.ruledOut.has(k)) return [`"${st.equals}" (device ${st.device}): the ticket rules out its first part ("${quotes.ruledOut.get(lead)}" follows a "not", "never", "instead of" or "rather than")`];
+    if (quotes.ruledOut.has(k)) return [`"${st.equals}" (device ${st.device}): the ticket rules it out ("${quotes.ruledOut.get(k)}" follows a "not", "never", "instead of" or "rather than")`];
+    return quotes.has(k) ? [] : [`"${st.equals}" (device ${st.device}) isn't quoted in the ticket`];
   });
 }
