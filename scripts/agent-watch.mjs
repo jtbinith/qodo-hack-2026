@@ -26,7 +26,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, realpathSync, cpSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync, readdirSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, ciPassed, reviewComment, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
-import { ticketTextProblems } from './group-check-lib.mjs';
+import { ticketTextProblems, scenarioProblems } from './group-check-lib.mjs';
 import { homedir, userInfo } from 'node:os';
 import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan, convergePlan, convergeAfterScope, blindSince, reproBundle, notAcceptanceIds } from './runner-lib.mjs';
 
@@ -475,12 +475,21 @@ function deviceCheck(n, s) {
   const raw = agentFile(s, 'scenario.json');
   if (!raw) throw new Stop(`This is an ${DEVICE_LABELS.join(' or ')} ticket, but the agent wrote no \`.agent/scenario.json\` for the device check (the work-ticket skill's unattended section says how).`);
   let scenario; try { scenario = JSON.parse(raw); } catch (e) { throw new Stop(`\`.agent/scenario.json\` isn't valid JSON: ${e.message}`); }
+  const bad = scenarioProblems(scenario);
+  if (bad.length) throw new Stop(`\`.agent/scenario.json\` isn't a valid scenario, so nothing was run: ${bad.join('; ')}`);
   const wrong = ticketTextProblems(scenario, t.body || '');
   if (wrong.length) throw new Stop(`The scenario's expected text isn't quoted in #${n}, so it may have come from the code. Nothing was run, and this is not a pass:\n${wrong.map((w) => `- ${w}`).join('\n')}`);
-  const sha = head(s), out = join(HOME, 'logs', `${n}-${s.runs}-device-${sha.slice(0, 7)}`), file = join(HOME, `${n}-scenario.json`);
-  rmSync(out, { recursive: true, force: true }); writeFileSync(file, raw);
-  const r = spawnSync('node', ['scripts/group-check.mjs', '--app', s.dir, '--scenario', file, '--out', out], { cwd: MAIN, encoding: 'utf8', timeout: LIMITS.deviceRunMin * 60000, killSignal: 'SIGKILL' });
+  // It runs in the same throwaway container as npm test, never on the host: the build's web/ is the
+  // agent's code, and a host browser could reach this machine's local services (Qodo on #148). The
+  // runner's own copy of the checker (from main) is put in the worktree's .agent/ just for the run.
+  const sha = head(s), out = join(HOME, 'logs', `${n}-${s.runs}-device-${sha.slice(0, 7)}`), rc = join(s.dir, '.agent', 'runner-check');
+  rmSync(rc, { recursive: true, force: true }); mkdirSync(rc, { recursive: true });
+  for (const f of ['group-check.mjs', 'group-check-lib.mjs']) cpSync(join(MAIN, 'scripts', f), join(rc, f));
+  writeFileSync(join(rc, 'scenario.json'), raw);
+  const r = spawnSync(SANDBOX, ['node', join(rc, 'group-check.mjs'), '--app', s.dir, '--scenario', join(rc, 'scenario.json'), '--out', join(rc, 'out')], { cwd: s.dir, encoding: 'utf8', timeout: LIMITS.deviceRunMin * 60000, killSignal: 'SIGKILL' });
   const said = ((r.stdout || '') + (r.stderr || '')).trim();
+  rmSync(out, { recursive: true, force: true }); if (existsSync(join(rc, 'out'))) cpSync(join(rc, 'out'), out, { recursive: true });
+  rmSync(rc, { recursive: true, force: true });
   writeFileSync(join(HOME, 'logs', `${n}-${s.runs}-device.log`), said);
   let facts = {}; try { facts = JSON.parse(readFileSync(join(out, 'facts.json'), 'utf8')); } catch {}
   event(n, `device check on ${sha.slice(0, 7)}: exit ${r.status}${facts.verdict ? ` (${facts.verdict.state})` : ''}`);
@@ -488,6 +497,8 @@ function deviceCheck(n, s) {
     const cell = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ').slice(0, 120);
     const rows = (facts.points || []).map((p) => `| ${p.step} | ${p.check} | ${p.device ?? ''} | ${cell(p.expected)} | ${cell(p.actual)} | ${p.state} | ${cell(p.source)} |`);
     const notChecked = (scenario.notChecked || []).map((x) => `- [ ] Not checked: ${typeof x === 'string' ? x : `${x.what}${x.why ? ` (${x.why})` : ''}`}`);
+    // headless windows with a stand-in share sheet are never a real phone, whatever the agent listed (Qodo on #148)
+    notChecked.push('- [ ] Checked on real phones (iPhone and Android): the device check uses headless browser windows and a stand-in share sheet');
     const pass = notChecked.length ? 'PASS on what was checked' : 'PASS';
     return `**Device check (group-device-check), run by the runner** on \`${sha.slice(0, 7)}\`: **${pass}**, ${rows.length} check points, ${scenario.devices.length} devices (${scenario.devices.map((d) => d.size).join(', ')}), joined with the orbs. Every expected text is quoted in #${n}. Windows with a stand-in share sheet: ${scenario.devices.map((d, i) => d.share ? `device ${i} (${d.share})` : null).filter(Boolean).join(', ') || 'none'}.\n\n| Step | Check | Device | Expected | Actual | Result | Ticket source |\n|---|---|---|---|---|---|---|\n${rows.join('\n')}${notChecked.length ? `\n\n${notChecked.join('\n')}` : ''}`;
   }

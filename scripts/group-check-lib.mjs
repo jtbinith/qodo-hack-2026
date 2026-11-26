@@ -27,6 +27,7 @@ export function scenarioProblems(s) {
     if (!kind) p.push(`step ${i}: needs "do" or "check"`);
     if (st?.check && typeof st.source !== 'string') p.push(`step ${i}: a check needs "source": the ticket section its expected value is copied from`);
     if (st?.check === 'shared' && !Number.isInteger(st.calls)) p.push(`step ${i}: a shared check needs "calls"`);
+    if (st?.check === 'toast' && typeof st.equals !== 'string') p.push(`step ${i}: a toast check needs "equals": the exact text from the ticket (an empty toast must never pass)`);   // Qodo on #148
     if (st?.check && typeof st.source === 'string' && /\b(web|src|tests?)\/|\.m?js\b|\.html\b/.test(st.source)) p.push(`step ${i}: "source" points at code (${st.source}); expected text must come from the ticket`);
   });
   return p;
@@ -82,14 +83,20 @@ export function sharedBytesProblems(names, hashes, sent) {
 // styles count as the same and numbers may differ: the skill tells the agent to use the numbers its
 // scenario produces ("Downloading 3" for the ticket's "Downloading 10"). It proves the text came from
 // the ticket, not that it is the right line of it: the check's `source` and the skill cover that.
-const shape = (t) => plainQuotes(t).replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
+// Spaces inside the text are kept: the checker compares them exactly (Qodo on #148).
+const shape = (t) => plainQuotes(t).replace(/\d+/g, '#');
 export function ticketQuotes(body) {
   const text = plainQuotes(body), out = new Set();
-  for (const [, q] of text.matchAll(/"([^"\n]{2,300})"/g)) { out.add(shape(q)); out.add(shape(q.split(' · ')[0])); }
+  for (const [, q] of text.matchAll(/"([^"\n]{1,300})"/g)) { out.add(shape(q)); out.add(shape(q.split(' · ')[0])); }
   return out;
 }
 export function ticketTextProblems(scenario, body) {
+  // a malformed scenario is refused here, never a crash (Qodo on #148)
+  if (!scenario || typeof scenario !== 'object' || !Array.isArray(scenario.steps)) return ['the scenario has no list of steps'];
   const quotes = ticketQuotes(body);
-  return (scenario.steps || []).filter((st) => typeof st.equals === 'string' && !quotes.has(shape(st.equals)))
-    .map((st) => `"${st.equals}" (device ${st.device}) isn't quoted in the ticket`);
+  return scenario.steps.flatMap((st, i) => {
+    if (!st || typeof st !== 'object') return [`step ${i} isn't an object`];
+    if (st.check === 'toast' && typeof st.equals !== 'string') return [`step ${i}: a toast check has no expected text`];   // Qodo on #148
+    return typeof st.equals === 'string' && !quotes.has(shape(st.equals)) ? [`"${st.equals}" (device ${st.device}) isn't quoted in the ticket`] : [];
+  });
 }
