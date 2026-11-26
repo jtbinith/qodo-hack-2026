@@ -13,6 +13,7 @@ A JSON file:
 - `devices`: 2–20 of `laptop` (900×600), `phone` (390×700), `tablet` (768×1000). They're joined in order (0–1, 1–2 …). Device 0 is usually the sender.
   - `"share": "fail-once"`: a stand-in share sheet that rejects its first call with `NotAllowedError`, then works.
   - `"share": "works"`: one that always works.
+  - `"share": "hang-then-works"` or `"hang-then-cancel"`, with `"hangMs": 65000`: its first call hangs for `hangMs`, then works (or is cancelled, `AbortError`). Use it for a share sheet that outlives the app's own timeout; add a `pause` step longer than the timeout before the next tap.
   - Without `share`, the device has no share sheet, as on a laptop.
 - `steps` run in order. Actions:
   - `{"do":"pick","device":0,"count":3}`: draw and pick that many numbered photos (`1.jpg` … continuing across picks) on that device.

@@ -47,22 +47,29 @@ const browser = await chromium.launch();
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 // a stand-in share sheet for phone-size windows (headless Chromium has none): "fail-once" rejects
 // the first share with NotAllowedError, as a phone does when the tap no longer counts, then works
-const shareStub = (mode) => `(() => { const s = window.__shares = []; let first = ${mode === 'fail-once'};
+// "hang-then-works" / "hang-then-cancel" hang their first call for hangMs, then settle (works, or
+// AbortError as when the person cancels): a sheet that outlives the app's timeout (Qodo on #130)
+const shareStub = (mode, hangMs = 0) => `(() => { const s = window.__shares = []; let first = ${mode === 'fail-once'}, hang = ${/^hang-then-/.test(mode) ? Number(hangMs) : 0}; const cancel = ${mode === 'hang-then-cancel'};
   navigator.canShare = () => true;
   const h = window.__sharedHashes = [];
+  let open = false;   // a real browser refuses a second share while one is open (Qodo on #149)
   navigator.share = async ({ files }) => {
+    if (open) throw new DOMException('a share is already in progress', 'InvalidStateError');
+    open = true; try {
     // the bytes handed over, so the check can compare them with what the sender holds; the call is
     // recorded only once they're hashed, so a check never reads a call without its hashes (Qodo on #145)
     const hashed = await Promise.all(files.map(async (f) => { try { return [f.name, [...new Uint8Array(await crypto.subtle.digest('SHA-256', await f.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('')]; } catch { return [f.name, null]; } }));
     s.push(files.map((f) => f.name)); h.push(hashed);
-    if (first) { first = false; throw new DOMException('not allowed', 'NotAllowedError'); } }; })();`;
+    if (first) { first = false; throw new DOMException('not allowed', 'NotAllowedError'); }
+    if (hang) { const ms = hang; hang = 0; await new Promise((r) => setTimeout(r, ms)); if (cancel) throw new DOMException('cancelled', 'AbortError'); }
+    } finally { open = false; } }; })();`;
 const dev = [];
 for (const [i, d] of s.devices.entries()) {
   const [w, h] = SIZES[d.size];
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, acceptDownloads: true });
   const page = await ctx.newPage();
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
-  if (d.share) await page.addInitScript(shareStub(d.share));
+  if (d.share) await page.addInitScript(shareStub(d.share, d.hangMs));
   const downloads = []; page.on('download', async (dl) => { const p = join(OUT, `dl-${i}-${downloads.length}-${dl.suggestedFilename()}`); downloads.push({ name: dl.suggestedFilename(), path: p, done: dl.saveAs(p) }); });
   await page.goto(`${base}?room=${String(ABSENT) === String(i) ? other : room}&auto`);
   dev.push({ i, size: d.size, w, h, page, errors, downloads, mark: 0 });
