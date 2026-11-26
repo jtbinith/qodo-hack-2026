@@ -5,7 +5,8 @@
 // ignored, that a send to a device that never answers gives up after 10 s without holding up
 // anyone else (S1.3), that a print dropped while a device's key was late is announced again
 // once the key comes (S1.3), that a thumbnail over 400 x 400 is never decoded (S14), that a device asking again and again
-// for the same file gets it at most 3 times a minute (S1.5) and that a late guest can still download photos after their owner leaves.
+// for the same file gets it at most 3 times a minute (S1.5), that Invite's link joins the same room and the
+// code leaves the address bar once joined (S16) and that a late guest can still download photos after their owner leaves.
 //
 //   node tests/two-browser.mjs           direct device-to-device path (WebRTC)
 //   node tests/two-browser.mjs --relay   force the end-to-end encrypted relay path
@@ -493,6 +494,94 @@ try {
   const heard = await until(B2, (pid) => window.__t.prints.has(pid), pid, 20000).then(() => true, () => false);
   const took = await B2.evaluate(() => ((Date.now() - window.__keySent) / 1000).toFixed(1));
   check(heard, `A announced the print again once B's key came, and B has it (${took} s after the key)`);
+
+  // Invite (S16, #102), in a fresh room. A joined device has no room code in its address bar or
+  // the history entry, keeps the room for this tab (a reload goes back in, a new tab doesn't),
+  // and Invite shows a QR code drawn on the device and the ?room=CODE&auto link, which joins
+  // the same room. A join that fails before it's live shows the lobby again with the code filled in
+  const inv = code(), invUrl = `${BASE}?room=${inv}&auto`;
+  const off127 = [];   // requests to anywhere but this page's server and the room server
+  const I1 = await device(900, 600, { at: inv });
+  I1.on('request', (r) => { const h = new URL(r.url()).hostname; if (h !== '127.0.0.1' && !h.endsWith('.supabase.co')) off127.push(r.url()); });
+  await until(I1, () => window.__t && window.__t.net.status === 'live');
+  const where = (page) => page.evaluate(() => { const on = (id) => document.getElementById(id)?.hidden === false;
+    return { url: location.href, room: sessionStorage.getItem('room'), lobby: on('lobby'), invite: on('invite'), net: window.__t?.net?.room || null }; });
+  const i1 = await until(I1, (c) => !location.href.includes(c) && sessionStorage.getItem('room') === c, inv, 10000).then(() => where(I1), () => where(I1));
+  check(!i1.url.includes(inv) && i1.room === inv && !i1.lobby && i1.invite, `once joined, the address bar has no room code (${i1.url.replace(inv, '<code>')}), the tab keeps it (${i1.room === inv}), the lobby is gone (${!i1.lobby}) and Invite shows (${i1.invite})`);
+  await I1.click('#invite', { timeout: 3000 }).catch(() => {});
+  const box = await I1.evaluate(() => { const c = document.getElementById('qr'), g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data;
+    let dark = 0, light = 0; for (let k = 0; k < d.length; k += 4) if (d[k + 3] === 255) { if (d[k] < 64) dark++; else if (d[k] > 192) light++; }
+    if (!light) dark = 0;   // a QR code is dark modules on a light ground: an undrawn canvas has neither
+    return { box: !document.getElementById('invitebox').hidden, link: document.getElementById('link').value, w: c.width, dark, qr: typeof window.qrcode === 'function' }; }).catch(() => ({ box: false, link: invUrl, w: 0, dark: 0, qr: false }));
+  check(box.box && box.link === invUrl && box.qr && box.w > 0 && box.dark > 0, `Invite shows a QR code (${box.w} px, ${box.dark} dark pixels) and the link ?room=CODE&auto (${box.link === invUrl})`);
+  // Copy: a refused clipboard selects the link and says so; a working one copies the link
+  await I1.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.reject(new DOMException('refused', 'NotAllowedError')) } }));
+  await I1.click('#copy', { timeout: 3000 }).catch(() => {});
+  const refused = await until(I1, () => document.getElementById('toast').textContent.replace('’', "'") === "Couldn't copy. The link is selected", null, 3000).then(() => true, () => false);
+  const sel = await I1.evaluate(() => { const l = document.getElementById('link'); return document.activeElement === l && l.selectionStart === 0 && l.selectionEnd === l.value.length; });
+  check(refused && sel, `a refused copy says "Couldn't copy. The link is selected" (${refused}) with the link selected (${sel})`);
+  await I1.evaluate(() => { window.__copied = []; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t) => { window.__copied.push(t); } } }); });
+  await I1.click('#copy', { timeout: 3000 }).catch(() => {});
+  const copied = await until(I1, () => window.__copied.length === 1, null, 3000).then(() => I1.evaluate(() => window.__copied[0]), () => null);
+  check(copied === invUrl, `Copy puts the link on the clipboard (${copied === invUrl})`);
+  check(off127.length === 0, `the QR code is made on the device: no request outside 127.0.0.1 and the room server (${off127.length ? off127.join(', ') : 'none'})`);
+  // scanning the QR code opens the link: that page joins the same room without typing the code
+  const I2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  I2.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
+  await I2.goto(box.link);
+  const scanned = await until(I2, () => window.__t && Object.keys(window.__t.net.peers).length === 2, null, 20000).then(() => true, () => false);
+  const i2 = await where(I2);
+  check(scanned && i2.net === 'photo-' + inv && !i2.url.includes(inv), `the invite link joins the same room without typing (${scanned}), then leaves the address bar (${!i2.url.includes(inv)})`);
+  // Back doesn't step to a page with the code: the joined entry was replaced, not added
+  await I2.goBack().catch(() => {});
+  const back = I2.url();
+  check(!back.includes(inv), `Back doesn't step to a page with the code (${back.replace(inv, '<code>')})`);
+  await I2.context().close();
+  // a reload goes straight back into the same room; a new tab doesn't see it
+  await I1.reload();
+  const reloaded = await until(I1, (r) => window.__t && window.__t.net.room === r && window.__t.net.status === 'live', 'photo-' + inv, 20000).then(() => true, () => false);
+  const r1 = await where(I1);
+  check(reloaded && !r1.lobby && !r1.url.includes(inv), `a reload goes back into the same room (${reloaded}) with no code in the address bar (${!r1.url.includes(inv)})`);
+  const tab = await I1.context().newPage();
+  await tab.goto(BASE);
+  await new Promise((r) => setTimeout(r, 1500));
+  const t1 = await tab.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, net: !!window.__t }));
+  check(t1.lobby && t1.code === '' && !t1.net, `a new tab doesn't see the stored room (lobby ${t1.lobby}, code "${t1.code}", joined ${t1.net})`);
+  await tab.close();
+  // a ?room=CODE&auto link wins over the room stored for this tab
+  const inv2 = code();
+  await I1.goto(`${BASE}?room=${inv2}&auto`);
+  const won = await until(I1, (r) => window.__t && window.__t.net.room === r && sessionStorage.getItem('room') === r.slice(6), 'photo-' + inv2, 20000).then(() => true, () => false);
+  check(won, `a ?room=CODE&auto link wins over the stored room (${won})`);
+  await I1.context().close();
+  // a join that fails before it's live: the room server's first answer is an error, then a late
+  // "subscribed" from that failed attempt. The lobby comes back with the code, the address bar
+  // keeps it, nothing is stored, the late answer changes nothing and joining again works
+  const failFirst = () => {
+    let real; window.__fails = 1;
+    Object.defineProperty(window, 'supabase', { configurable: true, get: () => real, set(v) {
+      real = { ...v, createClient: (...a) => {
+        const client = v.createClient(...a), channel = client.channel.bind(client);
+        client.channel = (...b) => {
+          const ch = channel(...b);
+          if (window.__fails > 0) { window.__fails--; ch.subscribe = (cb) => { setTimeout(() => cb('CHANNEL_ERROR'), 300); setTimeout(() => cb('SUBSCRIBED'), 1500); return ch; }; ch.track = async () => {}; }
+          return ch;
+        };
+        return client;
+      } };
+    } });
+  };
+  const F = await device(390, 700, { at: inv, init: `(${failFirst})()` });
+  const lobbyBack = await until(F, () => document.getElementById('lobby')?.hidden === false && window.__fails === 0, null, 10000).then(() => true, () => false);
+  await new Promise((r) => setTimeout(r, 2500));   // past the failed attempt's late "subscribed"
+  const f1 = await F.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, url: location.href, room: sessionStorage.getItem('room'), invite: document.getElementById('invite')?.hidden === false }));
+  check(lobbyBack && f1.lobby && f1.code === inv && f1.url.includes(inv) && f1.room === null && !f1.invite,
+    `a join that fails before live shows the lobby again with the code (${f1.code === inv}), keeps the address bar (${f1.url.includes(inv)}), stores nothing (${f1.room === null}) and a late answer from it changes nothing (lobby ${f1.lobby})`);
+  await F.click('#f button', { timeout: 3000 }).catch(() => {});
+  const retried = await until(F, (r) => window.__t && window.__t.net.room === r && window.__t.net.status === 'live' && sessionStorage.getItem('room') === r.slice(6) && !location.href.includes(r.slice(6)), 'photo-' + inv, 20000).then(() => true, () => false);
+  const f2 = await F.evaluate(() => document.getElementById('lobby')?.hidden === false);
+  check(retried && !f2, `joining again after a failed join works as if it were the first try (${retried})`);
+  await F.context().close();
 
   // four devices in a fresh room (C15, #68): A–B, then C–D, then B–D join them all into one
   // group. Each "Joined with…" shows only on the two devices it names, all four hold the time
