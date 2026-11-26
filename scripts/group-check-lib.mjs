@@ -72,6 +72,7 @@ export const insideRoot = (rootReal, fileReal) => fileReal.startsWith(rootReal.e
 // must match what the sender holds. No hash (not finished, or hashing failed) is a problem, never a
 // match (Qodo on #145).
 export function sharedBytesProblems(names, hashes, sent) {
-  const got = new Map(hashes);
-  return names.flatMap((n) => !got.has(n) || !got.get(n) ? [`${n}: its bytes weren't hashed`] : got.get(n) !== sent.get(n) ? [`${n}: not byte-identical to the sender's`] : []);
+  // one by one, in the order they were handed over, so two files with the same name are each
+  // checked (Qodo on #145)
+  return names.flatMap((n, i) => { const [name, h] = hashes[i] || []; return name !== n || !h ? [`${n} (file ${i + 1}): its bytes weren't hashed`] : h !== sent.get(n) ? [`${n} (file ${i + 1}): not byte-identical to the sender's`] : []; });
 }
