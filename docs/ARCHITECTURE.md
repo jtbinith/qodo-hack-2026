@@ -167,7 +167,7 @@ The rules in [AGENTS.md](../AGENTS.md) shape the design:
 | Supabase Realtime | Presence and messages | Free tier. See technical risks |
 | GitHub Pages | Hosting | Static files only |
 | Google STUN server | Finding a direct route between devices | No TURN server: blocked networks use the relay |
-| supabase-js, hash-wasm, exifr | Client libraries | MIT licensed, vendored in `web/vendor/` |
+| supabase-js, hash-wasm, exifr, qrcode-generator | Client libraries | MIT licensed, vendored in `web/vendor/` (qrcode-generator 2.0.4 draws the Invite QR code on the device, #102) |
 
 ## 10. Constraints
 - **No server code.** GitHub Pages serves static files only. It cannot send security headers. Protections that need headers use workarounds in the page (S12, S15).
