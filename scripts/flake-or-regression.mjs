@@ -6,7 +6,7 @@
 //
 // Exit: 0 a verdict (already flaky, branch broke it, made worse), 3 inconclusive, 2 couldn't run.
 // Writes <out>/runs.csv, <out>/verdict.md and each run's output.
-import { spawnSync, execFileSync } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -30,7 +30,18 @@ const sides = { main: { ref: MAIN, sha: sha(MAIN) }, branch: { ref: BRANCH, sha:
 // included (Qodo on #146)
 const work = mkdtempSync(join(tmpdir(), 'for-'));
 process.on('exit', () => { for (const s of Object.values(sides)) if (s.dir) { try { git('worktree', 'remove', '--force', s.dir); } catch {} } try { rmSync(work, { recursive: true, force: true }); git('worktree', 'prune'); } catch {} });
-for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => process.exit(130));   // so the exit handler runs
+// a test run doesn't block the runner, so a signal can stop the run in progress, skip the rest and
+// still run the exit handler (Qodo on #146)
+let current = null;
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { current?.kill('SIGKILL'); process.exit(130); });
+const runTest = (cwd) => new Promise((done) => {
+  const c = current = spawn('node', ['tests/two-browser.mjs', ...(MODE === 'relay' ? ['--relay'] : [])], { cwd });
+  let stdout = '', stderr = '', timedOut = false, error = null;
+  c.stdout.on('data', (d) => { stdout += d; }); c.stderr.on('data', (d) => { stderr += d; });
+  const timer = setTimeout(() => { timedOut = true; c.kill('SIGKILL'); }, 10 * 60000);
+  c.on('error', (e) => { error = e; });
+  c.on('close', (status, signal) => { clearTimeout(timer); current = null; done({ status, signal, stdout, stderr, error: timedOut ? { code: 'ETIMEDOUT' } : error }); });
+});
 // both sides run with this checkout's node_modules, so a fair comparison needs both to declare the
 // same dependencies (Qodo on #146). If both differ from this checkout, verdict.md says so.
 try { git('diff', '--quiet', sides.main.sha, sides.branch.sha, '--', 'package.json', 'package-lock.json'); } catch { stop(`dependencies differ: main (${sides.main.sha.slice(0, 7)}) and the branch (${sides.branch.sha.slice(0, 7)}) have a different package.json or package-lock.json, so they can't both run with one node_modules. Compare by hand`); }
@@ -51,7 +62,7 @@ for (const name of order(K)) {
   for (let attempt = 1; ; attempt++) {
     n++;
     const t0 = Date.now(), m0 = process.hrtime.bigint();
-    const r = spawnSync('node', ['tests/two-browser.mjs', ...(MODE === 'relay' ? ['--relay'] : [])], { cwd: s.dir, encoding: 'utf8', timeout: 10 * 60000, killSignal: 'SIGKILL' });
+    const r = await runTest(s.dir);
     const out = (r.stdout || '') + (r.stderr || ''), wallMs = Date.now() - t0, monoMs = Number((process.hrtime.bigint() - m0) / 1000000n), secs = Math.round(wallMs / 1000);
     const timedOut = r.error?.code === 'ETIMEDOUT';
     const outcome = outcomeOf({ exit: r.status, output: out, signature: SIG, timedOut, spawnError: r.error && !timedOut ? r.error.code || r.error.message : null, killedBy: !timedOut && r.signal ? r.signal : null, wallMs, monoMs });
