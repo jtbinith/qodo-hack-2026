@@ -435,3 +435,21 @@ test('a hung share that fails after its photos were downloaded leaves no downloa
   assert.deepEqual(log.downloads.sort(), ['r0.jpg', 'r1.jpg'], 'the new photo is not downloaded');
   assert.deepEqual(log.shares[1], ['r2.jpg'], 'the new photo goes to the share sheet');
 });
+
+// Qodo on #130 at f857768 (Medium, "Timed-out share gives the tap no report"): at SHARE_TIMEOUT only
+// the busy guard was freed, and the tap itself never settled
+test('a tap whose share sheet never settles settles itself once SHARE_TIMEOUT is up', async () => {
+  const t = table({ n: 1 });
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true,
+    share: () => new Promise(() => {}),   // never settles
+    download: () => {},
+    wait: async () => {},                 // SHARE_TIMEOUT is up at once
+    toast: () => {},
+  });
+  let settled = false;
+  s.tap().then(() => { settled = true; }, () => { settled = true; });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.ok(settled, 'the tap settles (resolves or rejects) at SHARE_TIMEOUT');
+});
