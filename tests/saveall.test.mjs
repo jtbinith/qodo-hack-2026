@@ -258,14 +258,59 @@ test('after SHARE_TIMEOUT, photos still in the pending share are not shared or d
   });
   s.tap();
   await new Promise((r) => setTimeout(r, 10));
-  await s.tap();
-  assert.equal(log.shares.length, 1, 'the pending photos are not offered to a second share sheet');
-  assert.equal(log.toasts.at(-1), 'Still saving');
   t.prints.set('r2', { pid: 'r2', owner: THEM, name: 'r2.jpg' }); t.files.set('r2', { name: 'r2.jpg' });
   await s.tap();   // shares only r2, refused: the next tap downloads
-  assert.deepEqual(log.shares[1], ['r2.jpg']);
+  assert.deepEqual(log.shares[1], ['r2.jpg'], 'the pending photos are not offered to a second share sheet');
   await s.tap();
   assert.deepEqual(log.downloads, ['r2.jpg'], 'download mode skips the photos the pending share holds');
+});
+
+// jtbinith's decision on #130 ("A share sheet that never finishes", option 1, ask first): Qodo's
+// Medium "Hung share keeps its photos out of Save all". After SHARE_TIMEOUT a tap that finds only
+// the hung share's photos says so, and the next tap downloads them: a duplicate only when asked for
+test('after SHARE_TIMEOUT, a tap that finds only the hung share’s photos asks first; the next tap downloads them', async () => {
+  const t = table({ n: 2 });
+  const log = { shares: [], downloads: [], toasts: [] };
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true,
+    share: (l) => { log.shares.push(l.map((f) => f.name)); return log.shares.length === 1 ? new Promise(() => {}) : Promise.resolve(); },
+    download: (f) => log.downloads.push(f.name),
+    wait: async () => {},   // the timeout is up at once
+    toast: (m) => log.toasts.push(m),
+  });
+  s.tap();   // the first share sheet never settles
+  await new Promise((r) => setTimeout(r, 10));
+  await s.tap();
+  assert.equal(log.toasts.at(-1), 'The share sheet didn’t finish. Tap Save all again to download them');
+  assert.equal(log.shares.length, 1, 'the asking tap opens no share sheet');
+  assert.deepEqual(log.downloads, [], 'and starts no downloads');
+  await s.tap();
+  assert.equal(log.shares.length, 1, 'the next tap downloads instead of sharing');
+  assert.deepEqual(log.downloads.sort(), ['r0.jpg', 'r1.jpg']);
+  assert.equal(log.toasts.at(-1), 'Downloading 2');
+  await s.tap();
+  assert.equal(log.toasts.at(-1), 'Nothing new to save', 'they are no longer held, and not downloaded twice');
+  assert.equal(log.downloads.length, 2);
+  // download mode lasted one batch: a photo that arrives next goes to the share sheet again
+  t.prints.set('r3', { pid: 'r3', owner: THEM, name: 'r3.jpg' }); t.files.set('r3', { name: 'r3.jpg' });
+  await s.tap();
+  assert.deepEqual(log.shares[1], ['r3.jpg']);
+});
+
+test('before SHARE_TIMEOUT a tap still says "Still saving" and asks nothing', async () => {
+  const t = table({ n: 2 });
+  const toasts = [];
+  const s = createSaveAll({
+    batch: (handed) => saveBatch({ ...t, handed }),
+    canShare: () => true, share: () => new Promise(() => {}), download: () => {},
+    wait: () => new Promise(() => {}),   // the timeout never comes
+    toast: (m) => toasts.push(m),
+  });
+  s.tap();
+  await new Promise((r) => setTimeout(r, 10));
+  await s.tap();
+  assert.deepEqual(toasts, ['Still saving']);
 });
 
 test('a pending share that fails after SHARE_TIMEOUT gives its photos back for the next tap', async () => {
