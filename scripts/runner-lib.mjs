@@ -501,3 +501,26 @@ export function machineReady({ localConfig, claude }) {
   const missing = [!localConfig && 'missing local config', !claude && 'claude not on PATH'].filter(Boolean);
   return missing.length ? { ok: false, why: `This machine isn't set up: ${missing.join(', ')}.` } : { ok: true };
 }
+
+// Each unticked box shows once in a PR description (#151). Every pushed head's device-check proof
+// keeps its own "Not checked" boxes, so an earlier head's boxes become plain text (its table stays
+// as history), and a box that's also further down (the latest proof) becomes text where it repeats.
+// A box belongs to a device check when the last bold line above it is that check's header.
+export function oneBoxEach(body) {
+  const DEVICE = '**Device check (group-device-check)';
+  const BOX = /^(\s*[-*]\s*)\[ \]\s*(.*)$/;
+  const lines = body.split('\n');
+  const owner = []; let current = -1;
+  lines.forEach((l, i) => { if (l.startsWith('**')) current = l.startsWith(DEVICE) ? i : -1; owner[i] = current; });
+  const latest = lines.reduce((last, l, i) => (l.startsWith(DEVICE) ? i : last), -1);
+  const key = (t) => t.replace(/^Not checked:\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const seen = new Set();
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(BOX);
+    if (!m) continue;
+    const k = key(m[2]);
+    if ((owner[i] !== -1 && owner[i] !== latest) || seen.has(k)) lines[i] = `${m[1]}${m[2]}`;
+    else seen.add(k);
+  }
+  return lines.join('\n');
+}

@@ -28,7 +28,7 @@ import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, ciPassed, reviewComment, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
 import { ticketTextProblems, scenarioProblems } from './group-check-lib.mjs';
 import { homedir, userInfo } from 'node:os';
-import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan, convergePlan, convergeAfterScope, blindSince, reproBundle, notAcceptanceIds } from './runner-lib.mjs';
+import { testNames as namesInDiff, oneBoxEach, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan, convergePlan, convergeAfterScope, blindSince, reproBundle, notAcceptanceIds } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
@@ -598,7 +598,7 @@ function openPr(n, s, why) {
 // When design questions were handed to the agent, its choices (its report's Assumptions) go into the PR
 // description too, so the owner sees them at merge whatever the agent wrote there (Qodo on #126)
 const choices = (s) => ((s.designAssumptions || []).length && assumptions(agentFile(s, 'report.md')) ? `**The agent's choices for the handed-over design questions** (from its report):\n${assumptions(agentFile(s, 'report.md'))}` : '');
-const prBody = (n, s) => shown([agentFile(s, 'pr-body.md') || `Closes #${n}`, choices(s), ...(s.proofs || [])].filter(Boolean).join('\n\n'));
+const prBody = (n, s) => shown(oneBoxEach([agentFile(s, 'pr-body.md') || `Closes #${n}`, choices(s), ...(s.proofs || [])].filter(Boolean).join('\n\n')));   // each unticked box once (#151)
 // Posts what's pushed but not yet on the PR: the description, and each new proof as a comment.
 // It's resumable: a crash between push and post is caught up on the next step or /agent retry.
 // (gh api, not gh pr edit: gh pr edit fails on this repo with a classic-projects error.)
