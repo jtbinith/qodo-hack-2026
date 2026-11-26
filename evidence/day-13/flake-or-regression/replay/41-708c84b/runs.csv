@@ -1,0 +1,11 @@
+run,side,commit,outcome,seconds,first_failure
+1,main,67aa548,pass,35,""
+2,branch,708c84b,pass,35,""
+3,main,67aa548,pass,36,""
+4,branch,708c84b,pass,36,""
+5,main,67aa548,pass,34,""
+6,branch,708c84b,pass,34,""
+7,main,67aa548,pass,35,""
+8,branch,708c84b,other,33,"FAIL A dropped its print to B while B's key was late (nothing dropped)"
+9,main,67aa548,pass,37,""
+10,branch,708c84b,other,34,"FAIL A dropped its print to B while B's key was late (nothing dropped)"
