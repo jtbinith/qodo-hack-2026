@@ -50,8 +50,10 @@ test('#147 50c924fd: "already flaky" with more branch hits than main goes to the
 test('#147 e5c52867: an unattended run never fixes a browser step it didn\'t write, and an unrun device check is an unticked box', () => {
   const s = unattended();
   assert.match(s, /don't fix it and don't decide whose it is/i);
-  assert.match(s, /- \[ \] .*group-device-check/);
-  assert.match(s, /needs-manual-check/);
+  // superseded by the runner running the device check itself (owner's decision, 26 Nov): the agent
+  // writes the scenario; anything it can't check becomes an unticked box through the runner's proof
+  assert.match(s, /\.agent\/scenario\.json/);
+  assert.match(s, /"notChecked"/);
 });
 test('#147 f3cc8324 (Low, settled by e5c52867): the Not checked items go to one place, as unticked boxes under Notes', () => {
   assert.match(step(4), /each item on that list goes under Notes as an unticked `- \[ \]`/);

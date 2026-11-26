@@ -43,7 +43,7 @@ test('the runner checks the scenario against the ticket before it runs anything,
 test('the runner runs the device check only for area: ui and area: sharing tickets, after npm test passes', () => {
   const src = runner();
   assert.match(src, /DEVICE_LABELS = \['area: ui', 'area: sharing'\]/);
-  assert.ok(src.indexOf('deviceCheck(n, s)') > src.indexOf('if (t.ok) break;'));
+  assert.ok(src.indexOf('const device = deviceCheck(n, s)') > src.indexOf('if (t.ok) break;'));
 });
 test('PASS goes in the PR\'s proof, FAIL goes back to the agent, STOP stops the run', () => {
   const src = runner();
@@ -60,4 +60,7 @@ test('the limit, on purpose: the guard proves the text came from the ticket, not
   // #72 quotes "Saved 10" in "not 'Saved 10'", so "Saved 3" passes the guard. The check's `source`
   // and the skill's rules cover which line is right; #135's "Saved N" was caught by the run, not here.
   assert.deepEqual(problems(scen('Saved 3')), []);
+});
+test('the "Not checked" boxes in the runner\'s device proof also set needs-manual-check', () => {
+  assert.match(runner(), /uncheckedCriteria\(prBody\(n, s\)\)/);
 });
