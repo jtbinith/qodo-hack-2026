@@ -26,12 +26,15 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, realpathSync, cpSync, writeFileSync, existsSync, appendFileSync, symlinkSync, openSync, closeSync, unlinkSync, rmSync, readdirSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { qodoRead, postGate, postBlind, ciPassed, reviewComment, QODO_BIN, QODO_ENV } from './qodo-gate.mjs';
+import { ticketTextProblems } from './group-check-lib.mjs';
 import { homedir, userInfo } from 'node:os';
 import { testNames as namesInDiff, assertionFailures, decodeEntities, parseAsk, retryPlan, afterOwnerRound, staleFiles, publishPlan, allPages, askPlan, gateVerdict, gateStatus, statusChange, severityOf, lowsReport, stopTitle, gateSection, findingTypes, publicText, agentSettings, agentEnv, machineReady, wisdomVerdict, localRead, blindVerdict, blindRepros, testRetry, reaskPlan, resumePlan, roundCounts, acceptLocalOnly, LOCAL_ONLY_REASON, scopePlan, scopeRepros, dismissedOk, designQuestions, transientGh, ghIsRead, designStopPlan, convergePlan, convergeAfterScope, blindSince, reproBundle, notAcceptanceIds } from './runner-lib.mjs';
 
 // Measured on PRs #39-#47: Qodo's first review took 0:25-3:19, re-reviews about 1 min.
 const LIMITS = {
   testAttempts: 2,          // agent runs allowed to get `npm test` green per round
+  deviceAttempts: 2,        // agent runs allowed to get the device check (group-device-check) to pass per round
+  deviceRunMin: 10,         // one device check
   reviewRounds: 3,          // Qodo review rounds the agent may answer
   localRounds: 2,           // fix rounds from Qodo's local review before a push (then it stops: the loop stalled)
   localReviewMin: 20,       // one `qodo review` of the unpushed commits
@@ -286,7 +289,7 @@ function shortReason(text) {
 function stop(n, s, label, why) {
   if (s) { s.phase = label === L.done ? 'done' : 'help'; s.stoppedAt = new Date().toISOString(); save(n, s); }
   const has = issue(n).labels.map((l) => l.name);
-  const report = s ? agentFile(s, 'report.md') : '', unchecked = label === L.done && s ? uncheckedCriteria(agentFile(s, 'pr-body.md')) : [];
+  const report = s ? agentFile(s, 'report.md') : '', unchecked = label === L.done && s ? uncheckedCriteria(prBody(n, s)) : [];
   setLabels(n, [label, ...(unchecked.length ? [L.manual] : [])], [L.working, L.ready].filter((l) => has.includes(l)));
   const assumed = assumptions(report);
   comment(n, `${stopTitle(label)} ${why}\n\n` +
@@ -459,6 +462,48 @@ function blindReview(n, s) {
 }
 
 // Gets the agent's commits green, proves the red, then pushes. Throws Stop when it can't.
+// The device check (the group-device-check skill), for tickets labelled area: ui or area: sharing.
+// The agent writes .agent/scenario.json from the ticket; the runner, which has browsers and the
+// internet, runs scripts/group-check.mjs from its own checkout of main. Before anything runs, every
+// expected text must be quoted in the ticket as GitHub has it now (never .agent/ticket.md, which the
+// agent can edit): a refusal is an error, never a pass. PASS: a table for the PR. FAIL: back to the
+// agent, like a red test. STOP: the run stops.
+const DEVICE_LABELS = ['area: ui', 'area: sharing'];
+function deviceCheck(n, s) {
+  const t = issue(n);
+  if (!t.labels.some((l) => DEVICE_LABELS.includes(l.name))) return null;
+  const raw = agentFile(s, 'scenario.json');
+  if (!raw) throw new Stop(`This is an ${DEVICE_LABELS.join(' or ')} ticket, but the agent wrote no \`.agent/scenario.json\` for the device check (the work-ticket skill's unattended section says how).`);
+  let scenario; try { scenario = JSON.parse(raw); } catch (e) { throw new Stop(`\`.agent/scenario.json\` isn't valid JSON: ${e.message}`); }
+  const wrong = ticketTextProblems(scenario, t.body || '');
+  if (wrong.length) throw new Stop(`The scenario's expected text isn't quoted in #${n}, so it may have come from the code. Nothing was run, and this is not a pass:\n${wrong.map((w) => `- ${w}`).join('\n')}`);
+  const sha = head(s), out = join(HOME, 'logs', `${n}-${s.runs}-device-${sha.slice(0, 7)}`), file = join(HOME, `${n}-scenario.json`);
+  rmSync(out, { recursive: true, force: true }); writeFileSync(file, raw);
+  const r = spawnSync('node', ['scripts/group-check.mjs', '--app', s.dir, '--scenario', file, '--out', out], { cwd: MAIN, encoding: 'utf8', timeout: LIMITS.deviceRunMin * 60000, killSignal: 'SIGKILL' });
+  const said = ((r.stdout || '') + (r.stderr || '')).trim();
+  writeFileSync(join(HOME, 'logs', `${n}-${s.runs}-device.log`), said);
+  let facts = {}; try { facts = JSON.parse(readFileSync(join(out, 'facts.json'), 'utf8')); } catch {}
+  event(n, `device check on ${sha.slice(0, 7)}: exit ${r.status}${facts.verdict ? ` (${facts.verdict.state})` : ''}`);
+  if (r.status === 0) {
+    const cell = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ').slice(0, 120);
+    const rows = (facts.points || []).map((p) => `| ${p.step} | ${p.check} | ${p.device ?? ''} | ${cell(p.expected)} | ${cell(p.actual)} | ${p.state} | ${cell(p.source)} |`);
+    const notChecked = (scenario.notChecked || []).map((x) => `- [ ] Not checked: ${typeof x === 'string' ? x : `${x.what}${x.why ? ` (${x.why})` : ''}`}`);
+    const pass = notChecked.length ? 'PASS on what was checked' : 'PASS';
+    return `**Device check (group-device-check), run by the runner** on \`${sha.slice(0, 7)}\`: **${pass}**, ${rows.length} check points, ${scenario.devices.length} devices (${scenario.devices.map((d) => d.size).join(', ')}), joined with the orbs. Every expected text is quoted in #${n}. Windows with a stand-in share sheet: ${scenario.devices.map((d, i) => d.share ? `device ${i} (${d.share})` : null).filter(Boolean).join(', ') || 'none'}.\n\n| Step | Check | Device | Expected | Actual | Result | Ticket source |\n|---|---|---|---|---|---|---|\n${rows.join('\n')}${notChecked.length ? `\n\n${notChecked.join('\n')}` : ''}`;
+  }
+  if (r.status === 1) {
+    s.deviceRounds = (s.deviceRounds || 0) + 1; save(n, s);
+    const fails = (facts.points || []).filter((p) => p.state === 'fail').map((p) => `- step ${p.step} ${p.check} (device ${p.device}, ${p.source}): expected ${JSON.stringify(p.expected)}, got ${JSON.stringify(p.actual)}`);
+    if (s.deviceRounds > LIMITS.deviceAttempts) throw new Stop(`The device check still fails after ${LIMITS.deviceAttempts} fix rounds:\n${fails.join('\n')}`);
+    putAgentFile(s, 'device-check.txt', `The runner ran group-device-check on ${sha.slice(0, 7)} with your .agent/scenario.json. FAIL:\n${fails.join('\n')}\n\nFull output:\n${said.slice(-6000)}`);
+    const before = head(s);
+    agent(n, s, 'fix-device', `Unattended run. The device check (the group-device-check skill, run by the runner) FAILS on your branch for ticket #${n}. What failed is in .agent/device-check.txt: each line is a ticket statement the build doesn't meet. Fix the code, test first, following AGENTS.md and the work-ticket skill. Don't change the scenario's expected text to match the build. If the scenario itself is wrong about the ticket, stop as the skill says and say why.`);
+    if (head(s) === before) throw new Stop(`The device check fails and the agent made no commit:\n${fails.join('\n')}`);
+    return 'fixed';
+  }
+  throw new Stop(`The device check stopped (exit ${r.status ?? r.signal ?? r.error?.code}), so this isn't a pass: ${(facts.verdict?.why || said.split('\n').filter((l) => /^STOP/.test(l)).join(' ') || 'no reason given').slice(0, 600)}`);
+}
+
 function checkAndPush(n, s, why, { ownerRound = false } = {}) {
   if (!s.pr && s.head && head(s) === s.head) return openPr(n, s, why);   // pushed before, but no PR yet: finish opening it
   for (let attempt = 1; ; attempt++) {
@@ -479,6 +524,10 @@ function checkAndPush(n, s, why, { ownerRound = false } = {}) {
     putAgentFile(s, 'test-output.txt', t.out.split('\n').slice(-150).join('\n'));
     agent(n, s, 'fix-tests', `Unattended run. \`npm test\` fails on your branch for ticket #${n}. The last 150 lines of the runner's run are in .agent/test-output.txt. Fix the cause, not the test, following AGENTS.md and the work-ticket skill. Commit the fix. If it isn't caused by this branch, stop as the skill says and say why. The failing lines:\n${t.fails.join('\n')}`);
   }
+  // Gate 1b, ui and sharing tickets: the runner runs group-device-check on the agent's scenario
+  const device = deviceCheck(n, s);
+  if (device === 'fixed') return checkAndPush(n, s, why, { ownerRound });   // tests, device check and the rest again on the fix
+  if (device) s.deviceProof = device;
   const red = proveRed(n, s, s.head || s.base);
   // Gate 2, before the push: Qodo's local review of the unpushed commits, through the same gate as a PR
   const local = localReview(n, s);
@@ -504,7 +553,8 @@ function checkAndPush(n, s, why, { ownerRound = false } = {}) {
   const pushed = head(s);
   s.localRounds = 0;   // each push gets its own local fix rounds (Qodo on #107)
   const flakes = s.flakes || []; s.flakes = [];   // shown once, in this push's proof
-  const proof = `**Red → green, checked by the runner** (not the agent) for ${s.head ? s.head.slice(0, 7) : 'main'}..${pushed.slice(0, 7)}:\n${red.join('\n')}\n- \`${pushed.slice(0, 7)}\` (head): \`npm test\` **passes**, direct and relay.\n${localProof}${flakes.length ? `\n${flakes.join('\n')}` : ''}`;
+  const proof = `**Red → green, checked by the runner** (not the agent) for ${s.head ? s.head.slice(0, 7) : 'main'}..${pushed.slice(0, 7)}:\n${red.join('\n')}\n- \`${pushed.slice(0, 7)}\` (head): \`npm test\` **passes**, direct and relay.\n${localProof}${flakes.length ? `\n${flakes.join('\n')}` : ''}${s.deviceProof ? `\n\n${s.deviceProof}` : ''}`;
+  s.deviceProof = null; s.deviceRounds = 0;
   s.head = pushed; s.pushedAt = s.waitFrom = Date.now(); s.proofs = [...(s.proofs || []), proof];
   return openPr(n, s, why);
 }

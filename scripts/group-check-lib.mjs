@@ -76,3 +76,20 @@ export function sharedBytesProblems(names, hashes, sent) {
   // checked (Qodo on #145)
   return names.flatMap((n, i) => { const [name, h] = hashes[i] || []; return name !== n || !h ? [`${n} (file ${i + 1}): its bytes weren't hashed`] : h !== sent.get(n) ? [`${n} (file ${i + 1}): not byte-identical to the sender's`] : []; });
 }
+
+// The runner's guard on a scenario the agent wrote: every expected text must be one of the ticket's
+// quoted strings (or the part of one before a " · "), so it can't have come from the code. Quote
+// styles count as the same and numbers may differ: the skill tells the agent to use the numbers its
+// scenario produces ("Downloading 3" for the ticket's "Downloading 10"). It proves the text came from
+// the ticket, not that it is the right line of it: the check's `source` and the skill cover that.
+const shape = (t) => plainQuotes(t).replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
+export function ticketQuotes(body) {
+  const text = plainQuotes(body), out = new Set();
+  for (const [, q] of text.matchAll(/"([^"\n]{2,300})"/g)) { out.add(shape(q)); out.add(shape(q.split(' · ')[0])); }
+  return out;
+}
+export function ticketTextProblems(scenario, body) {
+  const quotes = ticketQuotes(body);
+  return (scenario.steps || []).filter((st) => typeof st.equals === 'string' && !quotes.has(shape(st.equals)))
+    .map((st) => `"${st.equals}" (device ${st.device}) isn't quoted in the ticket`);
+}
