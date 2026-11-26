@@ -1,0 +1,53 @@
+PASS screens joined
+PASS the join says "Joined with Comet, on your right" and "Joined with Noodle, on your left"
+PASS the time keeper's nomatch for a lone push shows on its device only (after 2.2 s)
+PASS a join decided with a nomatch for an earlier push still says "Joined" ("Joined with Comet, on your right" and "Joined with Noodle, on your left")
+PASS results from a device that isn't the time keeper are ignored (heard 0; with a forged time keeper id: true)
+PASS setup from a device not in the room opens no connection (path none, state none)
+PASS join messages in order: ["Couldn’t tell who to join. Try again","Couldn’t tell who to join. Try again","Joined with Noodle, on your left","Joined with Noodle, on your left","Joined with Noodle, on your left","No match. Tap again together","No match. Tap again together","No match. Tap again together","No match. Tap again together","No match. Tap again together","Joined with Noodle, on your left","No match. Tap again together"]
+PASS "Try again" is still visible after 3 s (["Couldn’t tell who to join. Try again","1"]) and goes on the next push (["Couldn’t tell who to join. Try again","0"])
+PASS video and HEIC warned: "5 on the table. Details not removed from clip.mp4, IMG_0002.HEIC"
+PASS IMG_0004.JPG cleaned though "Keep details" was ticked mid-batch
+PASS IMG_0005.JPG cleaned though "Keep details" was ticked mid-batch
+PASS IMG_0006.JPG kept its details though "Keep details" was unticked mid-batch
+PASS IMG_0007.JPG kept its details though "Keep details" was unticked mid-batch
+PASS the other device sees 10 prints with 8 thumbnails
+PASS photo-0.jpg arrived byte-identical
+PASS clip.mp4 arrived byte-identical
+PASS IMG_0001.JPG passed its fingerprint check
+PASS IMG_0001.JPG arrived without GPS, camera details or gain map
+PASS IMG_0001.JPG still upright (shown 8 x 16)
+PASS IMG_0003.JPG arrived byte-identical
+PASS IMG_0003.JPG ("Keep details") still has its GPS
+PASS went direct
+PASS photo-1.jpg reached B after 0.3 s, while A still waited on the silent device
+PASS send to a silent device gave up and told the sender (after 10.0 s)
+PASS a read error isn't blamed on the other device ("Couldn’t send photo-1.jpg to silent")
+PASS malformed print ignored
+PASS bad pieces for a real transfer were dropped
+PASS malformed requests caused no resend
+PASS 20 wants for one photo made A send it 2 times (at least 1, at most 3)
+PASS 20 needs listing every piece made A send the file 1 times (at least 1, at most 3)
+PASS B left and came back, then 20 wants made A send photo-0.jpg 0 more times (none: its counter was kept)
+PASS a third device asked once and still got photo-0.jpg byte-identical
+PASS a 400 x 400 thumbnail is shown ({"img":[400,400],"kept":true,"decoded":true})
+PASS a 401 x 400 thumbnail isn't decoded and the print shows a plain card ({"img":null,"kept":false,"decoded":false})
+PASS a 30000 x 30000 bomb thumbnail isn't decoded and the print shows a plain card ({"img":null,"kept":false,"decoded":false})
+PASS a 400 x 400 with data after its end thumbnail isn't decoded and the print shows a plain card ({"img":null,"kept":false,"decoded":false})
+PASS tapping a print on another screen says "Drag it onto your screen first" and fetches nothing
+PASS tapping while every incoming slot is taken says "Too many photos arriving. Try again in a moment" and asks for nothing ({"wants":0,"expecting":false})
+FAIL tapping a print on your screen says "Receiving..."
+PASS taps asked for the photo 1 time(s), once wanted (second tap while still arriving: true)
+PASS IMG_0004.JPG arrived byte-identical after a tap (arrived: true)
+PASS tapping your own print says "Already yours"
+PASS late guest downloaded photo-0.jpg from B byte-identical
+PASS A dropped its print to B while B's key was late (dropped message to 1d4glxa1vkvjgn no progress from 1d4glxa1vkvjgn for 10 s)
+PASS A announced the print again once B's key came, and B has it (0.1 s after the key)
+PASS four devices: the A–B join says "Joined with Nova, on your right" and "Joined with Biscuit, on your left", and nothing new on C and D ("", "")
+PASS four devices: the C–D join says "Joined with Pebble, on your right" and "Joined with Noodle, on your left", and nothing new on A and B ("Joined with Nova, on your right", "Joined with Biscuit, on your left")
+PASS four devices: the B–D join says "Joined with Pebble, below you" and "Joined with Nova, above you", and nothing new on A and C ("Joined with Nova, on your right", "Joined with Pebble, on your right")
+PASS four devices hold the time keeper's 3 joins (same on all four: true), with 0 overlapping screens
+PASS four devices are one group on every page (1k6df2j1xe8183,1k6df2j1xe8183,1k6df2j1xe8183,1k6df2j1xe8183 | 1k6df2j1xe8183,1k6df2j1xe8183,1k6df2j1xe8183,1k6df2j1xe8183 | 1k6df2j1xe8183,1k6df2j1xe8183,1k6df2j1xe8183,1k6df2j1xe8183 | 1k6df2j1xe8183,1k6df2j1xe8183,1k6df2j1xe8183,1k6df2j1xe8183)
+PASS a print A puts down is visible on C, joined to A only through B and D ({"anchor":"udqwmh1gp8c01","group":"1k6df2j1xe8183","mine":"1k6df2j1xe8183"})
+PASS after the time keeper left, C (which heard last) holds the new time keeper's layout, as D does (B [{"a":"1k6df2j1xe8183","edgeA":"T","alongA":200,"b":"apiah81gcd0ve","edgeB":"B","alongB":200},{"a":"1rngwhiny4o0z","edgeA":"L","alongA":200,"b":"apiah81gcd0ve","edgeB":"R","alongB":200}], C [{"a":"1k6df2j1xe8183","edgeA":"T","alongA":200,"b":"apiah81gcd0ve","edgeB":"B","alongB":200},{"a":"1rngwhiny4o0z","edgeA":"L","alongA":200,"b":"apiah81gcd0ve","edgeB":"R","alongB":200}], D [{"a":"1k6df2j1xe8183","edgeA":"T","alongA":200,"b":"apiah81gcd0ve","edgeB":"B","alongB":200},{"a":"1rngwhiny4o0z","edgeA":"L","alongA":200,"b":"apiah81gcd0ve","edgeB":"R","alongB":200}]; C still counted A as time keeper: true)
+PASS when the new time keeper leaves straight away, C takes over and C and D hold the same layout (C [], D [])

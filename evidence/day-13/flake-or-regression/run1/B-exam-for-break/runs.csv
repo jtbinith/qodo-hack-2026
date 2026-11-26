@@ -1,0 +1,11 @@
+run,side,commit,outcome,seconds,first_failure
+1,main,6e994c3,pass,83,""
+2,branch,9e72433,hit,84,"FAIL tapping a print on your screen says \"Receiving...\""
+3,main,6e994c3,pass,84,""
+4,branch,9e72433,hit,79,"FAIL tapping a print on your screen says \"Receiving...\""
+5,main,6e994c3,pass,90,""
+6,branch,9e72433,hit,81,"FAIL tapping a print on your screen says \"Receiving...\""
+7,main,6e994c3,pass,83,""
+8,branch,9e72433,hit,82,"FAIL tapping a print on your screen says \"Receiving...\""
+9,main,6e994c3,pass,83,""
+10,branch,9e72433,hit,84,"FAIL tapping a print on your screen says \"Receiving...\""
