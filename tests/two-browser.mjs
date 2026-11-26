@@ -514,6 +514,12 @@ try {
     if (!light) dark = 0;   // a QR code is dark modules on a light ground: an undrawn canvas has neither
     return { box: !document.getElementById('invitebox').hidden, link: document.getElementById('link').value, w: c.width, dark, qr: typeof window.qrcode === 'function' }; }).catch(() => ({ box: false, link: invUrl, w: 0, dark: 0, qr: false }));
   check(box.box && box.link === invUrl && box.qr && box.w > 0 && box.dark > 0, `Invite shows a QR code (${box.w} px, ${box.dark} dark pixels) and the link ?room=CODE&auto (${box.link === invUrl})`);
+  // The QR code sits inside the Invite dialog, above the link, not pinned to the viewport's corner
+  const placed = await I1.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(), q = r('qr'), l = r('link'),
+    d = document.querySelector('#invitebox > div').getBoundingClientRect(), pos = getComputedStyle(document.getElementById('qr')).position;
+    return { pos, inside: q.left >= d.left && q.right <= d.right && q.top >= d.top && q.bottom <= d.bottom, above: q.bottom <= l.top }; })
+    .catch(() => ({ pos: '?', inside: false, above: false }));
+  check(placed.pos !== 'fixed' && placed.inside && placed.above, `the QR code is inside the Invite dialog (${placed.inside}, position ${placed.pos}) and above the link (${placed.above})`);
   // Copy: a refused clipboard selects the link and says so; a working one copies the link
   await I1.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.reject(new DOMException('refused', 'NotAllowedError')) } }));
   await I1.click('#copy', { timeout: 3000 }).catch(() => {});
