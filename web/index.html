@@ -19,15 +19,22 @@
   #lobby input { font-size: 22px; width: 11ch; text-align: center; text-transform: uppercase; letter-spacing: 3px;
     padding: 8px; border-radius: 12px; border: 2px solid #ffd23f; background: #3a281b; color: #fff; }
   #lobby button { font-size: 18px; padding: 10px 20px; border-radius: 12px; border: 0; background: #ffd23f; color: #222; }
+  [hidden] { display: none !important; }
+  #invitebox { position: fixed; inset: 0; display: grid; place-items: center; background: #000a; z-index: 4; }
+  #invitebox > div { display: grid; gap: 12px; justify-items: center; background: #2b1d14; padding: 18px; border-radius: 16px; max-width: calc(100vw - 40px); text-align: center; }
+  #qr { width: min(260px, 70vw); height: auto; image-rendering: pixelated; border-radius: 8px; }
+  #link { font: 13px ui-monospace, monospace; width: min(320px, 80vw); padding: 8px; border-radius: 10px; border: 2px solid #ffd23f;
+    background: #3a281b; color: #fff; -webkit-user-select: text; user-select: text; }
+  #invitebox button { font-size: 16px; padding: 10px 14px; border-radius: 12px; border: 0; background: #ffd23f; color: #222; }
   #toast { position: fixed; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-    background: #000b; padding: 8px 14px; border-radius: 10px; font-size: 15px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+    background: #000b; padding: 8px 14px; border-radius: 10px; font-size: 15px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="hud"></div>
 <div id="toast"></div>
-<div id="bar"><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>＋ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
+<div id="bar"><button id="invite" type="button" hidden>Invite</button><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>＋ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
 <div id="lobby"><form id="f">
   <div>Room code</div>
   <input id="code" maxlength="10" autocomplete="off" required>
@@ -35,14 +42,22 @@
   <button type="button" id="new">New room</button>
   <small>Make a code with New room, then type it on every device.<br>Test only: anyone with the code can see the photos.</small>
 </form></div>
+<div id="invitebox" hidden><div>
+  <canvas id="qr"></canvas>
+  <input id="link" readonly aria-label="Room link">
+  <div><button type="button" id="copy">Copy</button> <button type="button" id="closeinvite">Close</button></div>
+  <small>Anyone who can see this code or link can join the room.</small>
+</div></div>
 <script src="vendor/supabase.js"></script>
 <script src="vendor/sha256.umd.min.js"></script>
+<script src="vendor/qrcode.js"></script>
 <script type="module">
 import { joinRoom } from './net.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
 import { saveBatch, createSaveAll, REVOKE_AFTER } from './saveall.js';
+import { pickRoom, inviteLink, cleanUrl, watchJoin, ROOM_KEY } from './invite.js';
 import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
 
 const $ = (id) => document.getElementById(id);
@@ -52,7 +67,12 @@ const id = rnd[0].toString(36) + rnd[1].toString(36);
 const NAMES = ['Comet', 'Pebble', 'Mango', 'Gecko', 'Noodle', 'Biscuit', 'Pickle', 'Waffle', 'Nova', 'Sprout'];
 const name = NAMES[rnd[0] % NAMES.length];
 const params = new URLSearchParams(location.search);
-$('code').value = (params.get('room') || '').toUpperCase();
+// This tab's room (S16): written only once a join is live, so a reload goes straight back in.
+// sessionStorage can throw (storage turned off): the tab then just doesn't remember the room
+const stored = { get: () => { try { return sessionStorage.getItem(ROOM_KEY); } catch { return null; } },
+  set: (code) => { try { sessionStorage.setItem(ROOM_KEY, code); } catch {} } };
+const opening = pickRoom(location.search, stored.get());
+$('code').value = opening.fill;
 
 // A room code people can't guess: 10 characters from a 32-letter alphabet (50 bits).
 function newCode() {
@@ -354,9 +374,8 @@ function pushOrb(x, y) {
 
 // ---------- start ----------
 function start(room) {
-  $('lobby').remove();
-  history.replaceState(null, '', '?room=' + room);
-  net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
+  $('lobby').hidden = true;
+  const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
   peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) });
   peers.on((from, m, bytes) => {
     if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) dropped(p); return; }
@@ -398,8 +417,52 @@ function start(room) {
       toast('Couldn’t tell who to join. Try again', true);
     } else if (ev === 'nomatch' && d.latest && !said) toast('No match. Tap again together');
   });
+  // Joined means the channel reports live (S16). Only then does the code leave the address bar
+  // (the current history entry is replaced, so Back has no page with it) and go into this tab's
+  // sessionStorage. A join that fails before live is shut down, so a late live from it can't enter
+  // the room, and the lobby comes back with the code and the address bar as they were
+  watchJoin(attempt, {
+    joined: () => {
+      if (net !== attempt) return;
+      history.replaceState(null, '', cleanUrl(location.href));
+      stored.set(room);
+      invite.room = room; $('invite').hidden = false;
+    },
+    failed: () => {
+      if (net !== attempt) return;
+      attempt.leave();
+      $('code').value = room; $('lobby').hidden = false;
+      toast('Couldn’t join the room. Try again');
+    },
+  });
   window.__t = { net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
 }
+
+// ---------- invite (S16) ----------
+// The room's link and its QR code, drawn here by the vendored qrcode-generator: the code never
+// goes to an outside service. Anyone who sees either can join, the same as with a typed code
+const invite = { room: null };
+function drawQr(text) {
+  const qr = window.qrcode(0, 'M'); qr.addData(text); qr.make();
+  const n = qr.getModuleCount(), QUIET = 4, CELL = 8, c = $('qr'), g = c.getContext('2d');
+  c.width = c.height = (n + 2 * QUIET) * CELL;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (qr.isDark(r, k)) g.fillRect((k + QUIET) * CELL, (r + QUIET) * CELL, CELL, CELL);
+}
+$('invite').onclick = () => {
+  if (!invite.room) return;
+  const link = inviteLink(location.href, invite.room);
+  $('link').value = link; drawQr(link);
+  $('invitebox').hidden = false;
+};
+$('closeinvite').onclick = () => { $('invitebox').hidden = true; };
+// No Clipboard API (plain http on a LAN), or it's refused: select the link to copy by hand
+$('copy').onclick = async () => {
+  const l = $('link');
+  try { await navigator.clipboard.writeText(l.value); toast('Link copied'); }
+  catch { l.focus(); l.select(); l.setSelectionRange(0, l.value.length); toast('Couldn’t copy. The link is selected'); }
+};
 // Only codes made by New room are accepted: a hand-typed code like TEST is easy to guess.
 function tryStart(code) {
   code = code.trim().toUpperCase();
@@ -407,7 +470,7 @@ function tryStart(code) {
   start(code);
 }
 $('f').onsubmit = (e) => { e.preventDefault(); tryStart($('code').value); };
-if (params.get('room') && params.has('auto')) tryStart(params.get('room'));
+if (opening.join) tryStart(opening.join);
 
 // ---------- drawing ----------
 function frame() {
