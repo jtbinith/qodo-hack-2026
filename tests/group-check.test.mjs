@@ -93,3 +93,12 @@ test('#145 1aec7fe3: a shared file whose bytes were never hashed fails the check
   // the share is recorded only once its bytes are hashed, so a check never reads a call without hashes
   assert.match(runner(), /const hashed = await Promise\.all/);
 });
+// Qodo's third review of #145 (a3986d3)
+test('#145 914719bc: a failed fetch stops before FETCH_HEAD is read', () => {
+  assert.match(skill(), /git fetch origin "<branch-or-sha>" && sha=\$\(git rev-parse --verify FETCH_HEAD\^\{commit\}\)/);
+});
+test('#145 a6c8995a: two shared files with the same name are each checked', () => {
+  const sent = new Map([['1.jpg', 'aa']]);
+  assert.ok(lib.sharedBytesProblems(['1.jpg', '1.jpg'], [['1.jpg', 'zz'], ['1.jpg', 'aa']], sent).length);
+  assert.deepEqual(lib.sharedBytesProblems(['1.jpg', '1.jpg'], [['1.jpg', 'aa'], ['1.jpg', 'aa']], sent), []);
+});
