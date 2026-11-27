@@ -586,7 +586,8 @@ try {
   const f1 = await F.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, url: location.href, room: sessionStorage.getItem('room'), invite: document.getElementById('invite')?.hidden === false }));
   check(lobbyBack && f1.lobby && f1.code === inv && f1.url.includes(inv) && f1.room === null && !f1.invite,
     `a join that fails before live shows the lobby again with the code (${f1.code === inv}), keeps the address bar (${f1.url.includes(inv)}), stores nothing (${f1.room === null}) and a late answer from it changes nothing (lobby ${f1.lobby})`);
-  await F.click('#f button', { timeout: 3000 }).catch(() => {});
+  await F.click('#f button', { timeout: 3000 }).catch(() => {});   // the code screen, then the name screen (#156)
+  await F.click('#go', { timeout: 3000 }).catch(() => {});
   const retried = await until(F, (r) => window.__t && window.__t.net.room === r && window.__t.net.status === 'live' && sessionStorage.getItem('room') === r.slice(6) && !location.href.includes(r.slice(6)), 'photo-' + inv, 20000).then(() => true, () => false);
   const f2 = await F.evaluate(() => document.getElementById('lobby')?.hidden === false);
   check(retried && !f2, `joining again after a failed join works as if it were the first try (${retried})`);
@@ -704,13 +705,13 @@ try {
   const N2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
   await N2.goto(`${BASE}?room=${nr}&auto`); await new Promise((r) => setTimeout(r, 1500));
   const n0 = await N2.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, joined: !!window.__t,
-    asked: document.activeElement?.id === 'yourname', said: document.getElementById('toast')?.textContent }));
+    asked: document.activeElement?.id === 'yourname', step: document.getElementById('s-name')?.hidden === false }));
   await N2.fill('#yourname', '  Ada   Lovelace ');
-  await N2.click('#f button', { timeout: 3000 }).catch(() => {});
+  await N2.click('#go', { timeout: 3000 }).catch(() => {});
   const named = await until(N1, () => Object.values(window.__t.net.peers).some((p) => p.name === 'Ada Lovelace'), null, 20000).then(() => true, () => false);
   const keptName = await N2.evaluate(() => localStorage.getItem('heap-name'));
-  check(n0.lobby && n0.code === nr && !n0.joined && n0.asked && n0.said === 'Add your name first' && named && keptName === 'Ada Lovelace',
-    `a first visit asks for a name instead of joining (lobby ${n0.lobby}, code filled ${n0.code === nr}, joined ${n0.joined}, name box focused ${n0.asked}, toast "${n0.said}"), and the other device sees "Ada Lovelace" (${named}), remembered (${keptName})`);
+  check(n0.lobby && n0.code === nr && !n0.joined && n0.asked && n0.step && named && keptName === 'Ada Lovelace',
+    `a first visit asks for a name instead of joining (lobby ${n0.lobby}, code filled ${n0.code === nr}, joined ${n0.joined}, on the name screen ${n0.step}, name box focused ${n0.asked}), and the other device sees "Ada Lovelace" (${named}), remembered (${keptName})`);
   await N1.context().close(); await N2.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);

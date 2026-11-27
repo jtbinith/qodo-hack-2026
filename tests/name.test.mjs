@@ -25,8 +25,14 @@ test('a cleaned name is always a valid peer name', () => {
 });
 
 const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
-test('the home screen asks for your name above the two cards', () => {
-  assert.match(html, /<label for="yourname">Your name<\/label>\s*<input id="yourname" maxlength="20" autocomplete="nickname"[^>]*>[\s\S]*<div id="choose">/);
+const lobby = (html.match(/<div id="lobby">([\s\S]*?)<\/div>\s*<!-- \/lobby -->/) || [, ''])[1];
+const part = (id) => (lobby.match(new RegExp(`<div[^>]*id="${id}"[^>]*>([\\s\\S]*?)<!-- \\/${id} -->`)) || [, ''])[1];
+test('one step at a time: home, then the heap code, then your name (wireframes 1.1, 1.2, 1.4)', () => {
+  assert.ok(part('s-home'), 'a home screen');
+  assert.doesNotMatch(part('s-home'), /yourname|id="code"/, 'home has only Start and Join');
+  assert.match(part('s-code'), /<button type="button" class="back"[^>]*>‹ Back<\/button>[\s\S]*<h2>Heap code<\/h2>[\s\S]*<form id="f"[\s\S]*<input id="code"/, 'a code screen with Back');
+  assert.match(part('s-name'), /<button type="button" class="back"[^>]*>‹ Back<\/button>[\s\S]*<h2>What should others call you\?<\/h2>[\s\S]*<label for="yourname">Your name<\/label>\s*<input id="yourname" maxlength="20" autocomplete="nickname"[\s\S]*<button id="go">/, 'a name screen with Back');
+  assert.match(lobby, /id="s-code"[^>]*hidden/); assert.match(lobby, /id="s-name"[^>]*hidden/);
 });
 test('no random names any more', () => {
   assert.doesNotMatch(html, /const NAMES = /);
