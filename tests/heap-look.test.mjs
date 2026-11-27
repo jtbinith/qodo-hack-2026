@@ -52,7 +52,7 @@ test('the home screen offers Start a heap and Join with a code', () => {
   assert.match(lobby, /<button[^>]*id="new"[^>]*>[\s\S]*Start a heap[\s\S]*You get a code to share[\s\S]*?<\/button>/, 'Start a heap');
   assert.match(lobby, /<button[^>]*id="joinwith"[^>]*>[\s\S]*Join with a code[\s\S]*Someone nearby has one[\s\S]*?<\/button>/, 'Join with a code');
   assert.match(lobby, /<form id="f"[\s\S]*<input id="code"[\s\S]*<button>Join<\/button>/, 'the code form, its first button joins');
-  assert.match(lobby, /anyone with the code can see the photos/i, 'the test-only note stays');
+  assert.doesNotMatch(lobby, /<i aria-hidden/, 'no glyphs on the buttons');
 });
 
 test('the wordmark is the word heap with only the a as a glyph', async () => {
@@ -60,7 +60,21 @@ test('the wordmark is the word heap with only the a as a glyph', async () => {
   assert.match(mark, /^\s*he<canvas id="heap-a"[^>]*aria-hidden="true"[^>]*><\/canvas>p\s*$/, 'he, the a glyph, p');
   assert.match(html, /aria-label="heap"/, 'read out as heap');
   const a = await import('../web/heap-a.js');
-  assert.ok(a.field(a.A_GLYPH, 76, 50) < 0, 'the bowl of the a is filled');
+  assert.ok(a.field(a.A_GLYPH, 76, 64) < 0, 'the ring of the a is filled');
   assert.ok(a.field(a.A_GLYPH, 76, 92) > 0, 'the middle of the a is open');
   assert.ok(a.field(a.A_GLYPH, 112, 120) < 0, 'the stem is filled');
+});
+
+test('the table is drawn in the tokens, not the old dark wood', () => {
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.ok(frame.length > 200, 'found the drawing code');
+  assert.deepEqual(frame.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(/g) || [], [], 'no colour literals: colours come from the tokens');
+  assert.doesNotMatch(frame, /shadowBlur/, 'no drop shadows');
+  assert.doesNotMatch(frame, /monospace/, 'no monospace');
+});
+
+test('the live table has Leave and Invite at the top and the photo actions at the bottom', () => {
+  assert.match(html, /<div id="top">\s*<button id="leave"[^>]*>Leave<\/button>\s*<button id="invite"[^>]*>Invite<\/button>\s*<\/div>/);
+  assert.match(html, /<div id="bar">[\s\S]*id="keep"[\s\S]*id="saveall"[\s\S]*id="pick"[\s\S]*?<\/div>/);
+  assert.doesNotMatch((html.match(/<div id="bar">[\s\S]*?<\/div>/) || [''])[0], /id="(leave|invite)"/, 'Leave and Invite are not in the bottom bar');
 });
