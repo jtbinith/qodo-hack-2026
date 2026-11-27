@@ -75,14 +75,20 @@
   .pills { display: flex; gap: 10px; }
   .pills button { flex: 1; font-size: 16px; font-weight: 500; padding: 13px 16px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
   .pills .pri { background: var(--ink); color: var(--paper); }
-  #toast { position: fixed; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-    background: var(--ink); color: var(--paper); padding: 9px 15px; border-radius: 12px; font-size: 15px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
+  /* toasts: a charcoal pill that lands with a small squash and settles (component lab, "Boing, subtle") */
+  #toast { position: fixed; left: 50%; top: calc(62px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+    background: var(--ink); color: var(--paper); padding: 13px 18px; border-radius: 18px; font-size: 15px; font-weight: 500; line-height: 1.35; text-align: center;
+    opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
+  #toast.in { animation: boing .6s cubic-bezier(.2, .8, .3, 1) both; }
+  @keyframes boing { 0% { transform: translateX(-50%) translateY(-18px) scale(.97, 1.04); opacity: 0 } 40% { transform: translateX(-50%) translateY(3px) scale(1.03, .97); opacity: 1 }
+    70% { transform: translateX(-50%) translateY(1px) scale(.995, 1.005) } 100% { transform: translateX(-50%) } }
+  @media (prefers-reduced-motion: reduce) { #toast.in { animation: none; } }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="hud" hidden></div>
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 <div id="top">
   <span><button id="leave" type="button" hidden>Leave</button> <button id="info" type="button" aria-label="Status" aria-controls="hud" aria-expanded="false" hidden>i</button></span>
   <button id="invite" type="button" hidden>Invite</button>
@@ -166,6 +172,7 @@ let net = null, peers = null, W = innerWidth, H = innerHeight;
 // A sticky message stays until unstick(). Other messages show over it for a moment, then it comes back
 function toast(msg, sticky = false) {
   const t = $('toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(toast.h);
+  t.classList.remove('in'); void t.offsetWidth; t.classList.add('in');   // land again for each new message
   if (sticky) toast.sticky = msg;
   else toast.h = setTimeout(() => { if (toast.sticky) t.textContent = toast.sticky; else t.style.opacity = 0; }, 2400);
 }
