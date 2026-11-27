@@ -69,6 +69,8 @@ for (const [i, d] of s.devices.entries()) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, acceptDownloads: true });
   const page = await ctx.newPage();
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  // a name per window, as a person has after their first visit, so the invite link joins in one tap (#156)
+  await page.addInitScript((n) => { try { if (!localStorage.getItem('heap-name')) localStorage.setItem('heap-name', n); } catch {} }, `Device ${i}`);
   if (d.share) await page.addInitScript(shareStub(d.share, d.hangMs));
   const downloads = []; page.on('download', async (dl) => { const p = join(OUT, `dl-${i}-${downloads.length}-${dl.suggestedFilename()}`); downloads.push({ name: dl.suggestedFilename(), path: p, done: dl.saveAs(p) }); });
   await page.goto(`${base}?room=${String(ABSENT) === String(i) ? other : room}&auto`);

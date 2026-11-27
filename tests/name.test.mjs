@@ -33,3 +33,8 @@ test('no random names any more', () => {
   assert.match(html, /localStorage/, 'the name is remembered on this device');
   assert.match(html, /toast\('Add your name first'\)/);
 });
+
+test('the device check gives each window a name of its own, so invite links still join in one tap', () => {
+  const gc = readFileSync(new URL('../scripts/group-check.mjs', import.meta.url), 'utf8');
+  assert.match(gc, /addInitScript\(\(n\) => \{ try \{ if \(!localStorage\.getItem\('heap-name'\)\) localStorage\.setItem\('heap-name', n\); \} catch \{\} \}, `Device \$\{i\}`\)/);
+});

@@ -52,6 +52,10 @@
   .card small { display: block; font-size: 14px; margin-top: 6px; }
   .card.solid { background: var(--ink); color: var(--paper); }
   .card:focus-visible, #f button:focus-visible, #f input:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  label[for=yourname] { font-size: 14px; font-weight: 500; color: var(--text-mid); margin-bottom: -8px; }
+  #yourname { font: 500 20px var(--ui); padding: 12px 14px; border-radius: 16px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); margin-bottom: 6px; }
+  #yourname::placeholder { color: var(--text-mid); }
+  #yourname:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
   #f { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
   #f label { grid-column: 1 / -1; font-size: 14px; color: var(--text-mid); }
   #f input { font: 400 26px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; min-width: 0; padding: 12px 14px;
@@ -100,6 +104,8 @@
     <p class="tag">Share side by side</p>
     <h1 class="mark" aria-label="heap">he<canvas id="heap-a" aria-hidden="true"></canvas>p</h1>
     <p class="about">Put phones, tablets and laptops next to each other. Drag a photo across, it lands on theirs.</p>
+    <label for="yourname">Your name</label>
+    <input id="yourname" maxlength="20" autocomplete="nickname" autocapitalize="words" spellcheck="false" placeholder="What should people call you?">
     <div id="choose">
       <button type="button" id="new" class="card solid"><span><b>Start a heap</b><small>You get a code to share</small></span></button>
       <button type="button" id="joinwith" class="card join" style="margin-top:12px"><span><b>Join with a code</b><small>Someone nearby has one</small></span></button>
@@ -130,14 +136,17 @@ import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
 import { saveBatch, createSaveAll, REVOKE_AFTER } from './saveall.js';
 import { pickRoom, inviteLink, cleanUrl, watchJoin, ROOM_KEY } from './invite.js';
-import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
+import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex, cleanName } from './check.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const rnd = new Uint32Array(2); crypto.getRandomValues(rnd);
 const id = rnd[0].toString(36) + rnd[1].toString(36);
-const NAMES = ['Comet', 'Pebble', 'Mango', 'Gecko', 'Noodle', 'Biscuit', 'Pickle', 'Waffle', 'Nova', 'Sprout'];
-const name = NAMES[rnd[0] % NAMES.length];
+// Your name (#156): picked by the person, remembered on this device (localStorage), and sent only
+// to the others in the heap. No random names: with none saved, the home screen asks first
+const NAME_KEY = 'heap-name';
+const savedName = () => { try { return cleanName(localStorage.getItem(NAME_KEY)); } catch { return ''; } };
+let name = savedName();
 const params = new URLSearchParams(location.search);
 // This tab's room (S16): written only once a join is live, so a reload goes straight back in.
 // sessionStorage can throw (storage turned off): the tab then just doesn't remember the room
@@ -162,10 +171,11 @@ $('leave').onclick = () => {
   try { sessionStorage.removeItem(ROOM_KEY); } catch {}
   location.replace(location.pathname);
 };
-const showForm = (on) => { $('f').hidden = !on; $('choose').hidden = on; if (on) $('code').focus(); };
+const showForm = (on) => { $('f').hidden = !on; $('choose').hidden = on; if (on) ($('yourname').value ? $('code') : $('yourname')).focus(); };
 $('new').onclick = () => { const c = newCode(); $('code').value = c; tryStart(c); };
 $('joinwith').onclick = () => showForm(true);
 $('back').onclick = () => showForm(false);
+$('yourname').value = name;
 if ($('code').value) showForm(true);
 
 let net = null, peers = null, W = innerWidth, H = innerHeight;
@@ -556,6 +566,10 @@ $('copy').onclick = async () => {
 // Only codes made by New room are accepted: a hand-typed code like TEST is easy to guess.
 function tryStart(code) {
   code = code.trim().toUpperCase();
+  const typed = cleanName($('yourname').value);
+  if (!typed) { $('code').value = code; $('lobby').hidden = false; if (code) showForm(true); $('yourname').focus(); return toast('Add your name first'); }
+  name = typed; $('yourname').value = typed;
+  try { localStorage.setItem(NAME_KEY, typed); } catch {}
   if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
   start(code);
 }

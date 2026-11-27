@@ -217,3 +217,11 @@ export function askLimiter(now = () => performance.now()) {
   }
   return { allow, undo, get size() { return recs.size; } };
 }
+
+// Your name (#156): what others in the heap see. Trimmed, inner spaces collapsed, hidden control
+// and format characters removed, at most 20 characters (an emoji counts as one). '' means no name
+export function cleanName(v) {
+  if (typeof v !== 'string') return '';
+  const s = v.replace(/[\p{Cc}\p{Cf}]/gu, (c) => (/\s/.test(c) ? ' ' : '')).replace(/\s+/g, ' ').trim();
+  return [...s].slice(0, 20).join('').trim();
+}

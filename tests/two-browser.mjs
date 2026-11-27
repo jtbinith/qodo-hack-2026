@@ -535,6 +535,7 @@ try {
   check(off127.length === 0, `the QR code is made on the device: no request outside 127.0.0.1 and the room server (${off127.length ? off127.join(', ') : 'none'})`);
   // scanning the QR code opens the link: that page joins the same room without typing the code
   const I2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await I2.addInitScript(() => { try { localStorage.setItem('heap-name', 'Returning'); } catch {} });   // been here before: a link joins in one tap (#156)
   I2.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
   await I2.goto(box.link);
   const scanned = await until(I2, () => window.__t && Object.keys(window.__t.net.peers).length === 2, null, 20000).then(() => true, () => false);
