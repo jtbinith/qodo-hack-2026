@@ -90,3 +90,14 @@ test('buttons press down when tapped, and respect reduced motion', () => {
   assert.match(css, /transition:[^;]*transform/, 'springs back smoothly');
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?transform: none/, 'no movement for reduced motion');
 });
+
+test('the invite sheet: heading, the code in tiles, the QR with a line, Copy link and Close', () => {
+  const box = (html.match(/<div id="invitebox"[^>]*>([\s\S]*?)<\/div><!-- \/invitebox -->/) || [, ''])[1];
+  assert.match(box, /<h2[^>]*>Invite<\/h2>/, 'an Invite heading');
+  assert.match(box, /<div id="invcode" class="tiles" role="img"[^>]*><\/div>/, 'a place for the code tiles');
+  assert.match(box, /<canvas id="qr"[^>]*><\/canvas>[\s\S]*Scan to join/, 'the QR with a line beside it');
+  assert.match(box, /<input id="link" readonly/, 'the link stays selectable for the copy fallback');
+  assert.match(box, /<button type="button" id="copy"[^>]*>Copy link<\/button>[\s\S]*<button type="button" id="closeinvite"[^>]*>Close<\/button>/);
+  assert.match(box, /Anyone who can see this code or link can join/, 'the warning stays');
+  assert.match(html, /\$\('invcode'\)\.replaceChildren\(/, 'the tiles are filled from the heap code');
+});
