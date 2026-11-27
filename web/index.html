@@ -94,6 +94,14 @@
   .tiles { display: flex; gap: 4px; align-items: center; }
   .tiles i { font-style: normal; color: var(--text-mid); padding: 0 2px; }
   .tiles span { flex: 1; max-width: 44px; aspect-ratio: 3 / 4; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: var(--paper); font: 400 clamp(18px, 6vw, 28px)/1 var(--display); }
+  .copyrow { display: flex; gap: 8px; align-items: center; }
+  .copyrow .tiles, .copyrow #link { flex: 1; min-width: 0; }
+  .copyrow button { flex: none; font: 500 15px var(--ui); padding: 9px 14px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #invitebox .warn { color: var(--text-mid); font-size: 13px; margin-top: -6px; }
+  #invitebox .who { margin: 4px 0 -6px; font: 700 13px var(--ui); letter-spacing: .08em; text-transform: uppercase; }
+  #inroom { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  #inroom li { font-size: 14px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--ink); }
+  #inroom li.empty { border: 0; padding: 5px 0; color: var(--text-mid); flex-basis: 100%; }
   .qrrow { display: grid; justify-items: center; gap: 10px; text-align: center; }
   #qr { width: min(320px, 82vw); height: auto; image-rendering: pixelated; }
   .qrrow p { margin: 0; font-size: 15px; line-height: 1.4; }
@@ -164,10 +172,13 @@
 <div id="invitebox" hidden><div class="sheet" role="dialog" aria-labelledby="invtitle">
   <span class="handle" aria-hidden="true"></span>
   <h2 id="invtitle">Invite</h2>
-  <div id="invcode" class="tiles" role="img" aria-label="Heap code"></div>
-  <div class="qrrow"><canvas id="qr" aria-label="QR code for the invite link"></canvas><p>Scan to join this heap, or share the link.<br><small>Anyone who can see this code or link can join.</small></p></div>
-  <input id="link" readonly aria-label="Heap link">
-  <div class="pills"><button type="button" id="copy" class="pri">Copy link</button><button type="button" id="closeinvite">Close</button></div>
+  <div class="qrrow"><canvas id="qr" aria-label="QR code for the invite link"></canvas><p>Scan to join this heap, or share the code or link.</p></div>
+  <div class="copyrow"><div id="invcode" class="tiles" role="img" aria-label="Heap code"></div><button type="button" id="copycode" aria-label="Copy the heap code">Copy</button></div>
+  <div class="copyrow"><input id="link" readonly aria-label="Heap link"><button type="button" id="copy" aria-label="Copy the link">Copy</button></div>
+  <small class="warn">Anyone who can see this code or link can join.</small>
+  <h3 class="who">In this heap</h3>
+  <ul id="inroom" aria-live="polite"></ul>
+  <div class="pills"><button type="button" id="closeinvite">Close</button></div>
 </div></div><!-- /invitebox -->
 <script src="vendor/supabase.js"></script>
 <script src="vendor/sha256.umd.min.js"></script>
@@ -565,6 +576,7 @@ function start(room) {
   peers.onReady(catchUp);
   net.on((ev) => {
     if (ev !== 'peers') return;
+    showWho();
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
   });
@@ -630,7 +642,7 @@ $('invite').onclick = () => {
   const dash = Object.assign(document.createElement('i'), { textContent: '–' }); dash.setAttribute('aria-hidden', 'true');
   $('invcode').replaceChildren(...tiles.slice(0, 5), dash, ...tiles.slice(5));
   $('invcode').setAttribute('aria-label', `Heap code ${code.split('').join(' ')}`);
-  $('invitebox').classList.remove('out'); $('invitebox').hidden = false;
+  showWho(); $('invitebox').classList.remove('out'); $('invitebox').hidden = false;
 };
 function closeInvite() {
   const b = $('invitebox');
@@ -640,6 +652,17 @@ function closeInvite() {
   b.querySelector('.sheet').addEventListener('animationend', () => { b.classList.remove('out'); b.hidden = true; }, { once: true });
 }
 $('closeinvite').onclick = closeInvite;
+// who's in this heap: this device first, then the others by name, or a line saying nobody else is here yet
+function showWho() {
+  const li = (text, cls) => Object.assign(document.createElement('li'), { textContent: text, className: cls || '' });
+  const rest = others().map((k) => net.peers[k]?.name || 'a device');
+  $('inroom').replaceChildren(li(`${name} (you)`), ...(rest.length ? rest.map((n) => li(n)) : [li('Just you so far. Others show here when they join.', 'empty')]));
+}
+$('copycode').onclick = async () => {
+  const code = invite.room.slice(-10);
+  try { await navigator.clipboard.writeText(code); toast('Code copied'); }
+  catch { toast(`Couldn’t copy. The code is ${code.slice(0, 5)} ${code.slice(5)}`); }
+};
 $('invitebox').onclick = (e) => { if (e.target === e.currentTarget) closeInvite(); };
 // No Clipboard API (plain http on a LAN), or it's refused: select the link to copy by hand
 $('copy').onclick = async () => {
