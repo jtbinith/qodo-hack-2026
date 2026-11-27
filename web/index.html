@@ -62,6 +62,15 @@
   #nf label { font-size: 14px; font-weight: 500; color: var(--text-mid); margin-bottom: -6px; }
   #f input, #nf input { font: 400 26px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; padding: 14px 16px;
     border-radius: 16px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  /* the heap code: 10 boxes, 5 – 5, over one real field (wireframe 1.2) */
+  .codebox { position: relative; }
+  .cells { display: flex; gap: 5px; align-items: center; }
+  .cells span { flex: 1; aspect-ratio: 3 / 4; max-width: 44px; display: grid; place-items: center; border: 2px solid var(--line); border-radius: 10px;
+    font: 400 clamp(20px, 6.5vw, 28px)/1 var(--display); color: var(--ink); background: var(--paper); }
+  .cells span.full { border-color: var(--ink); }
+  .cells span.on { border-color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+  .cells i { font-style: normal; color: var(--text-mid); padding: 0 2px; }
+  #f .codebox input { position: absolute; inset: 0; width: 100%; opacity: 0; font-size: 16px; padding: 0; border: 0; }
   #nf input { font: 500 22px var(--ui); letter-spacing: 0; text-transform: none; }
   #f button, #nf button { margin-top: auto; font: 400 26px/1 var(--display); text-transform: uppercase; padding: 18px; border-radius: 22px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
   #f input:focus-visible, #nf input:focus-visible, #lobby .back:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
@@ -118,7 +127,14 @@
     <h2>Heap code</h2>
     <p class="sub">10 letters, on the host's screen under Invite.</p>
     <form id="f">
-      <input id="code" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" required aria-label="Heap code">
+      <div class="codebox">
+        <div class="cells" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+          <i>–</i>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <input id="code" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" required aria-label="Heap code, 10 letters" inputmode="text">
+      </div>
       <button>Join</button>
     </form>
   </div><!-- /s-code -->
@@ -191,7 +207,7 @@ $('leave').onclick = () => {
 const pending = { mode: 'start', code: '' };
 function screen(k) {
   for (const n of ['home', 'code', 'name']) $('s-' + n).hidden = n !== k;
-  if (k === 'code') $('code').focus();
+  if (k === 'code') { $('code').focus(); showCells(); }
   if (k === 'name') { $('yourname').value = $('yourname').value || name; $('yourname').focus(); }
 }
 const askName = (mode, code) => {
@@ -209,10 +225,20 @@ $('nf').onsubmit = (e) => {
   if (!typed) { $('yourname').focus(); return toast('Add your name first'); }
   name = typed; $('yourname').value = typed;
   try { localStorage.setItem(NAME_KEY, typed); } catch {}
+  pending.fresh = pending.mode === 'start';   // a new heap: show its invite as soon as it's live
   start(pending.code);
 };
+// the 10 boxes show what's in the one real field; only code letters are kept
+function showCells() {
+  const f = $('code'), v = [...f.value.toUpperCase()].filter((c) => CODE_ALPHABET.includes(c)).slice(0, 10).join('');
+  if (f.value !== v) f.value = v;
+  const on = document.activeElement === f;
+  document.querySelectorAll('.cells span').forEach((b, i) => { b.textContent = v[i] || ''; b.classList.toggle('full', !!v[i]); b.classList.toggle('on', on && i === Math.min(v.length, 9)); });
+}
+for (const ev of ['input', 'focus', 'blur', 'keyup']) $('code').addEventListener(ev, showCells);
 $('yourname').value = name;
 if ($('code').value) screen('code');
+showCells();
 
 let net = null, peers = null, W = innerWidth, H = innerHeight;
 // A sticky message stays until unstick(). Other messages show over it for a moment, then it comes back
@@ -560,6 +586,7 @@ function start(room) {
       history.replaceState(null, '', cleanUrl(location.href));
       stored.set(room);
       invite.room = room; $('invite').hidden = false; $('leave').hidden = false; $('info').hidden = false;
+      if (pending.fresh) { pending.fresh = false; $('invite').click(); }
     },
     failed: () => {
       if (net !== attempt) return;
