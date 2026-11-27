@@ -8,14 +8,14 @@ export const SHARE_TIMEOUT = 60000;  // ms a share sheet holds Save all: navigat
 // What Save all can hand over now: every verified file in `files` that isn't this device's own
 // and hasn't been handed over yet. "Still arriving" counts only full photos on their way here:
 // thumbnails (`thumb:` transfers) and prints never fetched aren't in it.
-export function saveBatch({ prints, files, incoming, me, handed }) {
+export function saveBatch({ prints, files, incoming, me, handed, only = null }) {   // only: just these pids (what's picked)
   const ready = [];
   for (const [pid, file] of files) {
     const p = prints.get(pid);
-    if (p && p.owner !== me && !handed.has(pid)) ready.push({ pid, file });
+    if (p && p.owner !== me && !handed.has(pid) && (!only || only.has(pid))) ready.push({ pid, file });
   }
   let arriving = 0;
-  for (const fid of incoming.keys()) if (!fid.startsWith('thumb:') && !files.has(fid)) arriving++;
+  for (const fid of incoming.keys()) if (!fid.startsWith('thumb:') && !files.has(fid) && (!only || only.has(fid))) arriving++;
   return { ready, arriving };
 }
 

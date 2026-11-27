@@ -13,6 +13,7 @@ test('sizes read as megabytes', () => {
   assert.equal(mb(1.5e6), '1.5 MB');
   assert.equal(mb(3e5), '0.3 MB');
   assert.equal(mb(0), '0 MB');
+  assert.equal(mb(15000), '< 0.1 MB', 'a small photo is not nothing');
   assert.equal(mb(12.34e6), '12 MB');
 });
 

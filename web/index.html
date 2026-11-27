@@ -117,6 +117,31 @@
   #decktiles .who { position: absolute; left: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--paper); color: var(--ink); border: 1.5px solid var(--ink);
     font: 700 10px/21px var(--ui); text-align: center; }
   #decktiles .save { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px; background: var(--ink); color: var(--paper); font-size: 12px; text-align: left; }
+  #deckbox .sheet { grid-template-rows: auto auto auto 1fr auto; }
+  #pickall { justify-self: end; background: none; border: 0; color: var(--ink); font: 500 15px var(--ui); padding: 6px 0; }
+  #decktiles button.on, #reviewtiles button.on { outline: 3px solid var(--ink); outline-offset: -3px; }
+  #decktiles button.on::after { content: '✓'; position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper);
+    border: 2px solid var(--paper); font: 700 13px/20px var(--ui); text-align: center; }
+  #pickfoot button { padding: 12px 10px; }
+  /* review what's picked before getting it (2B.6) */
+  #reviewbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
+  #reviewbox .sheet { width: min(100%, 560px); box-sizing: border-box; max-height: 86vh; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto 1fr auto auto auto; gap: 10px; }
+  #reviewbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #reviewtitle { margin: 0; font: 700 18px var(--ui); text-align: center; }
+  #reviewline { margin: 0; font-size: 13px; color: var(--text-mid); }
+  #reviewtiles { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+  #reviewtiles button { position: relative; aspect-ratio: 1; padding: 0; border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; background: var(--ink); color: var(--paper); font: 12px var(--ui); }
+  #reviewtiles img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #getall, #closereview { font-size: 16px; font-weight: 500; padding: 14px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #getall { background: var(--ink); color: var(--paper); }
+  #getall:disabled { opacity: .45; }
+  #closereview { border-color: transparent; }
+  #reviewbox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #reviewbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #reviewbox.out { animation: scrim-out .24s ease-in forwards; }
+  #reviewbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #reviewbox, #reviewbox .sheet, #reviewbox.out, #reviewbox.out .sheet { animation: none; } }
   #deckbox:not([hidden]) { animation: scrim-in .28s ease-out; }
   #deckbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
   #deckbox.out { animation: scrim-out .24s ease-in forwards; }
@@ -184,15 +209,26 @@
   <button id="people" type="button" aria-label="People in this heap"></button>
   <button id="menu" type="button" aria-label="Menu" aria-controls="menubox" aria-expanded="false"><span aria-hidden="true">≡</span></button>
 </header>
-<div id="bar"><label id="share">+ Share<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="saveall" type="button">Save all</button></div>
+<div id="bar"><label id="share">+ Share<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="pickedbtn" type="button">Picked · 0</button></div>
 <button type="button" id="allphotos" hidden></button>
 <div id="deckbox" hidden><div class="sheet" role="dialog" aria-labelledby="decktitle">
   <span class="handle" aria-hidden="true"></span>
   <div class="deckhead"><button type="button" id="deckback">‹ Table</button>
-  <h2 id="decktitle"></h2></div>
-  <p class="deckhint">Tap a photo to save it. Drag a photo out to put it on the table or send it.</p>
+  <h2 id="decktitle"></h2>
+  <button type="button" id="pickall">Pick all</button></div>
+  <p class="deckhint">Tap photos to pick them. Drag one out to put it on the table or send it.</p>
   <div id="decktiles" role="list"></div>
+  <div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"></button><button type="button" id="getpick" class="pri"></button></div>
 </div></div><!-- /deckbox -->
+<div id="reviewbox" hidden><div class="sheet" role="dialog" aria-labelledby="reviewtitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="reviewtitle"></h2>
+  <p id="reviewline"></p>
+  <div id="reviewtiles" role="list"></div>
+  <p class="deckhint">Tap a photo to unpick it</p>
+  <button type="button" id="getall" class="pri"></button>
+  <button type="button" id="closereview">Close</button>
+</div></div><!-- /reviewbox -->
 <div id="menubox" hidden><div class="sheet" role="dialog" aria-labelledby="menutitle">
   <span class="handle" aria-hidden="true"></span>
   <h2 id="menutitle">This heap</h2>
@@ -261,6 +297,7 @@
 import { joinRoom } from './net.js';
 import { heapTitle, heapSub, initials } from './words.js';
 import { groupDecks, deckSpot } from './decks.js';
+import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
@@ -618,23 +655,34 @@ function save(p) {
   }
   if (p.owner === id) return toast('Already yours');
   // handed over once it was shared or its download started, so Save all doesn't save it again (F13)
-  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => saveAll.handed.add(p.pid), () => {});
-  else { downloadFile(file); saveAll.handed.add(p.pid); }
+  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), () => {});
+  else { downloadFile(file); pickSave.handed.add(p.pid); }
 }
 function downloadFile(file) {
   const a = document.createElement('a'), url = URL.createObjectURL(file);
   a.href = url; a.download = file.name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER);
 }
-// Save all (F13): every received photo in one tap. The share sheet once with all of them, or downloads
-const saveAll = createSaveAll({
-  batch: (handed) => saveBatch({ prints, files, incoming, me: id, handed }),
+// Get (2B.6, built on Save all, F13): every picked photo in one tap. The share sheet once with all of them, or downloads
+const picked = new Set();   // pids picked on this device, never sent anywhere
+const pickSave = createSaveAll({
+  batch: (handed) => saveBatch({ prints, files, incoming, me: id, handed, only: picked }),
   canShare: (list) => !!navigator.share && !!navigator.canShare?.({ files: list }),
   share: (list) => navigator.share({ files: list }),
   download: downloadFile,
   toast,
 });
-$('saveall').onclick = () => saveAll.tap();
+// Get: ask for every picked photo that isn't here yet, then save what is here, inside this tap (iOS rule)
+function getPicked() {
+  let full = false;
+  for (const p of toFetch(prints, picked, files, incoming, id)) {
+    const src = (p.holders || []).find((k) => k !== id && net.peers[k]) || p.owner;
+    if (!expect(p.pid, src, p.size)) { full = true; break; }
+    p.lastSource = src; peers.send(src, { t: 'want', pid: p.pid });
+  }
+  pickSave.tap();
+  if (full) toast('Too many photos arriving. Tap Get again in a moment');
+}
 function pushOrb(x, y) {
   const [hx, hy] = home(), dx = x - hx, dy = y - hy;
   if (Math.hypot(dx, dy) < Math.min(W, H) * 0.15) return;
@@ -774,7 +822,7 @@ function openDeck(pids, all = false) {
     if (p.thumb) { const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); deckUrls.push(u); b.append(Object.assign(document.createElement('img'), { src: u, alt: '' })); }
     else b.append(p.type.startsWith('video') ? '▶ video' : p.name);
     if (all) b.append(Object.assign(document.createElement('span'), { className: 'who', textContent: initials(p.owner === id ? name : net.peers[p.owner]?.name) }));
-    if (files.has(p.pid) && p.owner !== id) b.append(Object.assign(document.createElement('span'), { className: 'save', textContent: 'Tap to save' }));
+    if (files.has(p.pid) && p.owner !== id) b.append(Object.assign(document.createElement('span'), { className: 'save', textContent: 'Here' }));
     b.onpointerdown = (e) => {
       const sx = e.clientX, sy = e.clientY;
       b.setPointerCapture(e.pointerId);
@@ -787,14 +835,56 @@ function openDeck(pids, all = false) {
         setWorld(p, mx + m.clientX - p.w / 2, my + m.clientY - p.h / 2);
         startDrag([p], m.clientX, m.clientY, true);
       };
-      b.onpointerup = () => { b.onpointermove = b.onpointerup = null; save(p); };
+      b.onpointerup = () => { b.onpointermove = b.onpointerup = null; togglePick(p.pid); };
     };
     return b;
   }));
   $('decktiles').scrollTop = 0;
+  showPicks();
   openSheet('deckbox');
 }
 $('deckback').onclick = () => closeSheet('deckbox');
+// picking (2B.3–2B.6): a tap picks or unpicks; every sheet and the bar say how many and how big
+function togglePick(pid) { if (!picked.delete(pid)) picked.add(pid); showPicks(); }
+function tileOf(p, onTap) {
+  const b = Object.assign(document.createElement('button'), { type: 'button' });
+  b.setAttribute('role', 'listitem'); b.dataset.pid = p.pid; b.setAttribute('aria-label', p.name);
+  if (p.thumb) { const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); deckUrls.push(u); b.append(Object.assign(document.createElement('img'), { src: u, alt: '' })); }
+  else b.append(p.type.startsWith('video') ? '▶ video' : p.name);
+  b.onclick = onTap;
+  return b;
+}
+function showPicks() {
+  for (const k of [...picked]) if (!prints.has(k)) picked.delete(k);
+  const s = pickSummary(prints, picked, (o) => net?.peers[o]?.name, id);
+  $('pickedbtn').textContent = `Picked · ${s.n}`;
+  $('pickfoot').hidden = !s.n;
+  $('reviewpick').textContent = `Review ${s.n}`;
+  $('getpick').textContent = `Get ${s.n} · ${mb(s.bytes)}`;
+  const tiles = [...document.querySelectorAll('#decktiles button')];
+  for (const t of tiles) { const on = picked.has(t.dataset.pid); t.classList.toggle('on', on); t.setAttribute('aria-pressed', String(on)); }
+  $('pickall').textContent = tiles.length && tiles.every((t) => picked.has(t.dataset.pid)) ? 'Unpick all' : 'Pick all';
+  $('reviewtitle').textContent = `Picked · ${s.n}`;
+  $('reviewline').textContent = s.n ? pickLine(s) : 'Nothing picked yet. Open a deck and tap photos to pick them.';
+  $('getall').textContent = `Get all ${s.n} · ${mb(s.bytes)}`; $('getall').disabled = !s.n;
+}
+$('pickall').onclick = () => {
+  const pids = [...document.querySelectorAll('#decktiles button')].map((t) => t.dataset.pid), all = pids.every((k) => picked.has(k));
+  for (const k of pids) all ? picked.delete(k) : picked.add(k);
+  showPicks();
+};
+function openReview() {
+  $('reviewtiles').replaceChildren(...[...picked].map((k) => prints.get(k)).filter(Boolean).map((p) => {
+    const b = tileOf(p, () => { picked.delete(p.pid); b.remove(); showPicks(); });
+    b.classList.add('on'); return b;
+  }));
+  showPicks(); openSheet('reviewbox');
+}
+$('pickedbtn').onclick = () => openReview();
+$('reviewpick').onclick = () => closeSheet('deckbox', openReview);
+$('getpick').onclick = $('getall').onclick = () => getPicked();
+$('closereview').onclick = () => closeSheet('reviewbox');
+$('reviewbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('reviewbox'); };
 $('deckbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('deckbox'); };
 $('allphotos').onclick = () => openDeck([...prints.keys()], true);
 // the header: the heap's name (after its time keeper), who's here and how much is shared, and their initials
@@ -807,6 +897,7 @@ function showHeader() {
   headWas = was;
   $('heapname').textContent = heapTitle(keeper);
   $('heapsub').textContent = heapSub(1 + others().length, prints.size);
+  showPicks();
   $('allphotos').hidden = !prints.size; $('allphotos').textContent = `All photos · ${prints.size}`;
   const all = [name, ...others().map((k) => net.peers[k]?.name || '?')];
   const face = (t, cls) => Object.assign(document.createElement('i'), { textContent: t, className: cls || '' });
