@@ -682,6 +682,17 @@ try {
   check(cAfter.joins === dAfter.joins && !cAfter.joins.includes(q.A.id) && !cAfter.joins.includes(q.B.id),
     `when the new time keeper leaves straight away, C takes over and C and D hold the same layout (C ${cAfter.joins}, D ${dAfter.joins})`);
   for (const k of 'CD') await quad[k].context().close();
+  // Leave (#156): once in a heap there's a way out; it forgets this tab's heap and shows the two cards again
+  const L = await device(390, 700, { at: code() });
+  await until(L, () => window.__t && window.__t.net.status === 'live', null, 20000);
+  const leaveShown = await L.evaluate(() => document.getElementById('leave')?.hidden === false);
+  L.once('dialog', (d) => d.accept());
+  await L.click('#leave', { timeout: 3000 }).catch(() => {});
+  const leftHome = await until(L, () => document.getElementById("lobby")?.hidden === false, null, 10000).then(() => true, () => false);
+  const l1 = await L.evaluate(() => ({ room: sessionStorage.getItem('room'), url: location.href, cards: document.getElementById('choose')?.hidden === false }));
+  check(leaveShown && leftHome && l1.room === null && !l1.url.includes('room=') && l1.cards,
+    `Leave shows in a heap (${leaveShown}), goes back to the home screen (${leftHome}) with the two cards (${l1.cards}), forgets the heap (${l1.room === null}) and leaves no code in the address bar (${!l1.url.includes('room=')})`);
+  await L.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {
