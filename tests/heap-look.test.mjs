@@ -127,3 +127,13 @@ test('the invite code is one row of tiles and the QR is big enough for another c
   const box = (html.match(/<div id="invitebox"[^>]*>([\s\S]*?)<\/div><!-- \/invitebox -->/) || [, ''])[1];
   assert.match(box, /<div id="invcode"[\s\S]*<canvas id="qr"[\s\S]*Scan to join/, 'code, then the QR, then the line');
 });
+
+test('the invite sheet slides up from the bottom and back down, still for reduced motion', () => {
+  assert.match(css, /@keyframes sheet-up \{[^}]*from \{[^}]*translateY\(100%\)/, 'starts below the screen');
+  assert.match(css, /@keyframes scrim-in \{[^}]*from \{[^}]*opacity: 0/, 'the backdrop fades in');
+  assert.match(css, /#invitebox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/, 'plays when the sheet opens');
+  assert.match(css, /#invitebox\.out \.sheet \{[^}]*animation: sheet-up[^;]*reverse/, 'slides back down when it closes');
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*#invitebox[^}]*animation: none/, 'still for reduced motion');
+  assert.match(html, /function closeInvite\(\)/, 'one close for the button and the backdrop');
+  assert.match(html, /\$\('closeinvite'\)\.onclick = closeInvite/, 'Close slides it down');
+});
