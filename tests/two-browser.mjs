@@ -213,17 +213,26 @@ try {
   // drag photo-0 and the video onto B's screen with the mouse: press on the print, move past
   // A's right edge (B's screen is joined there) and let go
   const drags = [];
-  async function drag(page, name, toX) {   // toX: where to let go, in this page's screen x (beyond its right edge = the joined screen)
+  async function drag(page, name, toX) {
     const at = await page.evaluate((name) => {
-      const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name), [wx, wy] = t.world(p), me = t.layout.pos[t.id];
-      t.prints.delete(p.pid); t.prints.set(p.pid, p);   // on top, so the press picks this print even where prints overlap
-      return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 };
+      const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name), d = t.decks().find((d) => d.pids.includes(p.pid)), [wx, wy] = t.world(d.top), me = t.layout.pos[t.id];
+      return { pid: p.pid, n: d.pids.length, x: wx - me[0] + d.top.w / 2, y: wy - me[1] + d.top.h / 2 };
     }, name);
     drags.push({ name, at });   // for the dump if the transfer below times out (#100)
+    if (at.n > 1) {   // in a deck: tap it open, then drag the photo out of it (2A.7)
+      await page.mouse.click(at.x, at.y);
+      await until(page, (pid) => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length && !!document.querySelector(`#decktiles [data-pid="${pid}"]`), at.pid, 5000);
+      Object.assign(at, await page.evaluate((pid) => { const el = document.querySelector(`#decktiles [data-pid="${pid}"]`); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, at.pid));
+    }
     await page.mouse.move(at.x, at.y); await page.mouse.down();
     for (let k = 1; k <= 12; k++) await page.mouse.move(at.x + ((toX - at.x) * k) / 12, at.y);
     await page.mouse.up();
   }
+  // what A shared sits as one deck, on both screens (2A.1)
+  const deckOf = (page, owner) => page.evaluate((o) => window.__t.decks().filter((d) => d.owner === o).map((d) => d.pids.length), owner);
+  const aId = await A.evaluate(() => window.__t.id);
+  const [deckA, deckB] = [await deckOf(A, aId), await deckOf(B, aId)];
+  check(deckA.join() === '10' && deckB.join() === '10', `A's 10 photos are one deck on A (${deckA}) and on B (${deckB})`);
   await drag(A, 'photo-0.jpg', 900 + 150);   // the middle of B's screen
   await drag(A, 'clip.mp4', 900 + 150);
   await drag(A, 'IMG_0001.JPG', 900 + 150);
@@ -444,6 +453,15 @@ try {
   await A.mouse.click(own.x, own.y);
   const ownSaid = await A.evaluate(() => document.getElementById('toast').textContent);
   check(ownSaid === 'Already yours', `tapping your own print says "${ownSaid}"`);
+
+  // dragging a whole deck across the seam sends every photo in it (2A.6)
+  const rest = await A.evaluate((o) => window.__t.decks().find((d) => d.owner === o && d.pids.length > 1)?.pids || [], ids.a);
+  const deckAt = await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid), [wx, wy] = t.world(p), me = t.layout.pos[t.id]; return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 }; }, rest[rest.length - 1]);
+  await A.mouse.move(deckAt.x, deckAt.y); await A.mouse.down();
+  for (let k = 1; k <= 12; k++) await A.mouse.move(deckAt.x + ((900 + 150 - deckAt.x) * k) / 12, deckAt.y);
+  await A.mouse.up();
+  const deckCame = await until(B, (pids) => pids.every((p) => window.__t.files.has(p)), rest, 60000).then(() => true, () => false);
+  check(rest.length > 1 && deckCame, `dragging A's deck of ${rest.length} onto B sends them all (${deckCame})`);
 
   // a late guest still gets photos B holds after A (the owner) leaves
   await A.context().close();

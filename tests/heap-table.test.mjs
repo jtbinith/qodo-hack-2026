@@ -58,3 +58,24 @@ test('the header is filled from the room, as text', () => {
   assert.match(fn, /heapTitle\(/); assert.match(fn, /heapSub\(/); assert.match(fn, /initials\(/);
   assert.match(html, /if \(ev !== 'peers'\) return;[\s\S]{0,200}showHeader\(\)/, 'updates as people join and leave');
 });
+
+test('decks on the table: a stack per person with a name and count pill, no loose photos', () => {
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.match(frame, /groupDecks\(prints\)/, 'drawn deck by deck');
+  assert.match(frame, /deck\.pids\.length > 1 \? `\$\{who\} \$\{deck\.pids\.length\}`/, 'the pill says whose and how many');
+  assert.match(html, /\$\('pick'\)\.onchange[\s\S]*?deckSpot\(prints, id/, 'what I share goes on my deck');
+  assert.match(html, /t: 'moves', pids: /, 'a deck moves as one message');
+  assert.match(html, /m\.t === 'moves'[\s\S]{0,80}validMoves\(m\)/, 'checked when it arrives');
+});
+
+test('the deck sheet (2B.1, 2B.2): ‹ Table, whose deck and how many, the photos newest first', () => {
+  const box = (html.match(/<div id="deckbox"[^>]*>([\s\S]*?)<\/div><!-- \/deckbox -->/) || [, ''])[1];
+  assert.match(box, /<div class="sheet" role="dialog" aria-labelledby="decktitle">/);
+  assert.match(box, /<button type="button" id="deckback">‹ Table<\/button>\s*<h2 id="decktitle"><\/h2>/);
+  assert.match(box, /<div id="decktiles" role="list"><\/div>/);
+  assert.match(box, /Drag a photo out to put it on the table or send it/, 'says how to send one');
+  assert.match(html, /function openDeck\(/);
+  assert.match(html, /\.reverse\(\)/, 'newest first');
+  assert.match(html, /<button type="button" id="allphotos" hidden>/, 'an All photos chip on the table');
+  assert.match(css, /#deckbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/, 'slides up like the other sheets');
+});

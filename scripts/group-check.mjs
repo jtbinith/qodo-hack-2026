@@ -135,9 +135,15 @@ async function drawPick(d, count, from) {
 }
 let picked = 1;
 async function drag(from, to, name) {
-  const at = await from.page.evaluate(([name, toId]) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name); if (!p) return null; const [wx, wy] = t.world(p), me = t.layout.pos[t.id], dst = t.layout.pos[toId]; t.prints.delete(p.pid); t.prints.set(p.pid, p); return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2, tx: dst[0] - me[0], ty: dst[1] - me[1] }; }, [name, await to.page.evaluate(() => window.__t.id)]);
+  // where the photo's deck is on this screen; a photo in a deck of several is dragged out of the open deck (2A.7)
+  const at = await from.page.evaluate(([name, toId]) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name); if (!p) return null; const d = t.decks().find((d) => d.pids.includes(p.pid)), [wx, wy] = t.world(d.top), me = t.layout.pos[t.id], dst = t.layout.pos[toId]; return { pid: p.pid, n: d.pids.length, x: wx - me[0] + d.top.w / 2, y: wy - me[1] + d.top.h / 2, tx: dst[0] - me[0], ty: dst[1] - me[1] }; }, [name, await to.page.evaluate(() => window.__t.id)]);
   if (!at) return `no print called ${name} on device ${from.i}`;
   if (at.x < 0 || at.y < 0 || at.x > from.w || at.y > from.h) return `${name} isn't on device ${from.i}'s screen (it's at ${Math.round(at.x)}, ${Math.round(at.y)}), so it can't be dragged from there`;
+  if (at.n > 1) {
+    await from.page.mouse.click(at.x, at.y);
+    if (!await until(from.page, (pid) => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length && !!document.querySelector(`#decktiles [data-pid="${pid}"]`), at.pid, 5000)) return `${name}'s deck didn't open on device ${from.i}`;
+    Object.assign(at, await from.page.evaluate((pid) => { const el = document.querySelector(`#decktiles [data-pid="${pid}"]`); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, at.pid));
+  }
   const toX = at.tx + Math.min(to.w / 2, 200), toY = at.ty + Math.min(to.h / 2, 260);
   await from.page.mouse.move(at.x, at.y); await from.page.mouse.down();
   for (let k = 1; k <= 12; k++) await from.page.mouse.move(at.x + (toX - at.x) * k / 12, at.y + (toY - at.y) * k / 12);
