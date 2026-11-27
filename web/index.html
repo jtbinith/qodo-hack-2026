@@ -69,10 +69,10 @@
     border-radius: 28px 28px 0 0; padding: 12px 22px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
   #invitebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
   #invitebox h2 { margin: 2px 0 0; font: 400 34px/1 var(--display); text-transform: uppercase; }
-  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-  .tiles span { aspect-ratio: 1 / 1.1; display: grid; place-items: center; border-radius: 12px; background: var(--ink); color: var(--paper); font: 400 clamp(22px, 7vw, 32px)/1 var(--display); }
-  .qrrow { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
-  #qr { width: min(150px, 40vw); height: auto; image-rendering: pixelated; }
+  .tiles { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+  .tiles span { aspect-ratio: 3 / 4; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: var(--paper); font: 400 clamp(18px, 6vw, 28px)/1 var(--display); }
+  .qrrow { display: grid; justify-items: center; gap: 10px; text-align: center; }
+  #qr { width: min(320px, 82vw); height: auto; image-rendering: pixelated; }
   .qrrow p { margin: 0; font-size: 15px; line-height: 1.4; }
   .qrrow small { color: var(--text-mid); font-size: 13px; }
   #link { font: 13px var(--ui); width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--line);
