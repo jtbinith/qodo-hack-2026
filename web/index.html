@@ -20,6 +20,8 @@
   button, label, input { font-family: var(--ui); }
   /* live table: Leave and Invite at the top, the photo actions at the bottom (Figma "04 · Live table") */
   #top { position: fixed; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top)); display: flex; justify-content: space-between; pointer-events: none; z-index: 3; }
+  #top span { display: flex; gap: 8px; }
+  #top #info { width: 40px; padding: 9px 0; font-weight: 700; font-style: italic; border-radius: 50%; }
   #top button { pointer-events: auto; font-size: 15px; font-weight: 500; padding: 9px 14px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
   #top #invite { background: var(--ink); color: var(--paper); }
   #bar { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: nowrap; }
@@ -29,6 +31,10 @@
   #bar input[type=file] { display: none; }
   #bar input[type=checkbox] { width: 18px; height: 18px; vertical-align: -3px; margin: 0 6px 0 0; accent-color: var(--ink); }
   [hidden] { display: none !important; }
+  /* every button pushes down when tapped and springs back; reduced motion gets a colour dip instead */
+  button, #bar label { transition: transform .12s cubic-bezier(.3, 1.6, .5, 1), filter .12s; -webkit-tap-highlight-color: transparent; }
+  button:active, #bar label:active { transform: translateY(2px) scale(.97); filter: brightness(.92); transition-duration: .05s; }
+  @media (prefers-reduced-motion: reduce) { button:active, #bar label:active { transform: none; } }
   /* home: a big glyph off the top, the wordmark, two tall card buttons (Figma "02 · Home") */
   #lobby { position: fixed; inset: 0; z-index: 5; background: var(--paper); overflow: hidden auto; touch-action: pan-y; }
   #lobby .blob { position: absolute; width: min(130vw, 74vh, 640px); aspect-ratio: 1; right: -14vw; top: max(-28vw, -24vh, -170px); background: var(--ink);
@@ -64,10 +70,10 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hud"></div>
+<div id="hud" hidden></div>
 <div id="toast"></div>
 <div id="top">
-  <button id="leave" type="button" hidden>Leave</button>
+  <span><button id="leave" type="button" hidden>Leave</button> <button id="info" type="button" aria-label="Status" aria-controls="hud" aria-expanded="false" hidden>i</button></span>
   <button id="invite" type="button" hidden>Invite</button>
 </div>
 <div id="bar"><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>+ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
@@ -129,6 +135,8 @@ function newCode() {
 }
 // Start a heap makes a code and starts at once; Join with a code shows the code form (heap home, issue 158)
 import('./heap-a.js').then(({ reacher, A_GLYPH }) => reacher($('heap-a'), A_GLYPH, { colour: getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() }));
+// the status box (heap code, devices, connections) stays hidden until the i button opens it
+$('info').onclick = () => { $('hud').hidden = !$('hud').hidden; $('info').setAttribute('aria-expanded', String(!$('hud').hidden)); };
 // Leave: forget this tab's heap and start again on the home screen (a fresh load drops every connection)
 $('leave').onclick = () => {
   if (!confirm('Leave this heap? Photos you haven\'t saved stay with the others, not on this screen.')) return;
@@ -485,7 +493,7 @@ function start(room) {
       if (net !== attempt) return;
       history.replaceState(null, '', cleanUrl(location.href));
       stored.set(room);
-      invite.room = room; $('invite').hidden = false; $('leave').hidden = false;
+      invite.room = room; $('invite').hidden = false; $('leave').hidden = false; $('info').hidden = false;
     },
     failed: () => {
       if (net !== attempt) return;
