@@ -125,7 +125,7 @@ test('the invite code is one row of tiles and the QR is big enough for another c
   assert.match(html, /\$\('invcode'\)\.replaceChildren\(\.\.\.tiles\.slice\(0, 5\), dash, \.\.\.tiles\.slice\(5\)\)/, 'two groups of five with a dash, like the join screen');
   assert.match(css, /#qr \{[^}]*width: min\(320px, 82vw\)/, 'a big QR');
   const box = (html.match(/<div id="invitebox"[^>]*>([\s\S]*?)<\/div><!-- \/invitebox -->/) || [, ''])[1];
-  assert.match(box, /<div id="invcode"[\s\S]*<canvas id="qr"[\s\S]*Scan to join/, 'code, then the QR, then the line');
+  assert.match(box, /<canvas id="qr"[\s\S]*<div id="invcode"[\s\S]*<input id="link"/, 'the QR, then the code, then the link');
 });
 
 test('the invite sheet slides up from the bottom and back down, still for reduced motion', () => {
@@ -136,4 +136,17 @@ test('the invite sheet slides up from the bottom and back down, still for reduce
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*#invitebox[^}]*animation: none/, 'still for reduced motion');
   assert.match(html, /function closeInvite\(\)/, 'one close for the button and the backdrop');
   assert.match(html, /\$\('closeinvite'\)\.onclick = closeInvite/, 'Close slides it down');
+});
+
+test('invite: a copy button beside the code and beside the link, and who is in the heap underneath', () => {
+  const box = (html.match(/<div id="invitebox"[^>]*>([\s\S]*?)<\/div><!-- \/invitebox -->/) || [, ''])[1];
+  assert.match(box, /<div class="copyrow"><div id="invcode"[^>]*><\/div><button type="button" id="copycode"[^>]*>Copy<\/button><\/div>/, 'Copy beside the code');
+  assert.match(box, /<div class="copyrow"><input id="link"[^>]*><button type="button" id="copy"[^>]*>Copy<\/button><\/div>/, 'Copy beside the link');
+  assert.match(box, /<input id="link"[\s\S]*<h3[^>]*>In this heap<\/h3>\s*<ul id="inroom"[^>]*><\/ul>[\s\S]*id="closeinvite"/, 'who is here, under the link, above Close');
+  assert.match(html, /function showWho\(\)/, 'the list is drawn by one function');
+  assert.match(html, /Just you so far/, 'says when nobody else has joined');
+  assert.match(html, /\(you\)/, 'marks this device');
+  assert.doesNotMatch((html.match(/function showWho\(\) {[\s\S]*?\n}/) || [''])[0], /innerHTML/, 'names go in as text, never HTML');
+  assert.match(html, /if \(ev !== 'peers'\) return;[\s\S]{0,200}showWho\(\)/, 'updates as people join and leave');
+  assert.match(html, /\$\('copycode'\)\.onclick/, 'the code copies');
 });

@@ -724,6 +724,17 @@ try {
   const s1 = await S.evaluate(() => ({ tiles: [...document.querySelectorAll('#invcode span')].map((x) => x.textContent).join(''), room: window.__t?.net.room }));
   check(named0 === 'Host' && invOpen && s1.room === 'photo-' + s1.tiles,
     `Start a heap asks for the name (pre-filled "${named0}"), then opens the invite sheet once live (${invOpen}) on the heap's own code (${s1.room === 'photo-' + s1.tiles})`);
+  // the invite sheet shows who's in the heap: just the host at first, then the guest once they join
+  const who = () => S.evaluate(() => [...document.querySelectorAll('#inroom li')].map((li) => li.textContent));
+  const alone = await who();
+  const G = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await G.addInitScript(() => { try { localStorage.setItem('heap-name', 'Guest'); } catch {} });
+  await G.goto(`${BASE}?room=${s1.tiles}&auto`);
+  const seen = await until(S, () => [...document.querySelectorAll('#inroom li')].some((li) => li.textContent === 'Guest'), null, 20000).then(() => true, () => false);
+  const both = await who();
+  check(alone.length === 2 && alone[0] === 'Host (you)' && /Just you so far/.test(alone[1]) && seen && both.length === 2 && both[0] === 'Host (you)',
+    `the invite sheet lists who's in the heap: first ${JSON.stringify(alone)}, then the guest appears (${seen}): ${JSON.stringify(both)}`);
+  await G.context().close();
   await S.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
