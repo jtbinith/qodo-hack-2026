@@ -54,3 +54,13 @@ test('the home screen offers Start a heap and Join with a code', () => {
   assert.match(lobby, /<form id="f"[\s\S]*<input id="code"[\s\S]*<button>Join<\/button>/, 'the code form, its first button joins');
   assert.match(lobby, /anyone with the code can see the photos/i, 'the test-only note stays');
 });
+
+test('the wordmark is the word heap with only the a as a glyph', async () => {
+  const mark = (html.match(/<h1 class="mark"[^>]*>([\s\S]*?)<\/h1>/) || [, ''])[1];
+  assert.match(mark, /^\s*he<canvas id="heap-a"[^>]*aria-hidden="true"[^>]*><\/canvas>p\s*$/, 'he, the a glyph, p');
+  assert.match(html, /aria-label="heap"/, 'read out as heap');
+  const a = await import('../web/heap-a.js');
+  assert.ok(a.field(a.A_GLYPH, 76, 50) < 0, 'the bowl of the a is filled');
+  assert.ok(a.field(a.A_GLYPH, 76, 92) > 0, 'the middle of the a is open');
+  assert.ok(a.field(a.A_GLYPH, 112, 120) < 0, 'the stem is filled');
+});
