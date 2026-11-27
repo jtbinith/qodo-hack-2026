@@ -136,7 +136,7 @@ async function drawPick(d, count, from) {
 let picked = 1;
 async function drag(from, to, name) {
   // where the photo's deck is on this screen; a photo in a deck of several is dragged out of the open deck (2A.7)
-  const at = await from.page.evaluate(([name, toId]) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name); if (!p) return null; const d = t.decks().find((d) => d.pids.includes(p.pid)), [wx, wy] = t.world(d.top), me = t.layout.pos[t.id], dst = t.layout.pos[toId]; return { pid: p.pid, n: d.pids.length, x: wx - me[0] + d.top.w / 2, y: wy - me[1] + d.top.h / 2, tx: dst[0] - me[0], ty: dst[1] - me[1] }; }, [name, await to.page.evaluate(() => window.__t.id)]);
+  const at = await from.page.evaluate(([name, toId]) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name); if (!p) return null; const d = t.decks().find((d) => d.pids.includes(p.pid)); for (const k of d.pids) { const q = t.prints.get(k); t.prints.delete(k); t.prints.set(k, q); } const [wx, wy] = t.world(d.top), me = t.layout.pos[t.id], dst = t.layout.pos[toId]; const ys = [0.15, 0.5, 0.85].map((f) => wy - me[1] + d.top.h * f).sort((a, b) => Math.abs(b - (innerHeight - 150)) - Math.abs(a - (innerHeight - 150))); return { pid: p.pid, n: d.pids.length, x: wx - me[0] + d.top.w / 2, y: ys[0], tx: dst[0] - me[0], ty: dst[1] - me[1] }; }, [name, await to.page.evaluate(() => window.__t.id)]);
   if (!at) return `no print called ${name} on device ${from.i}`;
   if (at.x < 0 || at.y < 0 || at.x > from.w || at.y > from.h) return `${name} isn't on device ${from.i}'s screen (it's at ${Math.round(at.x)}, ${Math.round(at.y)}), so it can't be dragged from there`;
   if (at.n > 1) {

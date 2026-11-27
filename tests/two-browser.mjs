@@ -215,8 +215,11 @@ try {
   const drags = [];
   async function drag(page, name, toX) {
     const at = await page.evaluate((name) => {
-      const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name), d = t.decks().find((d) => d.pids.includes(p.pid)), [wx, wy] = t.world(d.top), me = t.layout.pos[t.id];
-      return { pid: p.pid, n: d.pids.length, x: wx - me[0] + d.top.w / 2, y: wy - me[1] + d.top.h / 2 };
+      const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name), d = t.decks().find((d) => d.pids.includes(p.pid)); for (const k of d.pids) { const q = t.prints.get(k); t.prints.delete(k); t.prints.set(k, q); }   // on top, so the press picks this deck
+      const [wx, wy] = t.world(d.top), me = t.layout.pos[t.id];
+      // press the part of the card furthest from the orb (W / 2, H - 150), which takes presses near it
+      const x = wx - me[0] + d.top.w / 2, ys = [0.15, 0.5, 0.85].map((f) => wy - me[1] + d.top.h * f), y = ys.sort((a, b) => Math.abs(b - (innerHeight - 150)) - Math.abs(a - (innerHeight - 150)))[0];
+      return { pid: p.pid, n: d.pids.length, x, y };
     }, name);
     drags.push({ name, at });   // for the dump if the transfer below times out (#100)
     if (at.n > 1) {   // in a deck: tap it open, then drag the photo out of it (2A.7)
