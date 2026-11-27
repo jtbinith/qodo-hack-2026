@@ -8,9 +8,11 @@ const wf = readFileSync(new URL('../.github/workflows/pages.yml', import.meta.ur
 
 // the steps as written lines, so one copy can't stand in for the other (Qodo on #159)
 const lines = wf.split('\n').map((l) => l.trim());
-const checkout = wf.match(/uses: actions\/checkout@v4\s*\n\s*with:\s*\n\s*ref: universal-sharing-final\s*\n\s*path: (\S+)/);
+// pinned to the tag's commit, so moving the tag can't change what the root serves
+const FROZEN = '4e58f6f80f007e37235af59af21c2a670d4ac203';   // universal-sharing-final
+const checkout = wf.match(new RegExp(`uses: actions/checkout@v4\\s*\\n\\s*with:\\s*\\n\\s*ref: ${FROZEN}\\s*(?:#[^\\n]*)?\\n\\s*path: (\\S+)`));
 
-test('the root is built from the universal-sharing-final tag', () => {
+test('the root is built from the universal-sharing-final commit, pinned', () => {
   assert.ok(checkout, 'a checkout of the frozen tag into its own folder');
   assert.ok(lines.includes(`cp -R ${checkout[1]}/web/. _site/`), "the tag's web/ is copied to the site root");
 });
