@@ -685,7 +685,7 @@ try {
   // Leave (#156): once in a heap there's a way out; it forgets this tab's heap and shows the two cards again
   const L = await device(390, 700, { at: code() });
   await until(L, () => window.__t && window.__t.net.status === 'live', null, 20000);
-  const leaveShown = await L.evaluate(() => document.getElementById('leave')?.hidden === false);
+  const leaveShown = await until(L, () => document.getElementById('leave')?.hidden === false, null, 10000).then(() => true, () => false);
   L.once('dialog', (d) => d.accept());
   await L.click('#leave', { timeout: 3000 }).catch(() => {});
   const leftHome = await until(L, () => document.getElementById("lobby")?.hidden === false, null, 10000).then(() => true, () => false);

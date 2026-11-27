@@ -64,7 +64,7 @@
 <canvas id="c"></canvas>
 <div id="hud"></div>
 <div id="toast"></div>
-<div id="bar"><button id="invite" type="button" hidden>Invite</button><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>＋ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
+<div id="bar"><button id="leave" type="button" hidden>Leave</button><button id="invite" type="button" hidden>Invite</button><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>＋ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
 <div id="lobby">
   <div class="blob" aria-hidden="true"></div>
   <div class="home">
@@ -124,6 +124,12 @@ function newCode() {
 }
 // Start a heap makes a code and starts at once; Join with a code shows the code form (heap home, issue 158)
 import('./heap-a.js').then(({ reacher, A_GLYPH }) => reacher($('heap-a'), A_GLYPH, { colour: getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() }));
+// Leave: forget this tab's heap and start again on the home screen (a fresh load drops every connection)
+$('leave').onclick = () => {
+  if (!confirm('Leave this heap? Photos you haven\'t saved stay with the others, not on this screen.')) return;
+  try { sessionStorage.removeItem(ROOM_KEY); } catch {}
+  location.replace(location.pathname);
+};
 const showForm = (on) => { $('f').hidden = !on; $('choose').hidden = on; if (on) $('code').focus(); };
 $('new').onclick = () => { const c = newCode(); $('code').value = c; tryStart(c); };
 $('joinwith').onclick = () => showForm(true);
@@ -474,7 +480,7 @@ function start(room) {
       if (net !== attempt) return;
       history.replaceState(null, '', cleanUrl(location.href));
       stored.set(room);
-      invite.room = room; $('invite').hidden = false;
+      invite.room = room; $('invite').hidden = false; $('leave').hidden = false;
     },
     failed: () => {
       if (net !== attempt) return;
