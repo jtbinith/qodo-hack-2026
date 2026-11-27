@@ -110,3 +110,12 @@ test('toasts land with the subtle boing, are read out, and keep plain text', () 
   assert.match(html, /t\.classList\.remove\('in'\); void t\.offsetWidth; t\.classList\.add\('in'\)/, 'replays for each new message');
   assert.match(html, /t\.textContent = msg/, 'plain text, so the device check can read it');
 });
+
+test('prints: an outlined card, an outlined photo, a name pill, and a small lift while dragged', () => {
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.match(frame, /const lifted = drag && drag\.p === p && drag\.moved/, 'knows when a print is being dragged');
+  assert.match(frame, /ctx\.scale\(lifted \? 1\.05 : 1, lifted \? 1\.05 : 1\)/, 'grows a little when lifted, no shadow');
+  assert.match(frame, /ctx\.strokeRect\(-iw \/ 2, -ih \/ 2, iw, ih\)/, 'a thin outline round the photo');
+  assert.match(frame, /function pill\(/, 'the owner shows as a name pill');
+  assert.match(frame, /pill\(label, 0, p\.h \/ 2 \+ 16, have && !mine\)/, 'a filled pill when it is yours to save');
+});
