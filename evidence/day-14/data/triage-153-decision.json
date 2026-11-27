@@ -1,0 +1,113 @@
+{
+ "source": "Qodo portal, PR Triage, pull-requests?sort=priority response, generatedAt 2026-11-26T21:19:54.742422Z (extract: the decision fields for PR #153, unchanged)",
+ "pr": "https://github.com/jtbinith/qodo-hack-2026/pull/153",
+ "mergeAutomation": {
+  "availability": "recorded",
+  "freshness": "current",
+  "eventType": "merge_policy_evaluated",
+  "eventTimestamp": "2026-11-26T21:10:08Z",
+  "reviewedGitSha": "b8b51875e59a8997fbeb64a49458fc864074d0c6",
+  "reviewId": "fd78922474494d18b2ffe602aadc7613",
+  "decision": "surface",
+  "reasonCode": "surfaced",
+  "trigger": "initial_review",
+  "criterionCount": 0,
+  "traceComplete": true,
+  "criteria": [],
+  "requestedAction": "withdraw_approval",
+  "providerResult": "unknown",
+  "actionCode": null,
+  "failureCode": null,
+  "outputMode": null,
+  "advisoryAction": "none",
+  "advisoryResult": "skipped",
+  "advisoryFailureCode": null,
+  "blastRadius": {
+   "configured": false,
+   "state": "off"
+  }
+ },
+ "approvalEligibility": {
+  "state": "ineligible",
+  "reasonCode": "surfaced",
+  "evaluatedAt": "2026-11-26T21:19:54.606105Z",
+  "reviewedGitSha": "b8b51875e59a8997fbeb64a49458fc864074d0c6",
+  "reviewRunId": "2184859",
+  "automationEnabled": true,
+  "approvalProhibited": false,
+  "criterionResults": []
+ },
+ "workflow_evaluated (2026-11-26T21:10:08Z)": {
+  "workflows": [
+   {
+    "workflowId": "98293f1e-9fd1-4d5f-aed3-89b9c66c9cd1",
+    "version": 1,
+    "action": "hold",
+    "result": "unmatched"
+   },
+   {
+    "workflowId": "839e8783-dd41-4107-9aa1-681feef4c08e",
+    "version": 1,
+    "action": "label",
+    "result": "matched"
+   }
+  ]
+ },
+ "review_completed (2026-11-26T21:10:18Z)": {
+  "findingCount": 1,
+  "sourceUrl": "https://github.com/jtbinith/qodo-hack-2026/pull/153#issuecomment-7203458031",
+  "risk": {
+   "status": "complete",
+   "overall": "medium",
+   "blastRadius": "small",
+   "potentialDamage": "medium",
+   "behavioralComplexity": "high",
+   "assessedAt": "2026-11-26T21:10:54Z"
+  }
+ },
+ "findings": {
+  "actionRequired": 0,
+  "remediationRecommended": 0,
+  "informational": 1,
+  "total": 1
+ },
+ "labels": [],
+ "decision": {
+  "workflowState": "waiting_on_reviewers",
+  "reasonCodes": [
+   "no_actionable_reviewer"
+  ]
+ },
+ "second evaluation, after /agentic_review (generatedAt 2026-11-26T21:33:50Z)": {
+  "workflow_evaluated": "2026-11-26T21:28:10Z",
+  "review_completed": "2026-11-26T21:28:19Z (findingCount 0)",
+  "reviewId": "674c24f5dff94d50807edc387a529a04",
+  "reviewRunId": "2185006",
+  "trigger": "reconciliation",
+  "workflows": [
+   {
+    "workflowId": "98293f1e-9fd1-4d5f-aed3-89b9c66c9cd1",
+    "action": "hold",
+    "result": "unmatched"
+   },
+   {
+    "workflowId": "839e8783-dd41-4107-9aa1-681feef4c08e",
+    "action": "label",
+    "result": "matched"
+   }
+  ],
+  "decision": "surface",
+  "reasonCode": "surfaced",
+  "requestedAction": "withdraw_approval",
+  "advisoryAction": "none",
+  "advisoryResult": "skipped",
+  "criterionCount": 0,
+  "approvalEligibility": {
+   "state": "ineligible",
+   "reasonCode": "surfaced",
+   "automationEnabled": true,
+   "approvalProhibited": false
+  },
+  "note": "both evaluations ran about 10 s BEFORE the review_completed event; Qodo records additions 0, deletions 0, changedFiles 0 for a PR that GitHub counts as 4 files, +2353 -1; qodoReview.state is \"unavailable\""
+ }
+}

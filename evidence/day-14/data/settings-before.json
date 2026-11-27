@@ -1,0 +1,20 @@
+{
+ "source": "Qodo portal, Workflows page, GET settings?include_defaults=true response, read 2026-11-27 ~00:42Z (merge_automation block only, unchanged; overrides null)",
+ "merge_automation": {
+  "enabled": false,
+  "output_mode": "native_vote",
+  "advisory_enabled": false,
+  "rules": [],
+  "workflows": [],
+  "guards": {
+   "deny_repos": ["jtbinith/qodo-hack-2026"],
+   "deny_authors": [],
+   "allow_authors": [],
+   "deny_paths": ["jtbinith/qodo-hack-2026:scripts/**"]
+  },
+  "default": "surface",
+  "approval_after_dismissal": false,
+  "max_pr_risk": null
+ },
+ "panel_shows": "Approval guards · Whole workspace · jtbinith/qodo-hack-2026 · Only these paths · scripts/**"
+}

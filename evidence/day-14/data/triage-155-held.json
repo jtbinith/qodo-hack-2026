@@ -1,0 +1,9 @@
+{
+ "source": "Qodo portal, PR Triage, pull-requests?sort=priority response, generatedAt 2026-11-27T02:49:34.620329Z (extract for PR #155, unchanged values)",
+ "pr": "https://github.com/jtbinith/qodo-hack-2026/pull/155 (files: scripts/agent-watch.mjs, scripts/runner-lib.mjs, tests/pr-boxes.test.mjs; head 016c492)",
+ "mergeAutomation": {"eventType": "merge_policy_evaluated", "eventTimestamp": "2026-11-27T02:44:36Z", "trigger": "initial_review", "decision": "surface", "reasonCode": "surfaced", "criterionCount": 1, "criteria": [{"index": 0, "result": "matched"}], "requestedAction": "withdraw_approval", "providerResult": "unknown", "actionCode": null},
+ "approvalEligibility (note: says eligible although the decision is surface)": {"state": "eligible", "reasonCode": "approved_clean", "reviewRunId": "2187310"},
+ "review_completed": "2026-11-27T02:44:46Z, findingCount 0",
+ "portal timeline": "PR opened 2:41 · Qodo's PR approval blocked 2:44 · Qodo review completed: No new findings 2:44",
+ "github": "no reviews, no labels (read 2026-11-27T02:46:41Z)"
+}

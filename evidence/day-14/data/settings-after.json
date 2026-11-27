@@ -1,0 +1,7 @@
+{
+ "source": "Qodo portal: PATCH /config/v1/settings {values:[merge_automation.enabled=false, .output_mode=label_only, .advisory_enabled=true, .guards={deny_paths:[\"scripts/**\"]}]} at ~01:06Z on 2026-11-27 → 200 \"Configuration saved.\"; then GET settings?include_defaults=true (merge_automation block, unchanged)",
+ "note": "between 01:02:27Z and ~01:06Z the panel's own save had stored all guard lists empty (no guard). Nothing was reviewed in that window.",
+ "merge_automation": {"enabled": false, "output_mode": "label_only", "advisory_enabled": true, "rules": [], "workflows": [],
+  "guards": {"deny_repos": [], "deny_authors": [], "allow_authors": [], "deny_paths": ["scripts/**"]},
+  "default": "surface", "approval_after_dismissal": false, "max_pr_risk": null}
+}

@@ -1,0 +1,14 @@
+{
+ "source": "Qodo portal, PR Triage, pull-requests?sort=priority response, generatedAt 2026-11-27T00:20:38.613195Z (extract for PR #154, unchanged values)",
+ "pr": "https://github.com/jtbinith/qodo-hack-2026/pull/154",
+ "mergeAutomation": {"availability": "not_recorded", "eventType": null, "decision": null, "reasonCode": null, "requestedAction": null},
+ "approvalEligibility": {"state": "unknown", "reasonCode": "review_effort_unavailable", "evaluatedAt": "2026-11-27T00:20:38.521947Z", "reviewedGitSha": "491b4caad4e403c33cd433ff917edf1347c12061", "reviewRunId": "2186298", "automationEnabled": true, "approvalProhibited": false, "criterionResults": null},
+ "qodoReview": {"state": "unavailable", "at": null, "findingCount": null},
+ "statusEntries": ["opened 2026-11-27T00:13:48Z", "risk_assessed 2026-11-27T00:16:38Z (overall medium)"],
+ "no_events_recorded": ["review_completed", "workflow_evaluated", "merge_policy_evaluated"],
+ "additions": 0, "deletions": 0, "changedFiles": 0,
+ "signals.effort": {"nullReason": "unmeasured", "valueKey": "files", "value": 0},
+ "labels": [],
+ "decision": {"workflowState": "waiting_on_reviewers", "reasonCodes": ["merge_risk", "no_actionable_reviewer"]},
+ "for comparison": "qodo CLI at ~00:19Z: run 2186298 status completed, review_complete true, commit 491b4ca, 0 findings. GitHub: 7 files +349 -11. On the PR, Qodo posted only its 'PR Summary' comment (00:14:37Z), no code-review comment."
+}

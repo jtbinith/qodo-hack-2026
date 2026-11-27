@@ -1,0 +1,8 @@
+{
+ "source": "Qodo portal, PR Triage, pull-requests?sort=priority response, generatedAt 2026-11-27T02:40:11.046332Z (extract for PR #154, unchanged values)",
+ "mergeAutomation": {"eventType": "merge_policy_evaluated", "eventTimestamp": "2026-11-27T02:39:07Z", "reviewedGitSha": "491b4caad4e403c33cd433ff917edf1347c12061", "trigger": "reconciliation", "decision": "approve", "reasonCode": "approved_clean", "criterionCount": 1, "criteria": [{"index": 0, "result": "matched"}], "requestedAction": "approve", "providerResult": "confirmed", "actionCode": "approved"},
+ "approvalEligibility": {"state": "eligible", "reasonCode": "approved_clean", "reviewRunId": "2187294", "automationEnabled": true, "approvalProhibited": false, "criterionResults": ["matched"]},
+ "review_completed": "2026-11-27T02:39:14Z, findingCount 0",
+ "github": "qodo-code-review[bot] APPROVED 491b4ca at 2026-11-27T02:39:12Z",
+ "repo settings at the time": "merge_automation enabled true, output_mode native_vote, advisory_enabled false, guards deny_paths [\"scripts/**\"]; workflow 839e8783 'Clean review -> qodo-bot approval' action approve, Active"
+}

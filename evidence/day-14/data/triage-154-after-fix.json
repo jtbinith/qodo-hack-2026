@@ -1,0 +1,11 @@
+{
+ "source": "Qodo portal, PR Triage, pull-requests?sort=priority response, generatedAt 2026-11-27T01:39:18.974369Z (extract for PR #154, unchanged values)",
+ "latest mergeAutomation (still the 00:30:12Z one, from BEFORE the settings change)": {"eventType": "merge_policy_evaluated", "eventTimestamp": "2026-11-27T00:30:12Z", "trigger": "reconciliation", "decision": "surface", "reasonCode": "surfaced", "requestedAction": "withdraw_approval", "criterionCount": 0, "outputMode": null, "advisoryAction": "none", "advisoryResult": "skipped"},
+ "approvalEligibility": {"state": "unknown", "reasonCode": "eligibility_unavailable"},
+ "statusEntries after the 01:06Z settings change": [
+  {"kind": "review_completed", "occurredAt": "2026-11-27T01:08:06Z", "findingCount": 0, "mergeAutomation": null, "workflows": null},
+  {"kind": "review_completed", "occurredAt": "2026-11-27T01:23:56Z", "findingCount": 0, "mergeAutomation": null, "workflows": null}
+ ],
+ "no merge_policy_evaluated or workflow_evaluated after 00:30:12Z": true,
+ "changedFiles": 0, "labels": []
+}
