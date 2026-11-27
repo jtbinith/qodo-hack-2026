@@ -119,3 +119,10 @@ test('prints: an outlined card, an outlined photo, a name pill, and a small lift
   assert.match(frame, /function pill\(/, 'the owner shows as a name pill');
   assert.match(frame, /pill\(label, 0, p\.h \/ 2 \+ 26, have && !mine\)/, 'a filled pill when it is yours to save');
 });
+
+test('the invite code is one row of tiles and the QR is big enough for another camera', () => {
+  assert.match(css, /\.tiles \{[^}]*grid-template-columns: repeat\(10, 1fr\)/, 'one row of ten');
+  assert.match(css, /#qr \{[^}]*width: min\(320px, 82vw\)/, 'a big QR');
+  const box = (html.match(/<div id="invitebox"[^>]*>([\s\S]*?)<\/div><!-- \/invitebox -->/) || [, ''])[1];
+  assert.match(box, /<div id="invcode"[\s\S]*<canvas id="qr"[\s\S]*Scan to join/, 'code, then the QR, then the line');
+});
