@@ -63,6 +63,8 @@ try {
   // on both devices the join names, each with its own side
   const who = async (page) => page.evaluate(() => ({ id: window.__t.id, name: window.__t.net.name, leader: window.__t.net.leader }));
   const [a, b] = [await who(A), await who(B)];
+  // Keep photo details is a checkbox in the menu: open it, set the box, close it
+  const setKeep = async (page, on) => { await page.click('#menu'); await page.setChecked('#keep', on); await page.click('#closemenu'); await page.waitForFunction(() => document.getElementById('menubox').hidden); };
   const toastOf = (page) => page.evaluate(() => document.getElementById('toast').textContent);
   await until(B, () => document.getElementById('toast').textContent.startsWith('Joined with'), null, 10000);
   const joinSaid = [await toastOf(A), await toastOf(B)];
@@ -168,9 +170,9 @@ try {
   await until(A, () => document.getElementById('toast').textContent.includes('on the table'));
   const said = await A.evaluate(() => document.getElementById('toast').textContent);
   check(/Details not removed from .*clip\.mp4/.test(said) && said.includes('IMG_0002.HEIC') && !said.includes('IMG_0001'), `video and HEIC warned: "${said}"`);
-  await A.check('#keep');
+  await setKeep(A, true);
   await A.setInputFiles('#pick', [kept]);
-  await A.uncheck('#keep');
+  await setKeep(A, false);
   files.push(kept);
 
   // ticking "Keep details" while a batch is still being prepared changes nothing for that batch:
@@ -184,14 +186,14 @@ try {
     document.getElementById('keep').checked = true;   // ticked for the next pick, while this one is still running
   }, [[...iphoneJpeg()], batch]);
   await until(A, (names) => names.every((n) => [...window.__t.prints.values()].some((p) => p.name === n)), batch);
-  await A.uncheck('#keep');
+  await setKeep(A, false);
   const held = await A.evaluate((names) => Promise.all([...window.__t.prints.values()].filter((p) => names.includes(p.name))
     .map(async (p) => [p.name, [...new Uint8Array(await window.__t.files.get(p.pid).arrayBuffer())]])), batch);
   for (const [name, bytes] of held) check(await exifr.gps(Buffer.from(bytes)) === undefined, `${name} cleaned though "Keep details" was ticked mid-batch`);
 
   // the mirror: ticked when picked, unticked mid-batch. The batch keeps its details, as chosen at pick time
   const kbatch = ['IMG_0006.JPG', 'IMG_0007.JPG'];
-  await A.check('#keep');
+  await setKeep(A, true);
   await A.evaluate(([bytes, names]) => {
     const pick = document.getElementById('pick'), dt = new DataTransfer();
     for (const n of names) dt.items.add(new File([new Uint8Array(bytes)], n, { type: 'image/jpeg' }));
@@ -510,7 +512,7 @@ try {
     return { url: location.href, room: sessionStorage.getItem('room'), lobby: on('lobby'), invite: on('invite'), net: window.__t?.net?.room || null }; });
   const i1 = await until(I1, (c) => !location.href.includes(c) && sessionStorage.getItem('room') === c, inv, 10000).then(() => where(I1), () => where(I1));
   check(!i1.url.includes(inv) && i1.room === inv && !i1.lobby && i1.invite, `once joined, the address bar has no room code (${i1.url.replace(inv, '<code>')}), the tab keeps it (${i1.room === inv}), the lobby is gone (${!i1.lobby}) and Invite shows (${i1.invite})`);
-  await I1.click('#invite', { timeout: 3000 }).catch(() => {});
+  await I1.click('#menu', { timeout: 3000 }).catch(() => {}); await I1.click('#invite', { timeout: 3000 }).catch(() => {});
   const box = await I1.evaluate(() => { const c = document.getElementById('qr'), g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data;
     let dark = 0, light = 0; for (let k = 0; k < d.length; k += 4) if (d[k + 3] === 255) { if (d[k] < 64) dark++; else if (d[k] > 192) light++; }
     if (!light) dark = 0;   // a QR code is dark modules on a light ground: an undrawn canvas has neither
@@ -691,7 +693,7 @@ try {
   await until(L, () => window.__t && window.__t.net.status === 'live', null, 20000);
   const leaveShown = await until(L, () => document.getElementById('leave')?.hidden === false, null, 10000).then(() => true, () => false);
   L.once('dialog', (d) => d.accept());
-  await L.click('#leave', { timeout: 3000 }).catch(() => {});
+  await L.click('#menu', { timeout: 3000 }).catch(() => {}); await L.click('#leave', { timeout: 3000 }).catch(() => {});
   const leftHome = await until(L, () => document.getElementById("lobby")?.hidden === false, null, 10000).then(() => true, () => false);
   const l1 = await L.evaluate(() => ({ room: sessionStorage.getItem('room'), url: location.href, cards: document.getElementById('choose')?.hidden === false }));
   check(leaveShown && leftHome && l1.room === null && !l1.url.includes('room=') && l1.cards,
@@ -732,8 +734,10 @@ try {
   await G.goto(`${BASE}?room=${s1.tiles}&auto`);
   const guestShown = await until(S, () => [...document.querySelectorAll('#inroom li')].some((li) => li.textContent === 'Guest'), null, 20000).then(() => true, () => false);
   const withGuest = await inHeap();
+  const head = await S.evaluate(() => ({ name: document.getElementById('heapname').textContent, sub: document.getElementById('heapsub').textContent, faces: [...document.querySelectorAll('#people i')].map((x) => x.textContent) }));
   check(hostAlone.length === 2 && hostAlone[0] === 'Host (you)' && /Just you so far/.test(hostAlone[1]) && guestShown && withGuest.length === 2 && withGuest[0] === 'Host (you)',
     `the invite sheet lists who's in the heap: first ${JSON.stringify(hostAlone)}, then the guest appears (${guestShown}): ${JSON.stringify(withGuest)}`);
+  check(head.name === 'Host’s heap' && head.sub === '2 here · 0 shared' && head.faces.join() === 'H,G', `the header names the heap ("${head.name}"), says "${head.sub}" and shows ${head.faces.join(', ')}`);
   await G.context().close();
   // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
   const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();
