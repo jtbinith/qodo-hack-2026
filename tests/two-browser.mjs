@@ -33,6 +33,8 @@ const browser = await chromium.launch();
 async function device(w, h, { at = room, init, relay = RELAY } = {}) {
   const page = await (await browser.newContext({ viewport: { width: w, height: h } })).newPage();
   page.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
+  // every test device has a name of its own, as a person would after their first visit (#156)
+  await page.addInitScript((n) => { try { if (!localStorage.getItem('heap-name')) localStorage.setItem('heap-name', n); } catch {} }, 'T' + Math.random().toString(36).slice(2, 8));
   if (init) await page.addInitScript(init);
   await page.goto(`${BASE}?room=${at}&auto${relay ? '&relay' : ''}`);
   return page;
@@ -693,6 +695,22 @@ try {
   check(leaveShown && leftHome && l1.room === null && !l1.url.includes('room=') && l1.cards,
     `Leave shows in a heap (${leaveShown}), goes back to the home screen (${leftHome}) with the two cards (${l1.cards}), forgets the heap (${l1.room === null}) and leaves no code in the address bar (${!l1.url.includes('room=')})`);
   await L.context().close();
+  // Your name (#156): a first visit (no saved name) doesn't join from a link; it asks for a name with
+  // the code filled in, and the name typed is the one the other device sees
+  const nr = code();
+  const N1 = await device(390, 700, { at: nr });
+  await until(N1, () => window.__t && window.__t.net.status === 'live', null, 20000);
+  const N2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await N2.goto(`${BASE}?room=${nr}&auto`); await new Promise((r) => setTimeout(r, 1500));
+  const n0 = await N2.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, joined: !!window.__t,
+    asked: document.activeElement?.id === 'yourname', said: document.getElementById('toast')?.textContent }));
+  await N2.fill('#yourname', '  Ada   Lovelace ');
+  await N2.click('#f button', { timeout: 3000 }).catch(() => {});
+  const named = await until(N1, () => Object.values(window.__t.net.peers).some((p) => p.name === 'Ada Lovelace'), null, 20000).then(() => true, () => false);
+  const keptName = await N2.evaluate(() => localStorage.getItem('heap-name'));
+  check(n0.lobby && n0.code === nr && !n0.joined && n0.asked && n0.said === 'Add your name first' && named && keptName === 'Ada Lovelace',
+    `a first visit asks for a name instead of joining (lobby ${n0.lobby}, code filled ${n0.code === nr}, joined ${n0.joined}, name box focused ${n0.asked}, toast "${n0.said}"), and the other device sees "Ada Lovelace" (${named}), remembered (${keptName})`);
+  await N1.context().close(); await N2.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {
