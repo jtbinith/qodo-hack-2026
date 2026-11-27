@@ -81,8 +81,9 @@
     border-radius: 28px 28px 0 0; padding: 12px 22px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
   #invitebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
   #invitebox h2 { margin: 2px 0 0; font: 400 34px/1 var(--display); text-transform: uppercase; }
-  .tiles { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
-  .tiles span { aspect-ratio: 3 / 4; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: var(--paper); font: 400 clamp(18px, 6vw, 28px)/1 var(--display); }
+  .tiles { display: flex; gap: 4px; align-items: center; }
+  .tiles i { font-style: normal; color: var(--text-mid); padding: 0 2px; }
+  .tiles span { flex: 1; max-width: 44px; aspect-ratio: 3 / 4; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: var(--paper); font: 400 clamp(18px, 6vw, 28px)/1 var(--display); }
   .qrrow { display: grid; justify-items: center; gap: 10px; text-align: center; }
   #qr { width: min(320px, 82vw); height: auto; image-rendering: pixelated; }
   .qrrow p { margin: 0; font-size: 15px; line-height: 1.4; }
@@ -615,7 +616,9 @@ $('invite').onclick = () => {
   const link = inviteLink(location.href, invite.room);
   $('link').value = link; drawQr(link);
   const code = invite.room.slice(-10);
-  $('invcode').replaceChildren(...[...code].map((ch) => Object.assign(document.createElement('span'), { textContent: ch })));
+  const tiles = [...code].map((ch) => Object.assign(document.createElement('span'), { textContent: ch }));
+  const dash = Object.assign(document.createElement('i'), { textContent: '–' }); dash.setAttribute('aria-hidden', 'true');
+  $('invcode').replaceChildren(...tiles.slice(0, 5), dash, ...tiles.slice(5));
   $('invcode').setAttribute('aria-label', `Heap code ${code.split('').join(' ')}`);
   $('invitebox').hidden = false;
 };
