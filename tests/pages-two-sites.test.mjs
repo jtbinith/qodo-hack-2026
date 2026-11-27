@@ -6,13 +6,21 @@ import * as invite from '../web/invite.js';
 
 const wf = readFileSync(new URL('../.github/workflows/pages.yml', import.meta.url), 'utf8');
 
+// the steps as written lines, so one copy can't stand in for the other (Qodo on #159)
+const lines = wf.split('\n').map((l) => l.trim());
+const checkout = wf.match(/uses: actions\/checkout@v4\s*\n\s*with:\s*\n\s*ref: universal-sharing-final\s*\n\s*path: (\S+)/);
+
 test('the root is built from the universal-sharing-final tag', () => {
-  assert.match(wf, /ref:\s*universal-sharing-final/, 'a checkout of the frozen tag');
-  assert.match(wf, /cp -R [\w./-]*web\/\. _site\//, "the tag's web/ is copied to the site root");
+  assert.ok(checkout, 'a checkout of the frozen tag into its own folder');
+  assert.ok(lines.includes(`cp -R ${checkout[1]}/web/. _site/`), "the tag's web/ is copied to the site root");
+});
+
+test("the root copy is the tag's, not main's", () => {
+  assert.ok(!lines.includes('cp -R web/. _site/'), "main's web/ isn't copied to the root");
 });
 
 test("heap at /heap/ is main's web/", () => {
-  assert.match(wf, /cp -R web\/\. _site\/heap\//, "main's web/ is copied to /heap/");
+  assert.ok(lines.includes('cp -R web/. _site/heap/'), "main's web/ is copied to /heap/");
 });
 
 test('the uploaded site is the combined folder, not web/ alone', () => {
