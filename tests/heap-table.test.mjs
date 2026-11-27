@@ -98,3 +98,24 @@ test('the review sheet (2B.6): what is picked, tap to unpick, Get all', () => {
   assert.match(html, /function getPicked\(\) \{[\s\S]*?for \(const p of toFetch\(prints, picked, files, incoming, id\)\)[\s\S]*?pickSave\.tap\(\)/, 'asks for what is missing, then saves what is here in the same tap');
   assert.match(css, /#reviewbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/);
 });
+
+test('landing (2A.4): the receiver is told who it came from with Undo, the sender where it went', () => {
+  assert.match(html, /<div id="snack" role="status" hidden><span id="snacktext"><\/span><button type="button" id="snackact">Undo<\/button><\/div>/);
+  assert.match(html, /`\$\{n\} photo\$\{n === 1 \? '' : 's'\} from \$\{who\}`/, 'how many and from whom');
+  assert.match(html, /toast\(`Sent to \$\{/, 'the sender sees where it went');
+});
+
+test('no screen there (2A.8): the photo comes back and Send to… lists people', () => {
+  const box = (html.match(/<div id="sendbox"[^>]*>([\s\S]*?)<\/div><!-- \/sendbox -->/) || [, ''])[1];
+  assert.match(box, /<h2 id="sendtitle">Nothing joined on that side\. Send to…<\/h2>\s*<div id="sendlist" role="list"><\/div>/);
+  assert.match(box, /Or join a screen on that side/);
+  assert.match(html, /function openSendTo\(/);
+  assert.match(html, /m\.t === 'give'[\s\S]{0,160}validPidMsg\(m\)[\s\S]{0,200}holders/, 'a give is only taken from someone who has the photo');
+  assert.match(css, /#sendbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/);
+});
+
+test('holding (2A.5): a photo held near my edge shows as an outline with who is holding it', () => {
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.match(frame, /is holding \$\{/, 'says who is holding it');
+  assert.match(frame, /setLineDash/, 'drawn as an outline');
+});

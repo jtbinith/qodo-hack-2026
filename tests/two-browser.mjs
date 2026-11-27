@@ -269,6 +269,45 @@ try {
   const path = await A.evaluate(() => { const t = window.__t; return t.peers.path(Object.keys(t.net.peers).find((k) => k !== t.id)); });
   check(RELAY ? path === 'relay (encrypted)' : path === 'direct', `went ${path}`);
 
+  // 2A.3, 2A.4: a photo flicked toward B and let go on A's screen glides across and lands on B. B is told
+  // who it came from, with Undo; A is told where it went. Undo puts it k4Back on A's screen
+  const k4Names = { a: await A.evaluate(() => localStorage.getItem('heap-name')), b: await B.evaluate(() => localStorage.getItem('heap-name')) };
+  const k4BId = await B.evaluate(() => window.__t.id);
+  const k4FlickPid = await A.evaluate((b) => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1), p = t.prints.get(d.pids[0]);
+    p.x = 560; p.y = 260; t.prints.delete(p.pid); t.prints.set(p.pid, p); t.peers.send(b, { t: 'move', pid: p.pid, anchor: p.anchor, x: p.x, y: p.y, final: true }); return p.pid; }, k4BId);
+  await A.mouse.move(635, 335); await A.mouse.down();
+  for (const x of [650, 670, 695, 720]) await A.mouse.move(x, 335);
+  await A.mouse.up();
+  const k4Flew = await until(B, (pid) => window.__t.files.has(pid) && window.__t.prints.get(pid).anchor === window.__t.id, k4FlickPid, 60000).then(() => true, () => false);
+  const k4Snack = await B.evaluate(() => ({ shown: !document.getElementById('snack').hidden, text: document.getElementById('snacktext').textContent }));
+  const k4SentSaid = await toastOf(A);
+  check(k4Flew && k4Snack.shown && k4Snack.text === `1 photo from ${k4Names.a}` && k4SentSaid === `Sent to ${k4Names.b} ✓`,
+    `a flick let go on A glides across to B (${k4Flew}); B says "${k4Snack.text}", A says "${k4SentSaid}"`);
+  await B.click('#snackact');
+  const k4Undone = await until(A, ([pid, a]) => window.__t.prints.get(pid).anchor === a, [k4FlickPid, aId], 10000).then(() => true, () => false);
+  check(k4Undone, `Undo on B puts the photo back on A's screen (${k4Undone})`);
+  // 2A.8: let go where no screen is joined: the photo comes k4Back and Send to… lists B; choosing B sends it
+  const k4Lost = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); return d.pids[0]; });
+  await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); p.x = 40; p.y = 300; t.prints.delete(pid); t.prints.set(pid, p); }, k4Lost);
+  await A.mouse.move(110, 370); await A.mouse.down();
+  for (let k = 1; k <= 8; k++) await A.mouse.move(110 - k * 25, 370);
+  await A.mouse.up();
+  const k4SendUp = await until(A, () => !document.getElementById('sendbox').hidden, null, 5000).then(() => true, () => false);
+  const k4Back = await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); return t.screenAt(...t.world(p).map((v, i) => v + (i ? p.h : p.w) / 2)) === t.id; }, k4Lost);
+  const k4Rows = await A.evaluate(() => [...document.querySelectorAll('#sendlist button')].map((b) => b.textContent));
+  await A.click(`#sendlist button[data-to="${k4BId}"]`);
+  const k4Given = await until(B, (pid) => window.__t.files.has(pid), k4Lost, 60000).then(() => true, () => false);
+  check(k4SendUp && k4Back && k4Rows.some((r) => r.startsWith(k4Names.b)) && k4Given, `let go off every screen: it comes back (${k4Back}), Send to… opens (${k4SendUp}) listing ${JSON.stringify(k4Rows)}, and choosing B sends it (${k4Given})`);
+  // 2A.5: while A holds a photo near the seam, B sees who is k4Holding it
+  const k4HoldPid = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); const p = t.prints.get(d.pids[0]); p.x = 600; p.y = 260; t.prints.delete(p.pid); t.prints.set(p.pid, p); return p.pid; });
+  await A.mouse.move(675, 335); await A.mouse.down();
+  for (let k = 1; k <= 6; k++) await A.mouse.move(675 + k * 25, 335);
+  const k4Holding = await until(B, (a) => window.__t.holding().some((h) => h.from === a && h.n === 1), aId, 5000).then(() => true, () => false);
+  await A.mouse.move(640, 335); await A.mouse.up();
+  const k4LetGo = await until(B, () => !window.__t.holding().length, null, 5000).then(() => true, () => false);
+  check(k4Holding && k4LetGo, `B sees A holding a photo near the seam (${k4Holding}), and stops once A lets go (${k4LetGo})`);
+  void k4HoldPid;
+
   // a device that never sends its key asks A for a photo. A gives up after 10 s and says so,
   // while A and B keep transferring (S1.3)
   const GHOST = 'zzzzsilent';
