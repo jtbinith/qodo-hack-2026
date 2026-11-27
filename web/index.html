@@ -79,6 +79,16 @@
   #invitebox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
   #invitebox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
     border-radius: 28px 28px 0 0; padding: 12px 22px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
+  /* it slides up from the bottom while the backdrop fades in, and back down on close */
+  @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes sheet-down { to { transform: translateY(100%); } }
+  @keyframes scrim-out { to { opacity: 0; } }
+  #invitebox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #invitebox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #invitebox.out { animation: scrim-out .24s ease-in forwards; }
+  #invitebox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #invitebox, #invitebox .sheet, #invitebox.out, #invitebox.out .sheet { animation: none; } }
   #invitebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
   #invitebox h2 { margin: 2px 0 0; font: 400 34px/1 var(--display); text-transform: uppercase; }
   .tiles { display: flex; gap: 4px; align-items: center; }
@@ -620,9 +630,17 @@ $('invite').onclick = () => {
   const dash = Object.assign(document.createElement('i'), { textContent: '–' }); dash.setAttribute('aria-hidden', 'true');
   $('invcode').replaceChildren(...tiles.slice(0, 5), dash, ...tiles.slice(5));
   $('invcode').setAttribute('aria-label', `Heap code ${code.split('').join(' ')}`);
-  $('invitebox').hidden = false;
+  $('invitebox').classList.remove('out'); $('invitebox').hidden = false;
 };
-$('closeinvite').onclick = () => { $('invitebox').hidden = true; };
+function closeInvite() {
+  const b = $('invitebox');
+  if (b.hidden || b.classList.contains('out')) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { b.hidden = true; return; }
+  b.classList.add('out');
+  b.querySelector('.sheet').addEventListener('animationend', () => { b.classList.remove('out'); b.hidden = true; }, { once: true });
+}
+$('closeinvite').onclick = closeInvite;
+$('invitebox').onclick = (e) => { if (e.target === e.currentTarget) closeInvite(); };
 // No Clipboard API (plain http on a LAN), or it's refused: select the link to copy by hand
 $('copy').onclick = async () => {
   const l = $('link');

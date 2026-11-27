@@ -132,7 +132,7 @@ test('the invite sheet slides up from the bottom and back down, still for reduce
   assert.match(css, /@keyframes sheet-up \{[^}]*from \{[^}]*translateY\(100%\)/, 'starts below the screen');
   assert.match(css, /@keyframes scrim-in \{[^}]*from \{[^}]*opacity: 0/, 'the backdrop fades in');
   assert.match(css, /#invitebox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/, 'plays when the sheet opens');
-  assert.match(css, /#invitebox\.out \.sheet \{[^}]*animation: sheet-up[^;]*reverse/, 'slides back down when it closes');
+  assert.match(css, /@keyframes sheet-down \{[^}]*translateY\(100%\)[\s\S]*#invitebox\.out \.sheet \{[^}]*animation: sheet-down/, 'slides back down when it closes');
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*#invitebox[^}]*animation: none/, 'still for reduced motion');
   assert.match(html, /function closeInvite\(\)/, 'one close for the button and the backdrop');
   assert.match(html, /\$\('closeinvite'\)\.onclick = closeInvite/, 'Close slides it down');
