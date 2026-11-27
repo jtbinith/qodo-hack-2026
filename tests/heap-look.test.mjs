@@ -101,3 +101,12 @@ test('the invite sheet: heading, the code in tiles, the QR with a line, Copy lin
   assert.match(box, /Anyone who can see this code or link can join/, 'the warning stays');
   assert.match(html, /\$\('invcode'\)\.replaceChildren\(/, 'the tiles are filled from the heap code');
 });
+
+test('toasts land with the subtle boing, are read out, and keep plain text', () => {
+  assert.match(html, /<div id="toast" role="status" aria-live="polite"><\/div>/, 'announced to screen readers');
+  assert.match(css, /@keyframes boing \{[^}]*translateY\(18px\) scale\(\.97, 1\.04\)/, 'the lab\'s subtle boing');
+  assert.match(css, /#toast\.in \{[^}]*animation: boing \.6s/, 'plays when a toast appears');
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*#toast\.in[^}]*animation: none/, 'still for reduced motion');
+  assert.match(html, /t\.classList\.remove\('in'\); void t\.offsetWidth; t\.classList\.add\('in'\)/, 'replays for each new message');
+  assert.match(html, /t\.textContent = msg/, 'plain text, so the device check can read it');
+});
