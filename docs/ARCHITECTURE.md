@@ -35,6 +35,7 @@ flowchart LR
 | Encryption | `web/seal.js` | ECDH P-256 key exchange, HKDF, AES-256-GCM |
 | Validation | `web/check.js` | A check for every message type, piece lengths and SHA-256 |
 | Save all | `web/saveall.js` | Which received photos Save all hands over (F13): the share sheet once with all of them, or downloads `DOWNLOAD_GAP` apart. Remembers what was handed over so nothing is saved twice |
+| Invite | `web/invite.js` | Which room a page opens (S16): a `?room=CODE&auto` link, then this tab's room in `sessionStorage`, then the lobby. The invite link and its QR code (drawn on the device by the vendored qrcode-generator). A join counts once the channel reports `live`: only then does the code leave the address bar (the history entry is replaced) and go into `sessionStorage`. A join that fails first, or reports nothing for `JOIN_TIMEOUT`, is shut down and the lobby comes back with the code |
 
 ## 3. Message flow
 ```mermaid

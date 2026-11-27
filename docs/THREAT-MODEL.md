@@ -87,7 +87,7 @@ Anything that crosses into a device from the room or the server is untrusted. Th
 | T-I8 | Find files left on a shared computer | Use the browser after someone leaves | A6 | M | M | Received files are only ever held in memory | S13 (Leave clears memory and the tab's stored keys). S18 keeps keys, never received files, on disk. It deletes them at the next start-up at the latest |
 | T-I9 | Learn from filenames | Read names such as "passport-scan.pdf" before anything downloads | A1 | M | M | | OQ5 |
 | T-I10 | Server learns who talks to whom | Observe setup messages, names and screen sizes | A3 | H | L | Accepted. Listed as "allowed in the clear" in AGENTS.md. No content or keys | |
-| T-I11 | Room links leak | Codes in the address bar end up in browser history, screenshots and shared screens | A1, A6 | M | M | Codes are unguessable (C1) | S11, S16, S4 |
+| T-I11 | Room links leak | Codes in the address bar end up in browser history, screenshots and shared screens | A1, A6 | M | M | Codes are unguessable (C1). S16 in part: the code leaves the address bar once joined, replacing its history entry, and the Invite QR code is made on the device. It stays in the tab's `sessionStorage` and in the invite, which anyone who sees it can use | S11, S4. S16's host fingerprint in the QR code (needs #24) |
 | T-I12 | Recognise someone across rooms | A remembered signing key is the same in every room, so other people's devices can tell it's the same person | A1 | M | L | | S20 is off by default, is the person's choice and has Forget |
 
 ### 4.5 Denial of service
