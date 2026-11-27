@@ -51,17 +51,21 @@
   .card b { display: block; font: 400 32px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
   .card small { display: block; font-size: 14px; margin-top: 6px; }
   .card.solid { background: var(--ink); color: var(--paper); }
-  .card:focus-visible, #f button:focus-visible, #f input:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
-  label[for=yourname] { font-size: 14px; font-weight: 500; color: var(--text-mid); margin-bottom: -8px; }
-  #yourname { font: 500 20px var(--ui); padding: 12px 14px; border-radius: 16px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); margin-bottom: 6px; }
-  #yourname::placeholder { color: var(--text-mid); }
-  #yourname:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
-  #f { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
-  #f label { grid-column: 1 / -1; font-size: 14px; color: var(--text-mid); }
-  #f input { font: 400 26px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; min-width: 0; padding: 12px 14px;
+  .card:focus-visible, #f button:focus-visible, #nf button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  /* the steps after home: one question per screen (wireframes 1.2 and 1.4) */
+  #lobby .step { position: relative; box-sizing: border-box; max-width: 460px; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;
+    padding: calc(16px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom)); background: var(--paper); }
+  #lobby .step h2 { font: 400 40px/1 var(--display); text-transform: uppercase; margin: 18px 0 0; }
+  #lobby .step .sub, #lobby .step .hint { margin: 0; font-size: 15px; color: var(--text-mid); }
+  #lobby .back { align-self: flex-start; background: none; border: 0; padding: 6px 0; font: 500 16px var(--ui); color: var(--ink); }
+  #f, #nf { display: flex; flex-direction: column; gap: 12px; flex: 1; margin-top: 10px; }
+  #nf label { font-size: 14px; font-weight: 500; color: var(--text-mid); margin-bottom: -6px; }
+  #f input, #nf input { font: 400 26px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; padding: 14px 16px;
     border-radius: 16px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
-  #f button { font: 400 22px/1 var(--display); text-transform: uppercase; padding: 0 22px; border-radius: 16px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
-  #f .back { grid-column: 1 / -1; justify-self: start; background: none; color: var(--ink); border: 0; padding: 4px 0; font: 500 15px var(--ui); text-transform: none; text-decoration: underline; }
+  #nf input { font: 500 22px var(--ui); letter-spacing: 0; text-transform: none; }
+  #f button, #nf button { margin-top: auto; font: 400 26px/1 var(--display); text-transform: uppercase; padding: 18px; border-radius: 22px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #f input:focus-visible, #nf input:focus-visible, #lobby .back:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  #lobby:has(.step:not([hidden])) .blob { display: none; }
   /* invite: a bottom sheet with the code in tiles, the QR and the link (component lab, pick 16) */
   #invitebox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
   #invitebox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
@@ -100,23 +104,35 @@
 <div id="bar"><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>+ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
 <div id="lobby">
   <div class="blob" aria-hidden="true"></div>
-  <div class="home">
+  <div class="home" id="s-home">
     <p class="tag">Share side by side</p>
     <h1 class="mark" aria-label="heap">he<canvas id="heap-a" aria-hidden="true"></canvas>p</h1>
     <p class="about">Put phones, tablets and laptops next to each other. Drag a photo across, it lands on theirs.</p>
-    <label for="yourname">Your name</label>
-    <input id="yourname" maxlength="20" autocomplete="nickname" autocapitalize="words" spellcheck="false" placeholder="What should people call you?">
     <div id="choose">
       <button type="button" id="new" class="card solid"><span><b>Start a heap</b><small>You get a code to share</small></span></button>
       <button type="button" id="joinwith" class="card join" style="margin-top:12px"><span><b>Join with a code</b><small>Someone nearby has one</small></span></button>
     </div>
-    <form id="f" hidden>
-      <label for="code">Heap code</label>
-      <input id="code" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+  </div><!-- /s-home -->
+  <div class="step" id="s-code" hidden>
+    <button type="button" class="back" data-to="home">‹ Back</button>
+    <h2>Heap code</h2>
+    <p class="sub">10 letters, on the host's screen under Invite.</p>
+    <form id="f">
+      <input id="code" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" required aria-label="Heap code">
       <button>Join</button>
-      <button type="button" class="back" id="back">Back</button>
     </form>
-  </div>
+  </div><!-- /s-code -->
+  <div class="step" id="s-name" hidden>
+    <button type="button" class="back" data-to="home">‹ Back</button>
+    <h2>What should others call you?</h2>
+    <p class="sub" id="namewhy">Starting a new heap</p>
+    <form id="nf">
+      <label for="yourname">Your name</label>
+      <input id="yourname" maxlength="20" autocomplete="nickname" autocapitalize="words" spellcheck="false" required>
+      <p class="hint">Shown to everyone in this heap. Remembered on this device.</p>
+      <button id="go">Start heap</button>
+    </form>
+  </div><!-- /s-name -->
 </div><!-- /lobby -->
 <div id="invitebox" hidden><div class="sheet" role="dialog" aria-labelledby="invtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -171,12 +187,32 @@ $('leave').onclick = () => {
   try { sessionStorage.removeItem(ROOM_KEY); } catch {}
   location.replace(location.pathname);
 };
-const showForm = (on) => { $('f').hidden = !on; $('choose').hidden = on; if (on) ($('yourname').value ? $('code') : $('yourname')).focus(); };
-$('new').onclick = () => { const c = newCode(); $('code').value = c; tryStart(c); };
-$('joinwith').onclick = () => showForm(true);
-$('back').onclick = () => showForm(false);
+// The lobby is one step at a time: home, then the heap code (to join), then your name (wireframes 1.1–1.4)
+const pending = { mode: 'start', code: '' };
+function screen(k) {
+  for (const n of ['home', 'code', 'name']) $('s-' + n).hidden = n !== k;
+  if (k === 'code') $('code').focus();
+  if (k === 'name') { $('yourname').value = $('yourname').value || name; $('yourname').focus(); }
+}
+const askName = (mode, code) => {
+  Object.assign(pending, { mode, code });
+  $('namewhy').textContent = mode === 'start' ? 'Starting a new heap' : 'Joining a heap';
+  $('go').textContent = mode === 'start' ? 'Start heap' : 'Join heap';
+  screen('name');
+};
+$('new').onclick = () => askName('start', newCode());
+$('joinwith').onclick = () => screen('code');
+document.querySelectorAll('#lobby .back').forEach((b) => { b.onclick = () => screen(b.dataset.to); });
+$('nf').onsubmit = (e) => {
+  e.preventDefault();
+  const typed = cleanName($('yourname').value);
+  if (!typed) { $('yourname').focus(); return toast('Add your name first'); }
+  name = typed; $('yourname').value = typed;
+  try { localStorage.setItem(NAME_KEY, typed); } catch {}
+  start(pending.code);
+};
 $('yourname').value = name;
-if ($('code').value) showForm(true);
+if ($('code').value) screen('code');
 
 let net = null, peers = null, W = innerWidth, H = innerHeight;
 // A sticky message stays until unstick(). Other messages show over it for a moment, then it comes back
@@ -528,7 +564,7 @@ function start(room) {
     failed: () => {
       if (net !== attempt) return;
       attempt.leave();
-      $('code').value = room; $('lobby').hidden = false; showForm(true);
+      $('code').value = room; $('lobby').hidden = false; screen('code');
       toast('Couldn’t join the room. Try again');
     },
   });
@@ -566,14 +602,17 @@ $('copy').onclick = async () => {
 // Only codes made by New room are accepted: a hand-typed code like TEST is easy to guess.
 function tryStart(code) {
   code = code.trim().toUpperCase();
-  const typed = cleanName($('yourname').value);
-  if (!typed) { $('code').value = code; $('lobby').hidden = false; if (code) showForm(true); $('yourname').focus(); return toast('Add your name first'); }
-  name = typed; $('yourname').value = typed;
-  try { localStorage.setItem(NAME_KEY, typed); } catch {}
   if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
+  $('code').value = code;
+  if (!name) { $('lobby').hidden = false; return askName('join', code); }   // a first visit: ask, then join
   start(code);
 }
-$('f').onsubmit = (e) => { e.preventDefault(); tryStart($('code').value); };
+$('f').onsubmit = (e) => {
+  e.preventDefault();
+  const code = $('code').value.trim().toUpperCase();
+  if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
+  askName('join', code);
+};
 if (opening.join) tryStart(opening.join);
 
 // ---------- drawing ----------
