@@ -44,3 +44,10 @@ test('the device check gives each window a name of its own, so invite links stil
   const gc = readFileSync(new URL('../scripts/group-check.mjs', import.meta.url), 'utf8');
   assert.match(gc, /addInitScript\(\(n\) => \{ try \{ if \(!localStorage\.getItem\('heap-name'\)\) localStorage\.setItem\('heap-name', n\); \} catch \{\} \}, `Device \$\{i\}`\)/);
 });
+
+test('the heap code is typed into 10 boxes in two groups of 5 (wireframe 1.2)', () => {
+  const code = part('s-code');
+  assert.match(code, /<div class="cells" aria-hidden="true">(\s*<span><\/span>){5}\s*<i>–<\/i>(\s*<span><\/span>){5}\s*<\/div>/, 'ten boxes, a dash after five');
+  assert.match(code, /<input id="code" maxlength="10"[^>]*inputmode="text"/, 'one real field underneath, for paste and screen readers');
+  assert.match(html, /function showCells\(\)/, 'the boxes mirror the field');
+});

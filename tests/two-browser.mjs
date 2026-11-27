@@ -713,6 +713,18 @@ try {
   check(n0.lobby && n0.code === nr && !n0.joined && n0.asked && n0.step && named && keptName === 'Ada Lovelace',
     `a first visit asks for a name instead of joining (lobby ${n0.lobby}, code filled ${n0.code === nr}, joined ${n0.joined}, on the name screen ${n0.step}, name box focused ${n0.asked}), and the other device sees "Ada Lovelace" (${named}), remembered (${keptName})`);
   await N1.context().close(); await N2.context().close();
+  // Start a heap (#156): the name screen, then straight into the heap with the invite sheet open on its code
+  const S = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await S.addInitScript(() => { try { localStorage.setItem('heap-name', 'Host'); } catch {} });
+  await S.goto(BASE); await new Promise((r) => setTimeout(r, 800));
+  await S.click('#new', { timeout: 3000 }).catch(() => {});
+  const named0 = await S.evaluate(() => document.getElementById('s-name')?.hidden === false && document.getElementById('yourname')?.value);
+  await S.click('#go', { timeout: 3000 }).catch(() => {});
+  const invOpen = await until(S, () => document.getElementById('invitebox')?.hidden === false && window.__t?.net.status === 'live', null, 20000).then(() => true, () => false);
+  const s1 = await S.evaluate(() => ({ tiles: [...document.querySelectorAll('#invcode span')].map((x) => x.textContent).join(''), room: window.__t?.net.room }));
+  check(named0 === 'Host' && invOpen && s1.room === 'photo-' + s1.tiles,
+    `Start a heap asks for the name (pre-filled "${named0}"), then opens the invite sheet once live (${invOpen}) on the heap's own code (${s1.room === 'photo-' + s1.tiles})`);
+  await S.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {
