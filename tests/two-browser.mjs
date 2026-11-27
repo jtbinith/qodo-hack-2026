@@ -288,20 +288,44 @@ try {
   const toldSender = await A.waitForFunction(() => document.getElementById('toast').textContent.includes('Couldn’t send'), null, { timeout: 20000 }).then(() => true, () => false);
   const waited = (Date.now() - asked) / 1000;
   check(toldSender && waited >= 10 && waited < 20, `send to a silent device gave up and told the sender (after ${waited.toFixed(1)} s)`);
-  // Save all on a laptop (F13): B has no share sheet, so one tap downloads all 5 received files,
-  // byte-identical, and a second tap downloads nothing again
+  // Picking (2B.3–2B.6) on a laptop: B has no share sheet. B picks the 5 photos it holds in All photos;
+  // Get downloads all 5, byte-identical, and a second Get downloads nothing again
   await B.evaluate(() => Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true }));
   const downloads = [];
   B.on('download', (d) => downloads.push(d));
-  await B.click('#saveall');
+  const sheetUp = (page, box) => until(page, (box) => !document.getElementById(box).hidden && !document.querySelector(`#${box} .sheet`).getAnimations().length, box, 5000);
+  const tapTile = (page, box, pid) => page.evaluate(([box, pid]) => { const el = document.querySelector(`#${box} [data-pid="${pid}"]`); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, [box, pid])
+    .then((r) => page.mouse.click(r.x, r.y));
+  const heldByB = await B.evaluate(() => [...window.__t.files.keys()].filter((k) => window.__t.prints.get(k)?.owner !== window.__t.id));
+  await B.click('#allphotos'); await sheetUp(B, 'deckbox');
+  for (const pid of heldByB) await tapTile(B, 'deckbox', pid);
+  const pickedSays = await B.evaluate(() => [document.getElementById('getpick').textContent, document.getElementById('pickedbtn').textContent]);
+  await B.click('#deckback');
+  await B.click('#pickedbtn'); await sheetUp(B, 'reviewbox');
+  const reviewSays = await B.evaluate(() => [document.getElementById('reviewtitle').textContent, document.getElementById('reviewline').textContent]);
+  check(heldByB.length === 5 && /^Get 5 · [\d.]+ MB$/.test(pickedSays[0]) && pickedSays[1] === 'Picked · 5' && reviewSays[0] === 'Picked · 5' && /^[\d.]+ MB · from .+ \(5\) · stays only on this device$/.test(reviewSays[1]),
+    `picking 5 says "${pickedSays.join('", "')}", and the review says "${reviewSays.join('", "')}"`);
+  await B.click('#getall');
   await until(B, () => document.getElementById('toast').textContent.startsWith('Downloading'), null, 5000);
   const saveSaid = await toastOf(B);
   const allCame = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= 5 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length); } }, 100); });
   const saved = await Promise.all(downloads.map(async (d) => [d.suggestedFilename(), sha(readFileSync(await d.path()))]));
-  check(allCame === 5 && saveSaid === 'Downloading 5' && saved.every(([n, h]) => expected[n] === h), `Save all downloaded ${saved.map(([n]) => n).join(', ')} byte-identical ("${saveSaid}")`);
-  await B.click('#saveall');
+  check(allCame === 5 && saveSaid === 'Downloading 5' && saved.every(([n, h]) => expected[n] === h), `Get downloaded ${saved.map(([n]) => n).join(', ')} byte-identical ("${saveSaid}")`);
+  await B.click('#getall');
   await new Promise((r) => setTimeout(r, 1500));
-  check(downloads.length === 5 && await toastOf(B) === 'Nothing new to save', `a second Save all downloads nothing again ("${await toastOf(B)}")`);
+  check(downloads.length === 5 && await toastOf(B) === 'Nothing new to save', `a second Get downloads nothing again ("${await toastOf(B)}")`);
+  // a picked photo that isn't here yet: Get asks for it, says it's arriving, and the next Get saves it
+  const away = await B.evaluate(() => [...window.__t.prints.values()].find((p) => p.owner !== window.__t.id && !window.__t.files.has(p.pid) && p.type.startsWith('image/'))?.pid);
+  await B.evaluate(() => document.getElementById('reviewbox').hidden = true);
+  await B.click('#allphotos'); await sheetUp(B, 'deckbox');
+  await tapTile(B, 'deckbox', away);
+  await B.click('#getpick');
+  const arrivingSaid = await toastOf(B);
+  const fetched = await until(B, (pid) => window.__t.files.has(pid), away, 60000).then(() => true, () => false);
+  await B.click('#getpick');
+  const gotAway = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= 6 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length === 6); } }, 100); });
+  check(!!away && /still arriving/.test(arrivingSaid) && fetched && gotAway, `Get on a photo that isn't here says "${arrivingSaid}", fetches it (${fetched}) and the next Get saves it (${gotAway})`);
+  await B.evaluate(() => { document.getElementById('deckbox').hidden = true; });
   // a send that fails for another reason (here the file can't be read) doesn't blame the device
   const why = await A.evaluate(async (ghost) => {
     const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'photo-1.jpg'), real = t.files.get(p.pid);

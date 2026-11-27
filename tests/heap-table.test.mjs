@@ -44,9 +44,9 @@ test('the menu sheet (4.1): Join a screen, People, Invite, Keep photo details, L
   assert.match(html, /function closeSheet\(/, 'one way to close a sheet');
 });
 
-test('the bottom bar: a wide + Share and Save all, no checkbox', () => {
+test('the bottom bar: a wide + Share and Picked, no checkbox', () => {
   const bar = (html.match(/<div id="bar">([\s\S]*?)<\/div>/) || [, ''])[1];
-  assert.match(bar, /<label id="share">\+ Share<input id="pick" type="file"[^>]*><\/label>\s*<button id="saveall" type="button">Save all<\/button>/);
+  assert.match(bar, /<label id="share">\+ Share<input id="pick" type="file"[^>]*><\/label>\s*<button id="pickedbtn" type="button">Picked · 0<\/button>/);
   assert.doesNotMatch(bar, /id="keep"/, 'Keep photo details lives in the menu now');
   assert.match(css, /#bar #share \{[^}]*flex: 1/, '+ Share takes the width');
 });
@@ -73,9 +73,28 @@ test('the deck sheet (2B.1, 2B.2): ‹ Table, whose deck and how many, the photo
   assert.match(box, /<div class="sheet" role="dialog" aria-labelledby="decktitle">/);
   assert.match(box, /<button type="button" id="deckback">‹ Table<\/button>\s*<h2 id="decktitle"><\/h2>/);
   assert.match(box, /<div id="decktiles" role="list"><\/div>/);
-  assert.match(box, /Drag a photo out to put it on the table or send it/, 'says how to send one');
+  assert.match(box, /Tap photos to pick them\. Drag one out to put it on the table or send it\./, 'says how to pick and how to send one');
   assert.match(html, /function openDeck\(/);
   assert.match(html, /\.reverse\(\)/, 'newest first');
   assert.match(html, /<button type="button" id="allphotos" hidden>/, 'an All photos chip on the table');
   assert.match(css, /#deckbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/, 'slides up like the other sheets');
+});
+
+test('picking in the deck sheet (2B.3): tap picks, Pick all, then Review and Get with how many and how big', () => {
+  const box = (html.match(/<div id="deckbox"[^>]*>([\s\S]*?)<\/div><!-- \/deckbox -->/) || [, ''])[1];
+  assert.match(box, /<button type="button" id="pickall">Pick all<\/button>/);
+  assert.match(box, /<div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"><\/button><button type="button" id="getpick" class="pri"><\/button><\/div>/);
+  assert.match(html, /function togglePick\(/, 'a tap picks or unpicks');
+  assert.match(html, /b\.onpointerup = \(\) => \{ b\.onpointermove = b\.onpointerup = null; togglePick\(p\.pid\)/, 'tapping a photo in the sheet picks it');
+  assert.match(html, /`Get \$\{s\.n\} · \$\{mb\(s\.bytes\)\}`/, 'Get says how many and how big');
+  assert.match(html, /aria-pressed/, 'picked photos say so to screen readers');
+});
+
+test('the review sheet (2B.6): what is picked, tap to unpick, Get all', () => {
+  const box = (html.match(/<div id="reviewbox"[^>]*>([\s\S]*?)<\/div><!-- \/reviewbox -->/) || [, ''])[1];
+  assert.match(box, /<h2 id="reviewtitle"><\/h2>\s*<p id="reviewline"><\/p>\s*<div id="reviewtiles" role="list"><\/div>\s*<p class="deckhint">Tap a photo to unpick it<\/p>/);
+  assert.match(box, /<button type="button" id="getall" class="pri"><\/button>/);
+  assert.match(html, /\$\('pickedbtn'\)\.onclick = \(\) => openReview\(\)/);
+  assert.match(html, /function getPicked\(\) \{[\s\S]*?for \(const p of toFetch\(prints, picked, files, incoming, id\)\)[\s\S]*?pickSave\.tap\(\)/, 'asks for what is missing, then saves what is here in the same tap');
+  assert.match(css, /#reviewbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/);
 });
