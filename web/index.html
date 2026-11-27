@@ -37,10 +37,9 @@
   @media (prefers-reduced-motion: reduce) { button:active, #bar label:active { transform: none; } }
   /* home: a big glyph off the top, the wordmark, two tall card buttons (Figma "02 · Home") */
   #lobby { position: fixed; inset: 0; z-index: 5; background: var(--paper); overflow: hidden auto; touch-action: pan-y; }
-  /* the blob takes the space left above the text, so it never runs into it on a short screen */
-  #lobby .blob { flex: 1 1 0; min-height: 70px; margin: 0 -24px 6px 0; background: var(--ink); pointer-events: none;
-    -webkit-mask: url(img/g03.svg) right -10% bottom / auto 190% no-repeat; mask: url(img/g03.svg) right -10% bottom / auto 190% no-repeat; }
-  #lobby .home { position: relative; height: 100%; min-height: 560px; box-sizing: border-box; max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; justify-content: flex-end;
+  #lobby .blob { position: absolute; width: min(130vw, 74vh, 640px); aspect-ratio: 1; right: -14vw; top: max(-28vw, -24vh, -170px); background: var(--ink);
+    -webkit-mask: url(img/g03.svg) center / contain no-repeat; mask: url(img/g03.svg) center / contain no-repeat; pointer-events: none; }
+  #lobby .home { position: relative; min-height: 100%; box-sizing: border-box; max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; justify-content: flex-end;
     padding: 0 24px calc(28px + env(safe-area-inset-bottom)); gap: 14px; }
   #lobby .tag { font-size: 15px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); margin: 0; }
   /* the wordmark: he[a]p, only the a is a glyph, and it reaches for the pointer (component lab, section 28) */
@@ -100,8 +99,8 @@
 </div>
 <div id="bar"><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>+ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
 <div id="lobby">
+  <div class="blob" aria-hidden="true"></div>
   <div class="home">
-    <div class="blob" aria-hidden="true"></div>
     <p class="tag">Share side by side</p>
     <h1 class="mark" aria-label="heap">he<canvas id="heap-a" aria-hidden="true"></canvas>p</h1>
     <p class="about">Put phones, tablets and laptops next to each other. Drag a photo across, it lands on theirs.</p>
