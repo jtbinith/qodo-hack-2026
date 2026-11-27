@@ -1,4 +1,6 @@
-# Publishes web/ to GitHub Pages whenever main changes.
+# Publishes two apps to GitHub Pages whenever main changes (#157):
+# - the root is universal sharing, frozen at the universal-sharing-final tag, so old posts' links keep working;
+# - /heap/ is main's web/, the heap rebrand as it's built.
 # Public on purpose: a static site. Photos never go to this site or any server in readable form:
 # they travel device to device, or through the room relay end-to-end encrypted.
 name: Deploy to GitHub Pages
@@ -22,9 +24,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: universal-sharing-final
+          path: frozen
+      - run: |
+          mkdir -p _site/heap
+          cp -R frozen/web/. _site/
+          cp -R web/. _site/heap/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: _site
 
   deploy:
     needs: build
