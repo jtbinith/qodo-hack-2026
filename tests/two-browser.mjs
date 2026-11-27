@@ -509,7 +509,7 @@ try {
   I1.on('request', (r) => { const h = new URL(r.url()).hostname; if (h !== '127.0.0.1' && !h.endsWith('.supabase.co')) off127.push(r.url()); });
   await until(I1, () => window.__t && window.__t.net.status === 'live');
   const where = (page) => page.evaluate(() => { const on = (id) => document.getElementById(id)?.hidden === false;
-    return { url: location.href, room: sessionStorage.getItem('room'), lobby: on('lobby'), invite: on('invite'), net: window.__t?.net?.room || null }; });
+    return { url: location.href, room: sessionStorage.getItem('room'), lobby: on('lobby'), invite: on('top'), net: window.__t?.net?.room || null }; });
   const i1 = await until(I1, (c) => !location.href.includes(c) && sessionStorage.getItem('room') === c, inv, 10000).then(() => where(I1), () => where(I1));
   check(!i1.url.includes(inv) && i1.room === inv && !i1.lobby && i1.invite, `once joined, the address bar has no room code (${i1.url.replace(inv, '<code>')}), the tab keeps it (${i1.room === inv}), the lobby is gone (${!i1.lobby}) and Invite shows (${i1.invite})`);
   await I1.click('#menu', { timeout: 3000 }).catch(() => {}); await I1.click('#invite', { timeout: 3000 }).catch(() => {});
@@ -585,7 +585,7 @@ try {
   const F = await device(390, 700, { at: inv, init: `(${failFirst})()` });
   const lobbyBack = await until(F, () => document.getElementById('lobby')?.hidden === false && window.__fails === 0, null, 10000).then(() => true, () => false);
   await new Promise((r) => setTimeout(r, 2500));   // past the failed attempt's late "subscribed"
-  const f1 = await F.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, url: location.href, room: sessionStorage.getItem('room'), invite: document.getElementById('invite')?.hidden === false }));
+  const f1 = await F.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, url: location.href, room: sessionStorage.getItem('room'), invite: document.getElementById('top')?.hidden === false }));
   check(lobbyBack && f1.lobby && f1.code === inv && f1.url.includes(inv) && f1.room === null && !f1.invite,
     `a join that fails before live shows the lobby again with the code (${f1.code === inv}), keeps the address bar (${f1.url.includes(inv)}), stores nothing (${f1.room === null}) and a late answer from it changes nothing (lobby ${f1.lobby})`);
   await F.click('#f button', { timeout: 3000 }).catch(() => {});   // the code screen, then the name screen (#156)
@@ -691,7 +691,7 @@ try {
   // Leave (#156): once in a heap there's a way out; it forgets this tab's heap and shows the two cards again
   const L = await device(390, 700, { at: code() });
   await until(L, () => window.__t && window.__t.net.status === 'live', null, 20000);
-  const leaveShown = await until(L, () => document.getElementById('leave')?.hidden === false, null, 10000).then(() => true, () => false);
+  const leaveShown = await until(L, () => document.getElementById('top')?.hidden === false, null, 10000).then(() => true, () => false);
   L.once('dialog', (d) => d.accept());
   await L.click('#menu', { timeout: 3000 }).catch(() => {}); await L.click('#leave', { timeout: 3000 }).catch(() => {});
   const leftHome = await until(L, () => document.getElementById("lobby")?.hidden === false, null, 10000).then(() => true, () => false);

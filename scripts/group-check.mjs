@@ -94,7 +94,7 @@ async function shots(tag, first) { if (first) await shot(first, tag); for (const
 // 1. everyone in the room, then join neighbours with the orbs: device i's right edge to device i+1's left
 const inRoom = await Promise.all(dev.map((d) => until(d.page, (n) => window.__t && Object.keys(window.__t.net.peers).length === n, dev.length, 20000)));
 async function orbJoin(a, b) {
-  const from = (d) => [d.w / 2, d.h - 120];
+  const from = (d) => [d.w / 2, d.h - 150];
   const [ax, ay] = from(a), [bx, by] = from(b), ST = 10;
   await a.page.mouse.move(ax, ay); await b.page.mouse.move(bx, by);
   await Promise.all([a.page.mouse.down(), b.page.mouse.down()]);

@@ -15,19 +15,29 @@
   html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); overflow: hidden;
     font-family: var(--ui); touch-action: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
   #c { position: fixed; inset: 0; width: 100vw; height: 100vh; }
-  #hud { position: fixed; left: 12px; top: calc(62px + env(safe-area-inset-top)); font: 500 11px/1.45 var(--ui);
+  #hud { position: fixed; left: 12px; top: calc(78px + env(safe-area-inset-top)); font: 500 11px/1.45 var(--ui);
     background: var(--paper); color: var(--text-mid); border: 1.5px solid var(--line); padding: 6px 9px; border-radius: 10px; white-space: pre; pointer-events: none; }
   button, label, input { font-family: var(--ui); }
   /* live table: Leave and Invite at the top, the photo actions at the bottom (Figma "04 · Live table") */
-  #top { position: fixed; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top)); display: flex; justify-content: space-between; pointer-events: none; z-index: 3; }
-  #top span { display: flex; gap: 8px; }
-  #top #info { width: 40px; padding: 9px 0; font-weight: 700; font-style: italic; border-radius: 50%; }
-  #top button { pointer-events: auto; font-size: 15px; font-weight: 500; padding: 9px 14px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
-  #top #invite { background: var(--ink); color: var(--paper); }
-  #bar { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: nowrap; }
-  #bar label, #bar button { font-size: 15px; font-weight: 500; padding: 10px 14px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); white-space: nowrap; }
-  #bar label:last-child { background: var(--ink); color: var(--paper); }
-  #bar label:has(#keep) { border-color: transparent; background: none; padding: 10px 4px; font-size: 14px; margin-right: auto; }
+  /* the live table (wireframe 2A.1): a header with the heap's name and who's here, + Share at the bottom */
+  #top { position: fixed; left: 0; right: 0; top: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 10px;
+    background: var(--paper); border-bottom: 1.5px solid var(--line); z-index: 3; }
+  #top .title { flex: 1; min-width: 0; display: grid; }
+  #top .title b, #top .title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #top .title b { font: 700 18px/1.2 var(--ui); }
+  #top .title small { font-size: 13px; color: var(--text-mid); }
+  #top button { background: none; border: 0; color: var(--ink); padding: 0; }
+  #people { display: flex; padding: 4px; }
+  #people i { font: normal 700 11px/30px var(--ui); width: 30px; height: 30px; border-radius: 50%; text-align: center; background: var(--ink); color: var(--paper);
+    border: 2px solid var(--paper); margin-left: -10px; }
+  #people i:first-child { margin-left: 0; }
+  #people i.more { background: var(--paper); color: var(--ink); border-color: var(--ink); }
+  #menu { width: 44px; height: 44px; font: 400 28px/1 var(--ui); }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 10px;
+    background: var(--paper); border-top: 1.5px solid var(--line); z-index: 3; }
+  #bar label, #bar button { font-size: 16px; font-weight: 500; padding: 13px 18px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink);
+    white-space: nowrap; text-align: center; }
+  #bar #share { flex: 1; background: var(--ink); color: var(--paper); }
   #bar input[type=file] { display: none; }
   #bar input[type=checkbox] { width: 18px; height: 18px; vertical-align: -3px; margin: 0 6px 0 0; accent-color: var(--ink); }
   [hidden] { display: none !important; }
@@ -89,6 +99,26 @@
   #invitebox.out { animation: scrim-out .24s ease-in forwards; }
   #invitebox.out .sheet { animation: sheet-down .24s ease-in forwards; }
   @media (prefers-reduced-motion: reduce) { #invitebox, #invitebox .sheet, #invitebox.out, #invitebox.out .sheet { animation: none; } }
+  #menubox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
+  #menubox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 4px; }
+  #menubox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #menubox h2 { margin: 6px 0 8px; font: 700 18px var(--ui); text-align: center; }
+  #menubox .item { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; width: 100%; padding: 12px 2px; background: none;
+    border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: inherit; }
+  #menubox .item b, #menubox .item small { display: block; }
+  #menubox .item b { font-size: 17px; font-weight: 500; }
+  #menubox .item small { font-size: 13px; color: var(--text-mid); margin-top: 2px; }
+  #menubox button.item::after { content: '›'; font-size: 22px; color: var(--text-mid); }
+  #menubox .item.quiet { border: 0; }
+  #menubox .item.quiet b { font-size: 14px; color: var(--text-mid); }
+  #menubox #keep { width: 24px; height: 24px; accent-color: var(--ink); flex: none; }
+  #menubox .pills { margin-top: 10px; }
+  #menubox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #menubox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #menubox.out { animation: scrim-out .24s ease-in forwards; }
+  #menubox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #menubox, #menubox .sheet, #menubox.out, #menubox.out .sheet { animation: none; } }
   #invitebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
   #invitebox h2 { margin: 2px 0 0; font: 400 34px/1 var(--display); text-transform: uppercase; }
   .tiles { display: flex; gap: 4px; align-items: center; }
@@ -112,7 +142,7 @@
   .pills button { flex: 1; font-size: 16px; font-weight: 500; padding: 13px 16px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
   .pills .pri { background: var(--ink); color: var(--paper); }
   /* toasts: a charcoal pill that lands with a small squash and settles (component lab, "Boing, subtle") */
-  #toast { position: fixed; left: 50%; top: calc(62px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+  #toast { position: fixed; left: 50%; top: calc(78px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
     background: var(--ink); color: var(--paper); padding: 13px 18px; border-radius: 18px; font-size: 15px; font-weight: 500; line-height: 1.35; text-align: center;
     opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
   #toast.in { animation: boing .6s cubic-bezier(.2, .8, .3, 1) backwards; }   /* backwards: once landed, the timer's opacity decides */
@@ -125,11 +155,24 @@
 <canvas id="c"></canvas>
 <div id="hud" hidden></div>
 <div id="toast" role="status" aria-live="polite"></div>
-<div id="top">
-  <span><button id="leave" type="button" hidden>Leave</button> <button id="info" type="button" aria-label="Status" aria-controls="hud" aria-expanded="false" hidden>i</button></span>
-  <button id="invite" type="button" hidden>Invite</button>
-</div>
-<div id="bar"><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>+ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
+<header id="top" hidden>
+  <div class="title"><b id="heapname"></b>
+    <small id="heapsub"></small></div>
+  <button id="people" type="button" aria-label="People in this heap"></button>
+  <button id="menu" type="button" aria-label="Menu" aria-controls="menubox" aria-expanded="false"><span aria-hidden="true">≡</span></button>
+</header>
+<div id="bar"><label id="share">+ Share<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="saveall" type="button">Save all</button></div>
+<div id="menubox" hidden><div class="sheet" role="dialog" aria-labelledby="menutitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="menutitle">This heap</h2>
+  <button type="button" class="item" id="joinhow"><span><b>Join a screen</b><small>Drag the dot to the edge that faces the other screen</small></span></button>
+  <button type="button" class="item" id="peoplebtn"><span><b>People</b><small>Who is in this heap</small></span></button>
+  <button type="button" class="item" id="invite"><span><b>Invite</b><small>QR code and link, also for your own other device</small></span></button>
+  <label class="item"><span><b>Keep photo details</b><small>Off: place and camera are removed before sharing</small></span><input id="keep" type="checkbox"></label>
+  <button type="button" class="item" id="leave"><span><b>Leave and clear</b><small>Remove everything from this device</small></span></button>
+  <button id="info" type="button" aria-controls="hud" aria-expanded="false" class="item quiet"><b>Connection details</b></button>
+  <div class="pills"><button type="button" id="closemenu">Close</button></div>
+</div></div><!-- /menubox -->
 <div id="lobby">
   <div class="blob" aria-hidden="true"></div>
   <div class="home" id="s-home">
@@ -185,6 +228,7 @@
 <script src="vendor/qrcode.js"></script>
 <script type="module">
 import { joinRoom } from './net.js';
+import { heapTitle, heapSub, initials } from './words.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
@@ -218,7 +262,7 @@ function newCode() {
 // Start a heap makes a code and starts at once; Join with a code shows the code form (heap home, issue 158)
 import('./heap-a.js').then(({ reacher, A_GLYPH }) => reacher($('heap-a'), A_GLYPH, { colour: getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() }));
 // the status box (heap code, devices, connections) stays hidden until the i button opens it
-$('info').onclick = () => { $('hud').hidden = !$('hud').hidden; $('info').setAttribute('aria-expanded', String(!$('hud').hidden)); };
+$('info').onclick = () => { closeMenu(); $('hud').hidden = !$('hud').hidden; $('info').setAttribute('aria-expanded', String(!$('hud').hidden)); };
 // Leave: forget this tab's heap and start again on the home screen (a fresh load drops every connection)
 $('leave').onclick = () => {
   if (!confirm('Leave this heap? Photos you haven\'t saved stay with the others, not on this screen.')) return;
@@ -480,7 +524,7 @@ function dropped(p) {
 
 // ---------- input: orb (join screens), prints (drag / tap to save) ----------
 const ORB = 26;
-const home = () => [W / 2, H - 120];
+const home = () => [W / 2, H - 150];   // above the bottom bar
 let drag = null, orbDrag = null, ghosts = [];
 const PILL_BELOW = 40;   // the name pill under a photo is part of it: a tap there saves it too
 function hit(sx, sy) {
@@ -577,7 +621,7 @@ function start(room) {
   peers.onReady(catchUp);
   net.on((ev) => {
     if (ev !== 'peers') return;
-    showWho();
+    showWho(); showHeader();
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
   });
@@ -609,7 +653,7 @@ function start(room) {
       if (net !== attempt) return;
       history.replaceState(null, '', cleanUrl(location.href));
       stored.set(room);
-      invite.room = room; $('invite').hidden = false; $('leave').hidden = false; $('info').hidden = false;
+      invite.room = room; $('top').hidden = false; showHeader();
       if (pending.fresh) { pending.fresh = false; $('invite').click(); }
     },
     failed: () => {
@@ -636,6 +680,7 @@ function drawQr(text) {
 }
 $('invite').onclick = () => {
   if (!invite.room) return;
+  if (!$('menubox').hidden) closeMenu();
   const link = inviteLink(location.href, invite.room);
   $('link').value = link; drawQr(link);
   const code = invite.room.slice(-10);
@@ -643,16 +688,43 @@ $('invite').onclick = () => {
   const dash = Object.assign(document.createElement('i'), { textContent: '–' }); dash.setAttribute('aria-hidden', 'true');
   $('invcode').replaceChildren(...tiles.slice(0, 5), dash, ...tiles.slice(5));
   $('invcode').setAttribute('aria-label', `Heap code ${code.split('').join(' ')}`);
-  showWho(); $('invitebox').classList.remove('out'); $('invitebox').hidden = false;
+  showWho(); openSheet('invitebox');
 };
-function closeInvite() {
-  const b = $('invitebox');
+// bottom sheets slide up when opened and back down when closed (still for reduced motion)
+function openSheet(k) { const b = $(k); b.classList.remove('out'); b.hidden = false; }
+function closeSheet(k, then) {
+  const b = $(k);
   if (b.hidden || b.classList.contains('out')) return;
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { b.hidden = true; return; }
+  const done = () => { b.classList.remove('out'); b.hidden = true; then?.(); };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
   b.classList.add('out');
-  b.querySelector('.sheet').addEventListener('animationend', () => { b.classList.remove('out'); b.hidden = true; }, { once: true });
+  b.querySelector('.sheet').addEventListener('animationend', done, { once: true });
 }
+function closeInvite() { closeSheet('invitebox'); }
 $('closeinvite').onclick = closeInvite;
+// the menu (wireframe 4.1)
+const menuOpen = (open) => $('menu').setAttribute('aria-expanded', String(open));
+$('menu').onclick = () => { menuOpen(true); openSheet('menubox'); };
+const closeMenu = (then) => { menuOpen(false); closeSheet('menubox', then); };
+$('closemenu').onclick = () => closeMenu();
+$('menubox').onclick = (e) => { if (e.target === e.currentTarget) closeMenu(); };
+$('joinhow').onclick = () => closeMenu(() => toast('Drag the dot to the edge that faces the other screen'));
+$('peoplebtn').onclick = $('people').onclick = () => closeMenu(() => $('invite').click());
+// the header: the heap's name (after its time keeper), who's here and how much is shared, and their initials
+let headWas = '';
+function showHeader() {
+  if (!net) return;
+  const keeper = net.leader === id ? name : net.peers[net.leader]?.name;
+  const was = [keeper, prints.size, name, ...others().map((k) => net.peers[k]?.name)].join('\u0000');
+  if (was === headWas) return;
+  headWas = was;
+  $('heapname').textContent = heapTitle(keeper);
+  $('heapsub').textContent = heapSub(1 + others().length, prints.size);
+  const all = [name, ...others().map((k) => net.peers[k]?.name || '?')];
+  const face = (t, cls) => Object.assign(document.createElement('i'), { textContent: t, className: cls || '' });
+  $('peoplebtn').querySelector('b').textContent = `People (${all.length})`;
+  $('people').replaceChildren(...all.slice(0, 3).map((n) => face(initials(n))), ...(all.length > 3 ? [face('+' + (all.length - 3), 'more')] : []));
+}
 // who's in this heap: this device first, then the others by name, or a line saying nobody else is here yet
 function showWho() {
   const li = (text, cls) => Object.assign(document.createElement('li'), { textContent: text, className: cls || '' });
@@ -752,6 +824,7 @@ function frame() {
   ghosts = ghosts.filter((g) => now - g.t < 2500 && (glow(g.x, g.y, ORB * 2, 1 - (now - g.t) / 2500), true));
   const [ox, oy] = orbDrag ? [orbDrag.x, orbDrag.y] : home();
   glow(ox, oy, ORB * 2);
+  showHeader();
   const n = Object.keys(net.peers).length;
   $('hud').textContent = `table ${net.room.slice(6)} · ${name}${net.leader === id ? ' (time keeper)' : ''} · ${net.status}\n` +
     `devices ${n} · joins ${net.joins.length} · prints ${prints.size} · held here ${files.size}\n` +
