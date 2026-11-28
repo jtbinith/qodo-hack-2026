@@ -174,6 +174,30 @@
   #joinsub { margin: 0; font-size: 13px; color: var(--text-mid); }
   #jointry, #joincancel { font: 500 15px var(--ui); padding: 10px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
   #joincancel { background: none; color: var(--ink); border-color: transparent; }
+  /* the map (2C): the chip in the header, the sheet, and the map that comes up while dragging */
+  #top #mapbtn { display: flex; align-items: center; gap: 6px; font: 500 14px var(--ui); padding: 6px 10px; border-radius: 10px; border: 1.5px solid var(--ink); }
+  #mapbtn i { margin-right: 7px; width: 22px; height: 12px; border: 1.5px solid var(--ink); border-radius: 2px; box-shadow: 6px 3px 0 -1.5px var(--paper), 6px 3px 0 0 var(--ink); }
+  @media (max-width: 440px) { #people { display: none; } }
+  #mapbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
+  #mapbox .sheet { width: min(100%, 560px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 18px calc(16px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
+  #mapbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #maptitle { margin: 0; font: 700 17px var(--ui); text-align: center; }
+  #mapcv { width: 100%; height: 190px; border-radius: 12px; background: var(--line); }
+  #mapkey { margin: 0; font-size: 13px; color: var(--text-mid); }
+  #mapjoin, #mapclose { font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #mapclose { background: none; color: var(--ink); border-color: transparent; }
+  #mapbox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #mapbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #mapbox.out { animation: scrim-out .24s ease-in forwards; }
+  #mapbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #mapbox, #mapbox .sheet, #mapbox.out, #mapbox.out .sheet { animation: none; } }
+  #dropmap { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); max-width: 460px; margin: 0 auto; z-index: 3; padding: 8px 10px 10px;
+    border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); pointer-events: none; display: grid; gap: 4px; }
+  #dropmap[hidden] { display: none; }
+  #dropmap small { font-size: 12px; color: var(--text-mid); }
+  #dropcv { width: 100%; height: 120px; }
+  @media (prefers-reduced-motion: no-preference) { #dropmap:not([hidden]) { animation: sheet-up .28s cubic-bezier(.2, .9, .3, 1); } }
   /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
@@ -259,6 +283,7 @@
     <small id="heapsub"></small></div>
   <button id="joinbtn" type="button" aria-label="Join a screen">Join</button>
   <button id="people" type="button" aria-label="People in this heap"></button>
+  <button id="mapbtn" type="button" aria-label="Map of the screens in this heap" aria-controls="mapbox"><i aria-hidden="true"></i>Map</button>
   <button id="menu" type="button" aria-label="Menu" aria-controls="menubox" aria-expanded="false"><span aria-hidden="true">≡</span></button>
 </header>
 <div id="bar"><label id="share">+ Add photos &amp; videos<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="pickedbtn" type="button">Picked · 0</button></div>
@@ -276,6 +301,15 @@
     <button type="button" id="joincancel">Cancel</button>
   </div>
 </div><!-- /joinmode -->
+<div id="mapbox" hidden><div class="sheet" role="dialog" aria-labelledby="maptitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="maptitle"></h2>
+  <canvas id="mapcv" aria-hidden="true"></canvas>
+  <p id="mapkey"></p>
+  <button type="button" id="mapjoin" class="pri">Join a screen</button>
+  <button type="button" id="mapclose">Close</button>
+</div></div><!-- /mapbox -->
+<div id="dropmap" hidden><small>Or drop on the map</small><canvas id="dropcv"></canvas></div>
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -373,6 +407,7 @@ import { heapTitle, heapSub, initials } from './words.js';
 import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
+import { deviceKind, mapTiles, edgeLabels } from './map.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
@@ -744,6 +779,7 @@ addEventListener('pointermove', (e) => {
   drag.samples.push({ x: e.clientX, y: e.clientY, t: performance.now() }); if (drag.samples.length > 12) drag.samples.shift();
   setWorld(drag.p, drag.ox + dx, drag.oy + dy);
   for (const q of drag.ps) if (q !== drag.p) { q.anchor = drag.p.anchor; q.x = drag.p.x; q.y = drag.p.y; }
+  if (drag.moved) showDropMap(others().length >= 2, e.clientX, e.clientY);   // 3 or more screens: the map comes up (2C.6)
   if (performance.now() - lastSend > 40) { lastSend = performance.now(); sendMove(false); }
 });
 // the browser took the pointer away (a call, a system gesture): the photo is put down where it is
@@ -757,6 +793,8 @@ addEventListener('pointerup', (e) => {
   if (!drag || e.pointerId !== drag.pointer) return;
   const { ps, p, moved, ox, oy, samples } = drag;
   if (!moved) { drag = null; return ps.length === 1 ? save(p) : openDeck(ps.map((q) => q.pid)); }   // a tap: save it, or open the deck
+  const onMap = mapHit(e.clientX, e.clientY); showDropMap(false);
+  if (onMap) { drag = null; moveAll(ps, p, ox, oy); sendMove(true, { ps, p }); return giveTo(ps, onMap); }   // dropped on a tile: it goes there, and back here
   samples.push({ x: e.clientX, y: e.clientY, t: performance.now() });
   const { vx, vy } = velocity(samples);
   drag = null;
@@ -910,7 +948,9 @@ function start(room) {
       toast('Couldn’t join the room. Try again');
     },
   });
-  window.__t = { holding: () => holdingNear().map(({ from, n }) => ({ from, n })), decks: () => groupDecks(prints), net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
+  window.__t = { edgeLabels: () => edgeLabels(Object.keys(sizes), layout, sizes, id), mapTiles: () => tilesFor($('mapbox').hidden ? $('dropcv') : $('mapcv')),
+    mapHitBox: (k) => { const was = $('dropmap').hidden; const t = tilesFor($('dropcv')).find((t) => t.id === k); if (!t) return null; const r = $('dropcv').getBoundingClientRect(); return was && !r.width ? null : { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2 }; },
+    holding: () => holdingNear().map(({ from, n }) => ({ from, n })), decks: () => groupDecks(prints), net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
 }
 
 // ---------- invite (S16) ----------
@@ -1069,6 +1109,57 @@ function undoLanding() {
     broadcast((k) => peers.send(k, { t: 'move', pid, anchor: p.anchor, x: p.x, y: p.y, final: true }));
   }
 };
+// the map (2C): tiles for every screen; mine dark, the one under a dragged photo lit, not joined dashed
+const nameOf = (k) => (k === id ? name : net.peers[k]?.name) || 'a device';
+const sizeOf = (k) => (k === id ? { w: W, h: H } : sizes[k] || (net.peers[k] && { w: net.peers[k].w, h: net.peers[k].h }));
+function tilesFor(cv) {
+  const r = cv.getBoundingClientRect(), all = [id, ...others()], sz = Object.fromEntries(all.map((k) => [k, sizeOf(k)]).filter(([, v]) => v));
+  return mapTiles(Object.keys(sz), layout, sz, id, { w: r.width - 16, h: r.height - 16 }).map((t) => ({ ...t, x: t.x + 8, y: t.y + 8, name: nameOf(t.id) }));
+}
+function drawMap(cv, hot = null) {
+  const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
+  cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
+  const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, r.width, r.height);
+  const tiles = tilesFor(cv), apart = tiles.filter((t) => !t.joined);
+  g.font = `500 10px ${T.ui}`; g.textBaseline = 'top';
+  if (apart.length) { g.fillStyle = T.mid; g.fillText('Not joined', apart[0].x, apart[0].y - 13); }
+  for (const t of tiles) {
+    const mine = t.id === id, lit = t.id === hot;
+    g.setLineDash(t.joined ? [] : [4, 3]); g.lineWidth = 1.5; g.strokeStyle = T.ink;
+    g.fillStyle = mine ? T.ink : lit ? T.mid : T.paper; g.fillRect(t.x, t.y, t.w, t.h); g.strokeRect(t.x, t.y, t.w, t.h); g.setLineDash([]);
+    g.fillStyle = mine || lit ? T.paper : T.ink;
+    const label = mine ? 'You' : `${t.name} · ${deviceKind(sizeOf(t.id))}`;
+    g.save(); g.beginPath(); g.rect(t.x, t.y, t.w, t.h); g.clip(); g.fillText(label, t.x + 4, t.y + 4); g.restore();
+  }
+  return tiles;
+}
+function openMap() {
+  const all = [id, ...others()], apart = others().filter((k) => (layout.group[k] || k) !== (layout.group[id] || id));
+  $('maptitle').textContent = `${$('heapname').textContent} · ${all.length} screen${all.length === 1 ? '' : 's'}`;
+  $('mapkey').textContent = [`You = ${name}’s ${deviceKind({ w: W, h: H })}`, ...apart.map((k) => `${nameOf(k)} isn’t joined yet`)].join(' · ');
+  openSheet('mapbox'); requestAnimationFrame(() => drawMap($('mapcv')));
+}
+$('mapbtn').onclick = openMap;
+$('mapjoin').onclick = () => closeSheet('mapbox', openJoin);
+$('mapclose').onclick = () => closeSheet('mapbox');
+$('mapbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('mapbox'); };
+// the tile under a point on the drop map, if it's another screen
+function mapHit(cx, cy) {
+  if ($('dropmap').hidden) return null;
+  const r = $('dropcv').getBoundingClientRect(), x = cx - r.left, y = cy - r.top;
+  const t = tilesFor($('dropcv')).find((t) => t.id !== id && x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
+  return t?.id || null;
+}
+function showDropMap(on, cx, cy) {
+  if (!on) { $('dropmap').hidden = true; return; }
+  if ($('dropmap').hidden) { $('dropmap').hidden = false; $('snack').hidden = true; }   // the map takes the line's place while dragging
+  drawMap($('dropcv'), mapHit(cx, cy));
+}
+// send photos to one screen without dragging them there (2C.4, 3.11)
+function giveTo(ps, to) {
+  for (const p of ps) peers.send(to, { t: 'give', pid: p.pid });
+  toast(`Sent to ${nameOf(to)} ✓`);
+}
 // join screens (4.2–4.6): tap the edge that faces the other screen; both taps within 2 seconds pair up
 let joinTick = 0;
 const joinCard = (title, sub, { count = false, retry = false } = {}) => {
@@ -1288,6 +1379,15 @@ function frame() {
     ctx.strokeRect(g.x, g.y, g.w, g.h); ctx.setLineDash([]);
     pill(`${net.peers[g.from]?.name || 'Someone'} is holding ${g.n} photo${g.n === 1 ? '' : 's'}`, g.x + g.w / 2, g.y + g.h + 22, true);
     ctx.restore();
+  }
+  // the screens touching mine, named at the shared edge (2C.2, 2C.5)
+  for (const l of edgeLabels(Object.keys(sizes), layout, sizes, id)) {
+    const who = `${net.peers[l.id]?.name || 'A device'}’s ${deviceKind(sizes[l.id])}`;
+    const text = l.side === 'R' ? `${who} →` : l.side === 'L' ? `← ${who}` : l.side === 'T' ? `↑ ${who}` : `↓ ${who}`;
+    ctx.font = `500 12px ${T.ui}`; const pw = ctx.measureText(text).width + 22;
+    const x = l.side === 'R' ? W - pw / 2 - 8 : l.side === 'L' ? pw / 2 + 8 : Math.min(Math.max(l.along, pw / 2 + 8), W - pw / 2 - 8);
+    const y = l.side === 'T' ? 84 : l.side === 'B' ? H - 96 : Math.min(Math.max(l.along, 90), H - 100);
+    pill(text, x, y, true);
   }
   showHeader();
   const n = Object.keys(net.peers).length;

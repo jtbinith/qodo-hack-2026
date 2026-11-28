@@ -894,7 +894,7 @@ try {
   await until(S, () => [...window.__t.prints.values()].some((p) => p.name === 'map.jpg'), null, 10000);
   const mp = await S.evaluate(() => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'map.jpg'), [wx, wy] = t.world(p), me = t.layout.pos[t.id]; return { pid: p.pid, x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 }; });
   await S.mouse.move(mp.x, mp.y); await S.mouse.down(); await S.mouse.move(mp.x + 20, mp.y + 20);
-  const dm = await until(S, () => !document.getElementById('dropmap').hidden, null, 3000).then(() => true, () => false);
+  const dm = await until(S, () => !document.getElementById('dropmap').hidden && !document.getElementById('dropmap').getAnimations().length, null, 3000).then(() => true, () => false);   // up, and done sliding
   const t3At = await S.evaluate(() => { const t = window.__t.mapHitBox(window.__t.mapTiles().find((x) => x.name === 'Third').id); return t; });
   if (t3At) { for (let k = 1; k <= 6; k++) await S.mouse.move(mp.x + 20 + (t3At.x - mp.x - 20) * k / 6, mp.y + 20 + (t3At.y - mp.y - 20) * k / 6); await new Promise((r) => setTimeout(r, 150)); await S.mouse.move(t3At.x + 1, t3At.y); }
   await S.mouse.up();
