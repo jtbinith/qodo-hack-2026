@@ -26,14 +26,15 @@ test('a link or note carries its text, plain and short', () => {
   assert.equal(BIG_FILE, 25 * 1024 * 1024);
 });
 
-test('the share sheet (3.1): photos and videos, files, a link, a note', () => {
+test('the share sheet (3.1): photos and videos, files, a link', () => {
   assert.match(html, /<button type="button" id="share">\+ Add photos &amp; files<\/button>/);
   const b = box('sharebox');
-  assert.match(b, /<label class="item" for="pick">[\s\S]*Photos and videos[\s\S]*<label class="item" for="pickfile">[\s\S]*Files[\s\S]*id="sharelink"[\s\S]*Paste a link[\s\S]*id="sharenote"[\s\S]*Write a note/);
+  assert.match(b, /<label class="item" for="pick">[\s\S]*Photos and videos[\s\S]*<label class="item" for="pickfile">[\s\S]*Files[\s\S]*id="sharelink"[\s\S]*Paste a link/);
+  assert.doesNotMatch(html, /Write a note|id="sharenote"/, 'no notes: photos, files and links only');
   assert.match(html, /<input id="pickfile" type="file" multiple hidden>/);
 });
 
-test('a link or note (3.4): plain text everyone sees, nothing opens until tapped', () => {
+test('a link (3.4): plain text everyone sees, nothing opens until tapped', () => {
   const b = box('textbox');
   assert.match(b, /<h2 id="texttitle"><\/h2>[\s\S]*<textarea id="textfield" maxlength="500"[\s\S]*Everyone sees it as plain text\. Nothing opens until they tap it\.[\s\S]*id="textshare">Share<\/button>/);
   assert.match(html, /function addText\(/);

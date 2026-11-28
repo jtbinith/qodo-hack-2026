@@ -1036,12 +1036,12 @@ try {
   await until(S, () => window.__t.net.joins.length === 0, null, 15000);
   // 3.1, 3.4: S writes a note from the share sheet: G gets it as plain text. A program is refused (3.9)
   await sheetsDown(S); await S.click('#share'); await until(S, () => !document.getElementById('sharebox').hidden, null, 5000);
-  await S.click('#sharenote'); await until(S, () => !document.getElementById('textbox').hidden, null, 5000);
-  await S.fill('#textfield', 'Meet at the gate at 8'); await S.click('#textshare');
-  const noteAt = await until(G, () => [...window.__t.prints.values()].some((p) => p.text === 'Meet at the gate at 8' && p.type === 'text/plain'), null, 10000).then(() => true, () => false);
+  await S.click('#sharelink'); await until(S, () => !document.getElementById('textbox').hidden, null, 5000);
+  await S.fill('#textfield', 'https://maps.example.com/gate'); await S.click('#textshare');
+  const noteAt = await until(G, () => [...window.__t.prints.values()].some((p) => p.text === 'https://maps.example.com/gate' && p.type === 'text/plain'), null, 10000).then(() => true, () => false);
   await S.setInputFiles('#pickfile', [{ name: 'setup.exe', mimeType: 'application/x-msdownload', buffer: Buffer.from('MZ') }]);
   const refusedSaid = await until(S, () => document.getElementById('toast').textContent.startsWith('setup.exe'), null, 5000).then(() => toastOf(S), () => toastOf(S));
-  check(noteAt && refusedSaid === 'setup.exe was refused. Programs and scripts can’t be shared here', `a note reaches G as text (${noteAt}); a program is refused ("${refusedSaid}")`);
+  check(noteAt && refusedSaid === 'setup.exe was refused. Programs and scripts can’t be shared here', `a link reaches G as plain text (${noteAt}); a program is refused ("${refusedSaid}")`);
   // 5.6: S blocks G: G's photos go from S's table and nothing new from G arrives
   await G.setInputFiles('#pick', [{ name: 'before.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
   await until(S, () => [...window.__t.prints.values()].some((p) => p.name === 'before.jpg'), null, 10000);
