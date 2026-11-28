@@ -56,3 +56,11 @@ test('round 2: Undo after a move restores both screens’ joins, and only if not
   assert.match(net, /after: JSON\.stringify\(s\.joins\)/);
   assert.match(net, /if \(JSON\.stringify\(s\.joins\) !== m\.after\) return;/);
 });
+
+// the third look at #164
+test('round 3: Undo says Moved back only once the time keeper has done it', () => {
+  assert.match(net, /announce\('unmoved', \{ a, ok, from: id \}\)/);
+  assert.match(net, /ch\.on\('broadcast', \{ event: 'unmoved' \}/);
+  assert.match(html, /if \(ev === 'unmoved' && d\.a === id\) toast\(d\.ok \? 'Moved back' : 'Couldn’t move back: the screens changed since'\);/);
+  assert.doesNotMatch(html, /net\.unmove\(\); toast\('Moved back'\)/);
+});
