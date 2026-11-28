@@ -869,6 +869,12 @@ try {
   const joinSnack = await S.evaluate(() => document.getElementById('snack').hidden ? '' : document.getElementById('snacktext').textContent);
   check(jm.strips === 4 && jm.title === 'Which side is the other screen?' && /^2$|^1$/.test(counting) && stripJoined && joinSnack === 'Joined with Guest, on your right',
     `join mode shows ${jm.strips} strips ("${jm.title}"), counts down ("${counting}"), the facing taps join (${stripJoined}) and S says "${joinSnack}"`);
+  // 4.4: the joined line has Undo: both screens come apart again
+  const undoShown = await S.evaluate(() => !document.getElementById('snackact').hidden);
+  await S.click('#snackact');
+  const apart = await until(G, () => window.__t.net.joins.length === 0, null, 10000).then(() => true, () => false);
+  const apartS = await S.evaluate(() => window.__t.net.joins.length === 0);
+  check(undoShown && apart && apartS, `Undo on "Joined with Guest" (${undoShown}) takes the screens apart on both (${apart}, ${apartS})`);
   await joinModeOpen(S);
   await S.click('#joinmode .strip[data-edge="T"]');
   const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
