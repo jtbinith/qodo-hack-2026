@@ -996,6 +996,23 @@ try {
   const mvUnmoved = await until(S, () => window.__t.net.joins.length === 0, null, 10000).then(() => true, () => false);
   check(mvAsked[0] === 'The host wants to move your screen' && mvAsked[1] === 'Move it' && mvMoved && mvMovedSaid === 'Moved below Host’s phone' && mvUnmoved,
     `G is mvAsked ("${mvAsked[0]}", "${mvAsked[1]}"), the move joins them (${mvMoved}), G says "${mvMovedSaid}" and Undo takes it back (${mvUnmoved})`);
+  // 4.9: S invites its own other device: it's let in by itself and lines up on S's right
+  await sheetsDown(S); await S.click('#menu'); await S.click('#invite'); await until(S, () => !document.getElementById('invitebox').hidden, null, 5000);
+  await S.click('#pairbtn');
+  const pairLink = await until(S, () => /&pair=/.test(document.getElementById('link').value), null, 5000).then(() => S.evaluate(() => [document.getElementById('link').value, document.getElementById('invtitle').textContent]), () => ['', '']);
+  await S.click('#closeinvite'); await sheetsDown(S);
+  const P2 = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await P2.goto(pairLink[0]);
+  const pairName = await until(P2, () => document.getElementById('s-name')?.hidden === false && document.getElementById('yourname').value, null, 10000).then(() => P2.evaluate(() => document.getElementById('yourname').value), () => '');
+  await P2.click('#go');
+  const pIn = await until(P2, () => window.__t && window.__t.net.status === 'live' && document.getElementById('lobby').hidden, null, 20000).then(() => true, () => false);
+  const askedHost = await S.evaluate(() => !document.getElementById('askbox').hidden);
+  const pId = await P2.evaluate(() => window.__t?.id);
+  const lined = await until(S, ([p, me]) => window.__t.net.joins.some((j) => j.a === p && j.b === me && j.edgeA === 'L'), [pId, sId], 15000).then(() => true, () => false);
+  check(pairLink[1] === 'Join my other device' && pairName === 'Host (2)' && pIn && !askedHost && lined,
+    `"${pairLink[1]}" gives a link; the other device is named "${pairName}", let in without asking (${pIn}, host asked: ${askedHost}) and lined up on S's right (${lined})`);
+  await P2.context().close();
+  await until(S, () => window.__t.net.joins.length === 0, null, 15000);
   // 3.1, 3.4: S writes a note from the share sheet: G gets it as plain text. A program is refused (3.9)
   await sheetsDown(S); await S.click('#share'); await until(S, () => !document.getElementById('sharebox').hidden, null, 5000);
   await S.click('#sharenote'); await until(S, () => !document.getElementById('textbox').hidden, null, 5000);

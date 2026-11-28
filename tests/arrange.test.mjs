@@ -36,3 +36,13 @@ test('the time keeper moves a screen only with a yes from one of the two screens
   assert.match(html, /Nothing changes unless you tap Move it\. If you ignore this, it cancels after 30 s\./);
   assert.match(html, /`Moved \$\{sideWords\(/);
 });
+
+test('your own other device (4.9): a pairing link, let in and lined up next to you by itself', () => {
+  const net = readFileSync(new URL('../web/net.js', import.meta.url), 'utf8');
+  assert.match(net, /s\.pairHello = \(/);
+  const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<button type="button" id="pairbtn">Join my other device<\/button>/);
+  assert.match(html, /Scan this with your other device’s camera\. It joins this heap as you and lines up next to this screen\./);
+  assert.match(html, /&pair=\$\{pairToken\}&by=\$\{id\}/);
+  assert.match(html, /ev === 'pair'[\s\S]{0,80}d\.token === pairToken/, 'only the token from this screen');
+});
