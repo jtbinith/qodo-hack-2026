@@ -247,6 +247,27 @@
   #peoplebox:not([hidden]) .sheet, #personbox:not([hidden]) .sheet, #checkbox:not([hidden]) .sheet, #leavebox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
   #peoplebox.out .sheet, #personbox.out .sheet, #checkbox.out .sheet, #leavebox.out .sheet { animation: sheet-down .24s ease-in forwards; }
   @media (prefers-reduced-motion: reduce) { #peoplebox .sheet, #personbox .sheet, #checkbox .sheet, #leavebox .sheet { animation: none !important; } }
+  /* accessibility (6.1–6.7): decks a screen reader and the keyboard can reach, read out, never in a finger's way */
+  .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  #decklayer { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+  .deckbtn { position: absolute; pointer-events: none; background: transparent; border: 0; padding: 0; color: transparent; }
+  .deckbtn:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; border-radius: 6px; }
+  #deckacts, #keysbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 5; }
+  #deckacts .sheet, #keysbox .sheet { width: min(100%, 480px); box-sizing: border-box; max-height: 90vh; overflow: auto;
+    background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0; border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
+  #deckacts .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #deckacts h2, #keysbox h2 { margin: 2px 0; font: 700 18px var(--ui); text-align: center; }
+  #deckacts .item { display: flex; justify-content: space-between; align-items: center; text-align: left; width: 100%; padding: 12px 2px; background: none; border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: 500 17px var(--ui); }
+  #deckacts .item[hidden] { display: none; }
+  #deckacts .item b, #deckacts .item small { display: block; } #deckacts .item b { font-weight: 500; } #deckacts .item small { font-size: 13px; color: var(--text-mid); }
+  #keyslist { list-style: none; margin: 0; padding: 0; display: grid; }
+  #keyslist li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 2px; border-bottom: 1.5px solid var(--line); font-size: 15px; }
+  #keyslist kbd { font: 700 14px var(--ui); }
+  #decklist { position: fixed; left: 0; right: 0; top: calc(66px + env(safe-area-inset-top)); bottom: 0; z-index: 2; overflow: auto; background: var(--paper); padding: 8px 16px 96px; display: grid; align-content: start; }
+  #decklist[hidden] { display: none; }
+  #decklist button { display: grid; gap: 2px; text-align: left; padding: 14px 4px; border: 0; border-bottom: 1.5px solid var(--line); background: none; color: var(--ink); font: 500 17px var(--ui); }
+  #decklist small { font-size: 14px; color: var(--text-mid); }
+  #joinlist { background: none; border: 0; color: var(--text-mid); font: 13px var(--ui); text-decoration: underline; }
   #netbanner { position: fixed; left: 0; right: 0; top: calc(66px + env(safe-area-inset-top)); z-index: 3; padding: 10px 16px; background: var(--ink); color: var(--paper); font-size: 14px; }
   #netbanner[hidden] { display: none; }
   /* share more than photos (3.1, 3.4), problems (3.9) and the preview (3.10) */
@@ -481,6 +502,7 @@
     <p id="joinsub">Put the screens side by side. Each person taps the edge that faces the other one.</p>
     <button type="button" id="jointry" hidden>Try again</button>
     <button type="button" id="joinpair">Your own other device? Show a code</button>
+    <button type="button" id="joinlist">Use a list instead</button>
     <button type="button" id="joincancel">Cancel</button>
   </div>
 </div><!-- /joinmode -->
@@ -504,6 +526,24 @@
   <label class="askopen"><input id="askopen" type="checkbox"> Let everyone in without asking</label>
 </div></div><!-- /askbox -->
 <div id="netbanner" role="status" hidden>Reconnecting… Your joined screens and downloads will carry on.</div>
+<div id="decklayer" role="list" aria-label="Decks on your screen"></div>
+<div id="decklist" role="list" aria-label="Decks" hidden></div>
+<div id="say" class="sr" aria-live="polite"></div>
+<div id="deckacts" hidden><div class="sheet" role="dialog" aria-labelledby="datitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="datitle"></h2>
+  <button type="button" class="item" id="daopen"><span><b>Open</b><small id="daopensub"></small></span></button>
+  <button type="button" class="item" id="dasend"><span><b>Send to…</b><small>Same as flicking it</small></span></button>
+  <button type="button" class="item" id="dapick"></button>
+  <button type="button" class="item" id="daget"></button>
+  <button type="button" class="item" id="dahide"></button>
+  <div class="pills"><button type="button" id="daclose">Close</button></div>
+</div></div><!-- /deckacts -->
+<div id="keysbox" hidden><div class="sheet" role="dialog" aria-labelledby="keystitle">
+  <h2 id="keystitle">Keyboard shortcuts</h2>
+  <ul id="keyslist"></ul>
+  <div class="pills"><button type="button" id="keysclose">Close</button></div>
+</div></div><!-- /keysbox -->
 <div id="peoplebox" hidden><div class="sheet" role="dialog" aria-labelledby="peopletitle">
   <span class="handle" aria-hidden="true"></span>
   <button type="button" id="peopleback">‹ Back</button>
@@ -673,6 +713,7 @@
   <h2 id="menutitle">This heap</h2>
   <button type="button" class="item" id="joinhow"><span><b>Join a screen</b><small>Tap the edges that face each other</small></span></button>
   <button type="button" class="item" id="peoplebtn"><span><b>People</b><small>Who is in this heap</small></span></button>
+  <button type="button" class="item" id="listview"><span><b>Decks as a list</b><small>Easier with large text or a screen reader</small></span></button>
   <button type="button" class="item" id="invite"><span><b>Invite</b><small>QR code and link, also for your own other device</small></span></button>
   <label class="item"><span><b>Keep photo details</b><small>Off: place and camera are removed before sharing</small></span><input id="keep" type="checkbox"></label>
   <button type="button" class="item" id="leave"><span><b>Leave and clear</b><small>Remove everything from this device</small></span></button>
@@ -764,6 +805,7 @@ import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels, proposeJoin, sideWords, dropSide } from './map.js';
+import { deckLabel, deckRow, say, progressStep, SHORTCUTS, keyAction, gridMove } from './a11y.js';
 import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen, forgetOpen } from './gate.js';
 import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
 import { solveLayout, addJoins } from './layout.js';
@@ -1396,7 +1438,7 @@ function downloadFile(file) {
 // Get (2B.6, built on Save all, F13): every picked photo in one tap. The share sheet once with all of them, or downloads
 const picked = new Set();   // pids picked on this device, never sent anywhere
 const pickSave = createSaveAll({
-  batch: (handed) => saveBatch({ prints, files, incoming, me: id, handed, only: picked }),
+  batch: (handed, only) => saveBatch({ prints, files, incoming, me: id, handed, only: only || picked }),
   canShare: (list) => !!navigator.share && !!navigator.canShare?.({ files: list }),
   share: (list) => navigator.share({ files: list }),
   download: downloadFile,
@@ -1404,14 +1446,15 @@ const pickSave = createSaveAll({
   label: 'Get',
 });
 // Get: ask for every picked photo that isn't here yet, then save what is here, inside this tap (iOS rule)
-function getPicked() {
+// only: just these (one deck's Get all, 6.3), so other picked photos aren't saved too
+function getPicked(only = null) {
   let full = false;
-  for (const p of toFetch(prints, picked, files, incoming, id)) {
+  for (const p of toFetch(prints, only || picked, files, incoming, id)) {
     const src = sourceOf(p); if (!src) continue;   // nobody here has it: the problems row says so
     if (!expect(p.pid, src, p.size)) { full = true; break; }
     p.lastSource = src; peers.send(src, { t: 'want', pid: p.pid });
   }
-  pickSave.tap();
+  pickSave.tap(only);
   if (full) toast('Too many photos arriving. Tap Get again in a moment');
 }
 
@@ -1439,7 +1482,7 @@ function start(room) {
     }
     onMessage(from, m, bytes);
   });
-  const known = new Set();
+  const known = new Set(), seen = {};   // seen: who was here, by device name, to say who left
   // Catch everyone up. The owner announces its prints; once the owner has left, anyone
   // still holding a print announces it. Re-checked on every change in who's here, because
   // a device that closes can take a while to drop out of the room, and whenever a device's
@@ -1454,6 +1497,8 @@ function start(room) {
   peers.onReady(catchUp);
   const roomChanged = () => {
     showWho(); showHeader(); gate(); hostChanged();
+    for (const k of Object.keys(seen)) if (!net.peers[k]) { speak(say.left(seen[k])); delete seen[k]; }   // spoken (6.4)
+    for (const k of Object.keys(net.peers)) if (k !== id) seen[k] = deviceName(k);
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
   };
@@ -1795,6 +1840,7 @@ function noteLanding(from, p, drop) {
   if (!b || b.from !== from || b.drop !== drop || performance.now() - b.t > 1000) { b = { from, drop, pids: [] }; landings.push(b); }
   b.t = performance.now();
   if (!b.pids.includes(p.pid)) b.pids.push(p.pid);
+  clearTimeout(b.sayT); b.sayT = setTimeout(() => speak(say.sent(nameOf(from), b.pids.length)), 700);   // said once the drop has landed (6.4)
   // a drop still arriving stays, so its Stop isn't lost to a later one (Qodo on #162); finished ones go
   landings = landings.filter((x) => x === b || !landingState([x], hasFile, onTheWay).done).slice(-20);
   updateLanding();
@@ -1821,6 +1867,10 @@ function updateLanding() {
   snackUndo = gone ? null : st.done ? () => undoLanding(b) : () => stopLanding(b); $('snackact').hidden = gone; $('snack').hidden = false;
   clearTimeout(snackTimer);
   if (st.done) snackTimer = setTimeout(() => { $('snack').hidden = true; $('snackact').hidden = false; landings = []; landed = null; snackUndo = null; landedSaid = ''; }, 6000);
+  // spoken (6.4): how far a drop has come, once a quarter, then that it's all here
+  const q = progressStep(st.k, n);
+  if (q >= 1 && b.saidQ !== q) { b.saidQ = q; speak(say.getting(st.k, n)); }
+  if (st.done && st.k === n && n > 1 && !b.saidReady) { b.saidReady = true; speak(say.ready(n)); }
 }
 // Stop: whatever hasn't arrived yet stops (the sender is told, so it stops sending), and goes back to the sender's screen
 function stopLanding(b) {
@@ -1925,6 +1975,10 @@ $('mapaskgo').onclick = () => {
 $('arrangecancel').onclick = () => { $('arrangebox').hidden = true; };
 $('arrangelist').onclick = (e) => {
   const k = e.target.closest('button')?.dataset.k; if (!k) return;
+  if (arr.step === 'joinwho') {   // join from a list (6.3): which screen, then which side of mine; they're asked
+    arr.moved = k; arr.target = id; arr.step = 'side';
+    return arrangeStep(`Where is ${deviceName(k)}?`, [['left', 'On your left'], ['right', 'On your right'], ['above', 'Above your screen'], ['below', 'Below your screen']], `Next to your screen, on which side? ${nameOf(k)} will be asked to accept.`);
+  }
   if (arr.step === 'who') { arr.moved = k; arr.step = 'target'; return arrangeStep('Next to which screen?', [id, ...others()].filter((x) => x !== k).map((x) => [x, x === id ? `You · ${deviceName(x)}` : deviceName(x)])); }
   if (arr.step === 'target') { arr.target = k; arr.step = 'side'; return arrangeStep(`Where, next to ${deviceName(k)}?`, [['below', 'Below it'], ['above', 'Above it'], ['left', 'On its left'], ['right', 'On its right']]); }
   const all = Object.fromEntries([id, ...others()].map((x) => [x, sizeOf(x)]));
@@ -1940,7 +1994,12 @@ let moveSide = '', moveAsk = null, moveTimer = 0;
 const sideOf = (j) => ({ T: 'below', B: 'above', L: 'right', R: 'left' })[j.edgeA];   // where a sits next to b
 function moveAsked(ask) {
   moveAsk = ask; const j = ask.j, mine = j.a === id;
-  if (mine) {   // the host wants to move my screen (4.11)
+  if (mine && ask.by !== net.leader) {   // someone chose a side for my screen next to theirs, from the list (6.3)
+    $('movetitle').textContent = `${deviceName(ask.by)} wants to join your screen`;
+    $('movesub').textContent = `Your screen would join theirs, ${sideWords(sideOf(j))} ${deviceName(j.b)}.`;
+    $('moveno').textContent = 'No'; $('moveyes').textContent = 'Accept';
+    $('movenote').textContent = 'Nothing changes unless you tap Accept. If you ignore this, it cancels after 30 s.';
+  } else if (mine) {   // the host wants to move my screen (4.11)
     $('movetitle').textContent = 'The host wants to move your screen';
     $('movesub').textContent = `The host (${nameOf(ask.by)}) wants to put your screen ${sideWords(sideOf(j))} ${deviceName(j.b)}. Photos dropped there will start arriving on your screen.`;
     $('moveno').textContent = 'Keep it here'; $('moveyes').textContent = 'Move it';
@@ -2028,7 +2087,10 @@ $('jointry').onclick = openJoin;
 function joinResult(kind, text, other) {
   if ($('joinmode').hidden) return;
   clearInterval(joinTick);
-  if (kind === 'joined') { closeJoin(); return snackSay(text, () => { net.unjoin(other); toast('Screens apart again'); }, 10000); }
+  if (kind === 'joined') {
+    closeJoin(); speak(say.joined(deviceName(other), /on your right/.test(text) ? 'R' : /on your left/.test(text) ? 'L' : /above you/.test(text) ? 'T' : /below you/.test(text) ? 'B' : ''));
+    return snackSay(text, () => { net.unjoin(other); toast('Screens apart again'); }, 10000);
+  }
   if (kind === 'nomatch') return joinCard('No match', 'The other screen didn’t tap in time, or tapped the wrong edge.', { retry: true });
   joinCard('More than two screens tapped at once', 'Join one pair at a time. You can add the next screen after.', { retry: true });
 }
@@ -2037,6 +2099,132 @@ function snackSay(text, undo = null, ms = 6000) {
   landings = []; landed = null; snackUndo = undo; $('snacktext').textContent = text; $('snackact').hidden = !undo; $('snack').hidden = false;
   clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; snackUndo = null; }, ms);
 }
+// ---------- accessibility (6.1–6.7) ----------
+// spoken updates (6.4): one polite line, emptied first so the same words can be said again
+let sayT = 0;
+function speak(text) { const el = $('say'); el.textContent = ''; clearTimeout(sayT); sayT = setTimeout(() => { el.textContent = text; }, 60); }
+const sidesNow = () => (sizes[id] ? Object.fromEntries(edgeLabels(Object.keys(sizes), layout, sizes, id).map((l) => [l.id, l.side])) : {});   // nothing joined before the heap is live
+// 6.1: a button over each deck on my screen, for screen readers and the keyboard. The canvas stays in charge of
+// fingers and the mouse (the buttons let them through); a button's own Actions are one more button after it
+let layerSig = '';
+function showDeckLayer() {
+  if (!net || !$('lobby').hidden) { if (layerSig) { layerSig = ''; $('decklayer').replaceChildren(); } return; }
+  const [mx, my] = meWorld(), sides = sidesNow();
+  const ds = groupDecks(visiblePrints()).filter((d) => visible(d.top)).map((d) => { const [x, y] = world(d.top); return { d, x: Math.round(x - mx), y: Math.round(y - my) }; })
+    .filter(({ d, x, y }) => x + d.top.w > 0 && y + d.top.h > 0 && x < W && y < H);
+  const sig = ds.map(({ d, x, y }) => `${d.key}:${d.pids.length}:${x}:${y}:${sides[d.owner] || ''}:${nameOf(d.owner)}`).join('|');
+  if (sig === layerSig) return;
+  layerSig = sig;
+  $('decklayer').replaceChildren(...ds.map(({ d, x, y }) => {
+    const mine = d.owner === id, item = document.createElement('div'); item.setAttribute('role', 'listitem');
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'deckbtn' });
+    b.setAttribute('aria-label', deckLabel({ mine, name: nameOf(d.owner), n: d.pids.length, side: sides[d.owner] }));
+    Object.assign(b.style, { left: x + 'px', top: y + 'px', width: d.top.w + 'px', height: d.top.h + 'px' });
+    b.dataset.key = d.key;
+    b.onclick = () => openDeck(d.pids);
+    b.onkeydown = (e) => { if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); openDeckActions(d); } };
+    const a = Object.assign(document.createElement('button'), { type: 'button', className: 'deckacts sr', textContent: `Actions for ${mine ? 'your deck' : nameOf(d.owner) + '’s deck'}` });
+    a.onclick = () => openDeckActions(d);
+    item.append(b, a);
+    return item;
+  }));
+}
+// 6.3: a deck's actions as a list
+let actDeck = null;
+function openDeckActions(d) {
+  actDeck = d; const mine = d.owner === id, n = d.pids.length, ps = d.pids.map((k) => prints.get(k)).filter(Boolean), all = `${n} photo${n === 1 ? '' : 's'}`;
+  $('datitle').textContent = mine ? 'Your deck' : `${nameOf(d.owner)}’s deck`;
+  $('daopensub').textContent = `See all ${all}`;
+  $('dapick').textContent = `Pick all ${n}`;
+  $('daget').textContent = `Get all ${n} · ${mb(ps.reduce((a, p) => a + p.size, 0))}`; $('daget').hidden = mine;
+  $('dahide').textContent = `Hide ${nameOf(d.owner)}’s photos`; $('dahide').hidden = mine;
+  openSheet('deckacts');
+}
+const actPrints = () => (actDeck ? actDeck.pids.map((k) => prints.get(k)).filter(Boolean) : []);
+$('daopen').onclick = () => { const d = actDeck; closeSheet('deckacts', () => { if (d) openDeck(d.pids); }); };
+$('dasend').onclick = () => { const ps = actPrints(); closeSheet('deckacts', () => { if (ps.length) openSendTo(ps); }); };
+$('dapick').onclick = () => { for (const p of actPrints()) picked.add(p.pid); showPicks(); closeSheet('deckacts'); };
+$('daget').onclick = () => { const only = new Set(actPrints().map((p) => p.pid)); for (const k of only) picked.add(k); showPicks(); getPicked(only); closeSheet('deckacts'); };   // inside the tap; just this deck
+$('dahide').onclick = () => { const d = actDeck; if (d) { hiddenOwners.add(d.owner); for (const k of [...picked]) if (prints.get(k)?.owner === d.owner) picked.delete(k); showPicks(); } closeSheet('deckacts'); };
+$('daclose').onclick = () => closeSheet('deckacts');
+$('deckacts').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('deckacts'); };
+// 6.3: join a screen from a list instead of tapping edges
+$('joinlist').onclick = () => {
+  closeJoin();
+  if (!others().length) return toast('Nobody else is in this heap yet. Invite someone from the menu');
+  arr = { step: 'joinwho' };
+  arrangeStep('Which screen do you want to join?', others().map((k) => [k, deviceName(k)]));
+  $('arrangebox').hidden = false;
+};
+// 6.5: the decks as a list, one row a person: who, how many, where. Remembered on this device
+const LIST_KEY = 'heap-list';
+let listSig = '';
+function showDeckList() {
+  const sides = sidesNow(), by = new Map();
+  for (const d of groupDecks(visiblePrints())) by.set(d.owner, [...(by.get(d.owner) || []), ...d.pids]);
+  const rows = [...by].sort(([a], [b]) => (a === id ? -1 : b === id ? 1 : 0));
+  const sig = rows.map(([o, ps]) => `${o}:${ps.length}:${sides[o] || ''}`).join('|');
+  if (sig === listSig && $('decklist').childElementCount) return;
+  listSig = sig;
+  $('decklist').replaceChildren(...(rows.length ? rows.map(([owner, pids]) => {
+    const r = deckRow({ mine: owner === id, name: nameOf(owner), n: pids.length, side: sides[owner], kind: deviceKind({ w: W, h: H }) });
+    const b = Object.assign(document.createElement('button'), { type: 'button' }); b.setAttribute('role', 'listitem');
+    b.append(Object.assign(document.createElement('b'), { textContent: r.title }), Object.assign(document.createElement('small'), { textContent: r.where }));
+    b.onclick = () => openDeck(pids);
+    return b;
+  }) : [Object.assign(document.createElement('p'), { className: 'deckhint', textContent: 'Nothing on the table yet.' })]));
+}
+function listView(on) {
+  $('decklist').hidden = !on; listSig = '';
+  if (on) showDeckList();
+  $('listview').querySelector('b').textContent = on ? 'Decks on the table' : 'Decks as a list';
+  try { localStorage.setItem(LIST_KEY, on ? '1' : ''); } catch {}
+}
+$('listview').onclick = () => { const on = $('decklist').hidden; closeMenu(() => listView(on)); };
+try { if (localStorage.getItem(LIST_KEY) === '1') listView(true); } catch {}
+// 6.7: the keyboard
+$('keyslist').replaceChildren(...SHORTCUTS.map(([k, what]) => { const li = document.createElement('li'); li.append(Object.assign(document.createElement('kbd'), { textContent: k }), Object.assign(document.createElement('span'), { textContent: what })); return li; }));
+$('keysclose').onclick = () => closeSheet('keysbox');
+$('keysbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('keysbox'); };
+const SHEETS = ['keysbox', 'deckacts', 'previewbox', 'sendbox', 'reviewbox', 'deckbox', 'mapbox', 'arrangebox', 'personbox', 'peoplebox', 'checkbox', 'sharebox', 'textbox', 'invitebox', 'leavebox'];
+const openNow = () => SHEETS.find((k) => $(k) && !$(k).hidden);
+function closeTop() {
+  if (drag) { const { ps, p, ox, oy } = drag; drag = null; showDropMap(false); moveAll(ps, p, ox, oy); sendMove(true, { ps, p }); return true; }   // a drag goes back where it started
+  if (!$('menubox').hidden) { closeMenu(); return true; }
+  if (!$('joinmode').hidden) { closeJoin(); return true; }
+  const k = openNow(); if (k) { if (k === 'previewbox') $('previewback').click(); else closeSheet(k); return true; }
+  if (!$('decklist').hidden) { listView(false); return true; }
+  return false;
+}
+function onKey(e) {
+  if (!$('lobby').hidden || !net) return;
+  const tile = e.target?.closest?.('#decktiles button[data-pid]');
+  if (tile && /^Arrow/.test(e.key)) {   // between photos in a deck
+    const tiles = [...$('decktiles').querySelectorAll('button[data-pid]')], i = tiles.indexOf(tile);
+    const cols = Math.max(1, Math.round($('decktiles').clientWidth / Math.max(1, tile.offsetWidth)));
+    tiles[gridMove(e.key, i, tiles.length, cols)]?.focus(); e.preventDefault(); return;
+  }
+  if (tile && (e.key === ' ' || e.key === 'Enter')) {   // Space picks, Enter looks closer
+    e.preventDefault();
+    if (e.key === ' ') { togglePick(tile.dataset.pid); tile.classList.toggle('on', picked.has(tile.dataset.pid)); }
+    else { const list = [...$('decktiles').querySelectorAll('button[data-pid]')].map((t) => prints.get(t.dataset.pid)).filter(Boolean); openPreview(list, list.findIndex((p) => p.pid === tile.dataset.pid)); }
+    return;
+  }
+  const act = keyAction(e);
+  if (!act) return;
+  if (act === 'close') { if (closeTop()) e.preventDefault(); return; }
+  if (openNow() || !$('menubox').hidden || !$('joinmode').hidden) return;   // shortcuts work on the table
+  e.preventDefault();
+  if (act === 'map') $('mapbtn').click();
+  else if (act === 'help') openSheet('keysbox');
+  else if (act === 'get') { if (picked.size) getPicked(); else toast('Pick some photos first'); }
+  else if (act === 'send') {
+    const key = e.target?.closest?.('.deckbtn')?.dataset.key, d = key && groupDecks(prints).find((x) => x.key === key);
+    const ps = d ? d.pids.map((k) => prints.get(k)).filter(Boolean) : [...picked].map((k) => prints.get(k)).filter(Boolean);
+    if (ps.length) openSendTo(ps); else toast('Pick some photos, or move to a deck first');
+  }
+}
+addEventListener('keydown', onKey);
 // People (5.1): everyone in the heap; tap someone to check, hide, block or (host) remove them
 const kindOf = (k) => deviceKind(sizeOf(k) || { w: 390, h: 844 });
 const deviceName = (k) => `${nameOf(k)}’s ${kindOf(k)}`;
@@ -2347,7 +2535,7 @@ function frame() {
     const y = l.side === 'T' ? 84 : l.side === 'B' ? H - 96 : Math.min(Math.max(l.along, 90), H - 100);
     pill(text, x, y, true);
   }
-  showHeader(); updateLanding();
+  showHeader(); updateLanding(); showDeckLayer(); if (!$('decklist').hidden) showDeckList();
   const n = Object.keys(net.peers).length;
   $('hud').textContent = `table ${net.room.slice(6)} · ${name}${net.leader === id ? ' (time keeper)' : ''} · ${net.status}\n` +
     `devices ${n} · joins ${net.joins.length} · prints ${prints.size} · held here ${files.size}\n` +

@@ -36,13 +36,13 @@ export function createSaveAll({ batch, canShare, share, download, toast, label =
 
   // Everything is decided, and the share sheet opened, before the first await: the share sheet
   // only opens inside the tap (iOS rule)
-  async function tap() {
+  async function tap(only = null) {   // only: just these pids this time (one deck's Get all)
     if (busy) return toast('Still saving');
     for (const pid of pending) if (handed.has(pid)) pending.delete(pid);   // saved by tapping it: nothing left to hold
     if (!pending.size) release = false;   // the hung share settled since: nothing left to release or download
     // a share that outlived SHARE_TIMEOUT may still finish: its photos aren't offered again
     // until it settles, or until the person has been told and taps again
-    const { ready, arriving } = batch(release ? handed : new Set([...handed, ...pending]));
+    const { ready, arriving } = batch(release ? handed : new Set([...handed, ...pending]), only);
     if (!ready.length) {
       if (pending.size) {   // only the timed-out share's photos are left: ask first
         release = true;
