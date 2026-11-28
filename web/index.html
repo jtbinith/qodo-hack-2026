@@ -564,7 +564,6 @@
   <label class="item" for="pick"><span><b>Photos and videos</b><small>From your camera roll</small></span></label>
   <label class="item" for="pickfile"><span><b>Files</b><small>Any file up to 200 MB. Programs and scripts can’t be shared</small></span></label>
   <button type="button" class="item" id="sharelink"><span><b>Paste a link</b><small>Shown as plain text</small></span></button>
-  <button type="button" class="item" id="sharenote"><span><b>Write a note</b><small>Short text for everyone</small></span></button>
   <div class="pills"><button type="button" id="shareclose">Close</button></div>
 </div></div><!-- /sharebox -->
 <div id="textbox" hidden><div class="sheet" role="dialog" aria-labelledby="texttitle">
@@ -1047,7 +1046,7 @@ async function imgFrom(bytes) {
 }
 const pidOf = () => { const b = new Uint8Array(8); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); };
 
-// add to the table (3.1): photos and videos, files, or a link or note as a small text file with its text
+// add to the table (3.1): photos and videos, files, or a link as a small text file with its text
 async function addFiles(list, keep, text = null) {
   let added = 0;
   const spot = deckSpot(prints, id, { w: W, h: H });   // what I share goes on my deck (2A.1)
@@ -1081,16 +1080,15 @@ function placeActions() { const into = WIDE.matches ? $('topacts') : $('bar'); i
 WIDE.addEventListener('change', placeActions); placeActions();
 $('shareclose').onclick = () => closeSheet('sharebox');
 $('sharebox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('sharebox'); };
-// a link or a note (3.4): plain text; a link must be a web address
-let textKind = 'note';
-let textSending = false;   // one note per Share, however many taps
+// a link (3.4): plain text, and it must be a web address
+let textKind = 'link';
+let textSending = false;   // one link per Share, however many taps
 const openText = (kind) => closeSheet('sharebox', () => {
-  textKind = kind; textSending = false; $('texttitle').textContent = kind === 'link' ? 'Paste a link' : 'Write a note';
-  $('textfield').value = ''; $('textfield').placeholder = kind === 'link' ? 'https://' : 'Meet at the gate at 8';
+  textKind = kind; textSending = false; $('texttitle').textContent = 'Paste a link';
+  $('textfield').value = ''; $('textfield').placeholder = 'https://';
   openSheet('textbox'); $('textfield').focus();
 });
 $('sharelink').onclick = () => openText('link');
-$('sharenote').onclick = () => openText('note');
 $('textcancel').onclick = () => closeSheet('textbox');
 $('textshare').onclick = () => {
   if (textSending) return;
@@ -1101,7 +1099,7 @@ $('textshare').onclick = () => {
 function addText(kind, text) {
   if (kind === 'link' && !isWebLink(text)) return toast('That isn’t a web link. Links start with https://');
   closeSheet('textbox');
-  const file = new File([text], kind === 'link' ? 'link.txt' : 'note.txt', { type: 'text/plain' });
+  const file = new File([text], 'link.txt', { type: 'text/plain' });
   addFiles([file], true, text);
 }
 
@@ -1596,8 +1594,8 @@ $('peoplebtn').onclick = $('people').onclick = () => closeMenu(openPeople);
 // the deck sheet (2B.1, 2B.2): a deck's photos newest first, or everyone's. A tap saves one; dragging one out
 // puts it on the table under the finger and keeps it moving, so it can be dropped on another screen (2A.7)
 let deckUrls = [];
-const KIND_WORD = { photos: ['photo', 'photos'], videos: ['video', 'videos'], files: ['file', 'files'], text: ['link or note', 'links and notes'] };
-const KIND_NAME = { all: 'All', photos: 'Photos', videos: 'Videos', files: 'Files', text: 'Links and text' };
+const KIND_WORD = { photos: ['photo', 'photos'], videos: ['video', 'videos'], files: ['file', 'files'], text: ['link', 'links'] };
+const KIND_NAME = { all: 'All', photos: 'Photos', videos: 'Videos', files: 'Files', text: 'Links' };
 let deckOpen = { pids: [], all: false }, deckKind = 'all';
 function openDeck(pids, all = false, kind = 'all') {
   deckOpen = { pids, all }; deckKind = all ? kind : 'all';
