@@ -206,3 +206,11 @@ test('edge labels (2C.2, 2C.5): the table names each screen touching mine', () =
   assert.match(frame, /edgeLabels\(/);
   assert.match(frame, /’s \$\{deviceKind\(/, 'the neighbour, by name and kind');
 });
+
+test('remove your own photos: pick them, Remove, gone from every table, with Undo; only the owner can', () => {
+  assert.match(html, /<button type="button" id="removepick" hidden><\/button>/);
+  assert.match(html, /function removeMine\(/);
+  assert.match(html, /t: 'unshare', pid/);
+  assert.match(html, /m\.t === 'unshare'[\s\S]{0,160}validPidMsg\(m\)[\s\S]{0,120}p\.owner === from/, 'only the owner takes a photo off the table');
+  assert.match(html, /`Removed \$\{n\} photo\$\{n === 1 \? '' : 's'\}\. Copies already saved stay with whoever saved them`/);
+});

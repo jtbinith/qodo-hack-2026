@@ -903,6 +903,19 @@ try {
   await T3.context().close();
   await S.evaluate(() => window.__t.net.unjoin(Object.keys(window.__t.net.peers).find((k) => k !== window.__t.id)));
   await until(S, () => window.__t.net.joins.length === 0, null, 10000);
+  // remove your own photos: G picks its 2 in its deck and removes them; S's table loses them; Undo brings them back
+  await G.setInputFiles('#pick', ['g1.jpg', 'g2.jpg'].map((n) => ({ name: n, mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) })));
+  await until(S, () => ['g1.jpg', 'g2.jpg'].every((n) => [...window.__t.prints.values()].some((p) => p.name === n)), null, 15000);
+  const gd = await G.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length === 2), [wx, wy] = t.world(d.top), me = t.layout.pos[t.id]; return { pids: d.pids, x: wx - me[0] + 75, y: wy - me[1] + 75 }; });
+  await G.mouse.click(gd.x, gd.y); await until(G, () => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length, null, 5000);
+  await G.click('#pickall');
+  const rmSays = await G.evaluate(() => document.getElementById('removepick').hidden ? '' : document.getElementById('removepick').textContent);
+  await G.click('#removepick');
+  const rmGone = await until(S, (pids) => pids.every((p) => !window.__t.prints.has(p)), gd.pids, 10000).then(() => true, () => false);
+  const rmLine = await G.evaluate(() => document.getElementById('snacktext').textContent);
+  await G.click('#snackact');
+  const backAgain = await until(S, (pids) => pids.every((p) => window.__t.prints.has(p)), gd.pids, 10000).then(() => true, () => false);
+  check(rmSays === 'Remove 2' && rmGone && /^Removed 2 photos\./.test(rmLine) && backAgain, `"${rmSays}" takes G's photos off S's table (${rmGone}), G says "${rmLine}", and Undo puts them back (${backAgain})`);
   await joinModeOpen(S);
   await S.click('#joinmode .strip[data-edge="T"]');
   const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
