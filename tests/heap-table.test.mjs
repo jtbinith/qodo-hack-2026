@@ -183,3 +183,26 @@ test('a Join button in the header, one tap to join a screen', () => {
   assert.match(top, /<button id="joinbtn" type="button"[^>]*>Join<\/button>\s*<button id="people"/);
   assert.match(html, /\$\('joinbtn'\)\.onclick = openJoin/);
 });
+
+test('the map (2C.7): a Map chip in the header opens every screen in the room, with Join a screen', () => {
+  const top = (html.match(/<header id="top"[^>]*>([\s\S]*?)<\/header>/) || [, ''])[1];
+  assert.match(top, /<button id="mapbtn" type="button" aria-label="Map of the screens in this heap" aria-controls="mapbox"[^>]*>/);
+  const box = (html.match(/<div id="mapbox"[^>]*>([\s\S]*?)<\/div><!-- \/mapbox -->/) || [, ''])[1];
+  assert.match(box, /<h2 id="maptitle"><\/h2>\s*<canvas id="mapcv"[^>]*><\/canvas>\s*<p id="mapkey"><\/p>/);
+  assert.match(box, /<button type="button" id="mapjoin" class="pri">Join a screen<\/button>/);
+  assert.match(html, /function drawMap\(/);
+  assert.match(css, /#mapbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/);
+});
+
+test('drop on the map (2C.4, 2C.6): while dragging with 3 or more screens, the map comes up and a drop on a tile sends it there', () => {
+  assert.match(html, /<div id="dropmap" hidden><small>Or drop on the map<\/small><canvas id="dropcv"><\/canvas><\/div>/);
+  assert.match(html, /others\(\)\.length >= 2/);
+  assert.match(html, /function mapHit\(/);
+  assert.match(html, /giveTo\(/);
+});
+
+test('edge labels (2C.2, 2C.5): the table names each screen touching mine', () => {
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.match(frame, /edgeLabels\(/);
+  assert.match(frame, /’s \$\{deviceKind\(/, 'the neighbour, by name and kind');
+});

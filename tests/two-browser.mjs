@@ -875,6 +875,34 @@ try {
   const apart = await until(G, () => window.__t.net.joins.length === 0, null, 10000).then(() => true, () => false);
   const apartS = await S.evaluate(() => window.__t.net.joins.length === 0);
   check(undoShown && apart && apartS, `Undo on "Joined with Guest" (${undoShown}) takes the screens apart on both (${apart}, ${apartS})`);
+  // 2C: join again, then a third screen that isn't joined. The map shows all three; the table names its neighbour;
+  // dragging with 3 screens brings the map up and a drop on the far screen's tile sends it there
+  await joinModeOpen(S); await joinModeOpen(G);
+  await S.click('#joinmode .strip[data-edge="R"]'); await G.click('#joinmode .strip[data-edge="L"]');
+  await until(S, () => window.__t.net.joins.length === 1 && document.getElementById('joinmode').hidden, null, 15000);
+  const T3 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await T3.addInitScript(() => { try { localStorage.setItem('heap-name', 'Third'); } catch {} });
+  await T3.goto(`${BASE}?room=${s1.tiles}&auto`); await enter(T3);
+  await until(S, () => Object.keys(window.__t.net.peers).length === 3, null, 20000);
+  const labels = await S.evaluate(() => window.__t.edgeLabels());
+  await S.click('#mapbtn'); await until(S, () => !document.getElementById('mapbox').hidden, null, 5000);
+  const mapSays = await S.evaluate(() => ({ title: document.getElementById('maptitle').textContent, key: document.getElementById('mapkey').textContent, tiles: window.__t.mapTiles().map((t) => [t.id === window.__t.id ? 'me' : t.name, t.joined]) }));
+  await S.click('#mapbox .handle').catch(() => {}); await S.evaluate(() => { document.getElementById('mapbox').hidden = true; });
+  check(labels.length === 1 && labels[0].side === 'R' && mapSays.title === 'Host’s heap · 3 screens' && /Third isn’t joined yet/.test(mapSays.key) && mapSays.tiles.length === 3,
+    `S's table names its neighbour (${JSON.stringify(labels.map((l) => l.side))}); the map says "${mapSays.title}", "${mapSays.key}" with ${JSON.stringify(mapSays.tiles)}`);
+  await S.setInputFiles('#pick', [{ name: 'map.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
+  await until(S, () => [...window.__t.prints.values()].some((p) => p.name === 'map.jpg'), null, 10000);
+  const mp = await S.evaluate(() => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'map.jpg'), [wx, wy] = t.world(p), me = t.layout.pos[t.id]; return { pid: p.pid, x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 }; });
+  await S.mouse.move(mp.x, mp.y); await S.mouse.down(); await S.mouse.move(mp.x + 20, mp.y + 20);
+  const dm = await until(S, () => !document.getElementById('dropmap').hidden, null, 3000).then(() => true, () => false);
+  const t3At = await S.evaluate(() => { const t = window.__t.mapHitBox(window.__t.mapTiles().find((x) => x.name === 'Third').id); return t; });
+  if (t3At) { for (let k = 1; k <= 6; k++) await S.mouse.move(mp.x + 20 + (t3At.x - mp.x - 20) * k / 6, mp.y + 20 + (t3At.y - mp.y - 20) * k / 6); await new Promise((r) => setTimeout(r, 150)); await S.mouse.move(t3At.x + 1, t3At.y); }
+  await S.mouse.up();
+  const mapped = await until(T3, (pid) => window.__t.files.has(pid), mp.pid, 30000).then(() => true, () => false);
+  check(dm && !!t3At && mapped, `dragging brings the map up (${dm}) and a drop on Third's tile sends it there (${mapped})`);
+  await T3.context().close();
+  await S.evaluate(() => window.__t.net.unjoin(Object.keys(window.__t.net.peers).find((k) => k !== window.__t.id)));
+  await until(S, () => window.__t.net.joins.length === 0, null, 10000);
   await joinModeOpen(S);
   await S.click('#joinmode .strip[data-edge="T"]');
   const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
