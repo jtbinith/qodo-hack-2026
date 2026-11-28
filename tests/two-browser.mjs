@@ -387,8 +387,9 @@ try {
   await B.evaluate(() => document.getElementById('reviewbox').hidden = true);
   await B.click('#allphotos'); await sheetUp(B, 'deckbox');
   await tapTile(B, 'deckbox', away);
+  await B.evaluate(() => { window.__said = []; new MutationObserver(() => window.__said.push(document.getElementById('toast').textContent)).observe(document.getElementById('toast'), { childList: true, characterData: true, subtree: true }); });   // every toast, so one arriving at the same moment can't hide it
   await B.click('#getpick');
-  const arrivingSaid = await toastOf(B);
+  const arrivingSaid = await B.evaluate(() => window.__said.find((t) => /still arriving/.test(t)) || document.getElementById('toast').textContent);
   const fetched = await until(B, (pid) => window.__t.files.has(pid), away, 60000).then(() => true, () => false);
   await B.click('#getpick');
   const gotAway = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= NB + 1 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length === NB + 1); } }, 100); });
@@ -550,7 +551,10 @@ try {
   check(ownSaid === 'Already yours', `tapping your own print says "${ownSaid}"`);
 
   // dragging a whole deck across the seam sends every photo in it (2A.6)
-  const rest = await A.evaluate((o) => window.__t.decks().find((d) => d.owner === o && d.pids.length > 1)?.pids || [], ids.a);
+  // two new photos, so the deck is on A's screen and B doesn't have them yet
+  await A.setInputFiles('#pick', ['deck-1.jpg', 'deck-2.jpg'].map((n) => ({ name: n, mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) })));
+  await until(B, () => ['deck-1.jpg', 'deck-2.jpg'].every((n) => [...window.__t.prints.values()].some((p) => p.name === n)), null, 15000).catch(() => {});
+  const rest = await A.evaluate((o) => window.__t.decks().find((d) => d.owner === o && d.anchor === o && d.pids.length > 1 && d.pids.some((pid) => window.__t.prints.get(pid).name === 'deck-1.jpg'))?.pids || [], ids.a);
   const deckAt = await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid), [wx, wy] = t.world(p), me = t.layout.pos[t.id]; return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 }; }, rest[rest.length - 1]);
   await A.mouse.move(deckAt.x, deckAt.y); await A.mouse.down();
   for (let k = 1; k <= 12; k++) await A.mouse.move(deckAt.x + ((900 + 150 - deckAt.x) * k) / 12, deckAt.y);
