@@ -5,49 +5,181 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>qodo-hack-2026 · universal sharing</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #2b1d14; color: #f5ead8; overflow: hidden;
-    font-family: system-ui, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+  @font-face { font-family: 'Schibsted Grotesk'; font-weight: 400; font-display: swap; src: url(vendor/fonts/schibsted-grotesk-latin-400-normal.woff2) format('woff2'); }
+  @font-face { font-family: 'Schibsted Grotesk'; font-weight: 500; font-display: swap; src: url(vendor/fonts/schibsted-grotesk-latin-500-normal.woff2) format('woff2'); }
+  @font-face { font-family: 'Schibsted Grotesk'; font-weight: 700; font-display: swap; src: url(vendor/fonts/schibsted-grotesk-latin-700-normal.woff2) format('woff2'); }
+  @font-face { font-family: 'Anton'; font-weight: 400; font-display: swap; src: url(vendor/fonts/anton-latin-400-normal.woff2) format('woff2'); }
+  /* heap colours (rebrand epic, issue 156): charcoal on soft white; photos bring the colour */
+  :root { --ink: #382A2B; --paper: #F6F3F2; --text-mid: #6E5E5F; --line: #E4DEDC; --scrim: #382A2BB3;
+    --ui: 'Schibsted Grotesk', system-ui, sans-serif; --display: 'Anton', 'Schibsted Grotesk', sans-serif; }
+  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); overflow: hidden;
+    font-family: var(--ui); touch-action: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
   #c { position: fixed; inset: 0; width: 100vw; height: 100vh; }
-  #hud { position: fixed; left: 8px; top: calc(8px + env(safe-area-inset-top)); font: 12px/1.45 ui-monospace, monospace;
-    background: #0008; padding: 6px 9px; border-radius: 8px; white-space: pre; pointer-events: none; }
-  #bar { position: fixed; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); display: flex; gap: 8px; }
-  #bar label, #bar button { font-size: 16px; padding: 10px 14px; border-radius: 12px; border: 0; background: #ffd23f; color: #222; }
+  #hud { position: fixed; left: 12px; top: calc(62px + env(safe-area-inset-top)); font: 500 11px/1.45 var(--ui);
+    background: var(--paper); color: var(--text-mid); border: 1.5px solid var(--line); padding: 6px 9px; border-radius: 10px; white-space: pre; pointer-events: none; }
+  button, label, input { font-family: var(--ui); }
+  /* live table: Leave and Invite at the top, the photo actions at the bottom (Figma "04 · Live table") */
+  #top { position: fixed; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top)); display: flex; justify-content: space-between; pointer-events: none; z-index: 3; }
+  #top span { display: flex; gap: 8px; }
+  #top #info { width: 40px; padding: 9px 0; font-weight: 700; font-style: italic; border-radius: 50%; }
+  #top button { pointer-events: auto; font-size: 15px; font-weight: 500; padding: 9px 14px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #top #invite { background: var(--ink); color: var(--paper); }
+  #bar { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: nowrap; }
+  #bar label, #bar button { font-size: 15px; font-weight: 500; padding: 10px 14px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); white-space: nowrap; }
+  #bar label:last-child { background: var(--ink); color: var(--paper); }
+  #bar label:has(#keep) { border-color: transparent; background: none; padding: 10px 4px; font-size: 14px; margin-right: auto; }
   #bar input[type=file] { display: none; }
-  #bar input[type=checkbox] { width: 18px; height: 18px; vertical-align: -3px; margin: 0 6px 0 0; }
-  #lobby { position: fixed; inset: 0; display: grid; place-items: center; background: #2b1d14; z-index: 5; }
-  #lobby form { display: grid; gap: 12px; text-align: center; }
-  #lobby input { font-size: 22px; width: 11ch; text-align: center; text-transform: uppercase; letter-spacing: 3px;
-    padding: 8px; border-radius: 12px; border: 2px solid #ffd23f; background: #3a281b; color: #fff; }
-  #lobby button { font-size: 18px; padding: 10px 20px; border-radius: 12px; border: 0; background: #ffd23f; color: #222; }
+  #bar input[type=checkbox] { width: 18px; height: 18px; vertical-align: -3px; margin: 0 6px 0 0; accent-color: var(--ink); }
   [hidden] { display: none !important; }
-  #invitebox { position: fixed; inset: 0; display: grid; place-items: center; background: #000a; z-index: 4; }
-  #invitebox > div { display: grid; gap: 12px; justify-items: center; background: #2b1d14; padding: 18px; border-radius: 16px; max-width: calc(100vw - 40px); text-align: center; }
-  #qr { width: min(260px, 70vw); height: auto; image-rendering: pixelated; border-radius: 8px; }
-  #link { font: 13px ui-monospace, monospace; width: min(320px, 80vw); padding: 8px; border-radius: 10px; border: 2px solid #ffd23f;
-    background: #3a281b; color: #fff; -webkit-user-select: text; user-select: text; }
-  #invitebox button { font-size: 16px; padding: 10px 14px; border-radius: 12px; border: 0; background: #ffd23f; color: #222; }
-  #toast { position: fixed; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-    background: #000b; padding: 8px 14px; border-radius: 10px; font-size: 15px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
+  /* every button pushes down when tapped and springs back; reduced motion gets a colour dip instead */
+  button, #bar label { transition: transform .12s cubic-bezier(.3, 1.6, .5, 1), filter .12s; -webkit-tap-highlight-color: transparent; }
+  button:active, #bar label:active { transform: translateY(2px) scale(.97); filter: brightness(.92); transition-duration: .05s; }
+  @media (prefers-reduced-motion: reduce) { button:active, #bar label:active { transform: none; } }
+  /* home: a big glyph off the top, the wordmark, two tall card buttons (Figma "02 · Home") */
+  #lobby { position: fixed; inset: 0; z-index: 5; background: var(--paper); overflow: hidden auto; touch-action: pan-y; }
+  #lobby .blob { position: absolute; width: min(130vw, 74vh, 640px); aspect-ratio: 1; right: -14vw; top: max(-28vw, -24vh, -170px); background: var(--ink);
+    -webkit-mask: url(img/g03.svg) center / contain no-repeat; mask: url(img/g03.svg) center / contain no-repeat; pointer-events: none; }
+  #lobby .home { position: relative; min-height: 100%; box-sizing: border-box; max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 0 24px calc(28px + env(safe-area-inset-bottom)); gap: 14px; }
+  #lobby .tag { font-size: 15px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); margin: 0; }
+  /* the wordmark: he[a]p, only the a is a glyph, and it reaches for the pointer (component lab, section 28) */
+  #lobby .mark { font: 700 112px/.8 var(--ui); letter-spacing: -.065em; white-space: nowrap; display: flex; align-items: baseline; margin: 0 0 10px -6px; color: var(--ink); }
+  #lobby .mark canvas { width: 1em; height: 1em; align-self: center; margin: 0 -.2em 0 -.2em; transform: translateY(-.02em); }
+  #lobby .about { font-size: 17px; line-height: 1.45; margin: 0 0 18px; }
+  .card { display: block; text-align: left; width: 100%; min-height: 92px; padding: 14px 22px 14px 26px;
+    border-radius: 22px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; }
+  .card b { display: block; font: 400 32px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+  .card small { display: block; font-size: 14px; margin-top: 6px; }
+  .card.solid { background: var(--ink); color: var(--paper); }
+  .card:focus-visible, #f button:focus-visible, #nf button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  /* the steps after home: one question per screen (wireframes 1.2 and 1.4) */
+  #lobby .step { position: relative; box-sizing: border-box; max-width: 460px; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;
+    padding: calc(16px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom)); background: var(--paper); }
+  #lobby .step h2 { font: 400 40px/1 var(--display); text-transform: uppercase; margin: 18px 0 0; }
+  #lobby .step .sub, #lobby .step .hint { margin: 0; font-size: 15px; color: var(--text-mid); }
+  #lobby .back { align-self: flex-start; background: none; border: 0; padding: 6px 0; font: 500 16px var(--ui); color: var(--ink); }
+  #f, #nf { display: flex; flex-direction: column; gap: 12px; flex: 1; margin-top: 10px; }
+  #nf label { font-size: 14px; font-weight: 500; color: var(--text-mid); margin-bottom: -6px; }
+  #f input, #nf input { font: 400 26px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; padding: 14px 16px;
+    border-radius: 16px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  /* the heap code: 10 boxes, 5 – 5, over one real field (wireframe 1.2) */
+  .codebox { position: relative; }
+  .cells { display: flex; gap: 5px; align-items: center; }
+  .cells span { flex: 1; aspect-ratio: 3 / 4; max-width: 44px; display: grid; place-items: center; border: 2px solid var(--line); border-radius: 10px;
+    font: 400 clamp(20px, 6.5vw, 28px)/1 var(--display); color: var(--ink); background: var(--paper); }
+  .cells span.full { border-color: var(--ink); }
+  .cells span.on { border-color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+  .cells i { font-style: normal; color: var(--text-mid); padding: 0 2px; }
+  #f .codebox input { position: absolute; inset: 0; width: 100%; opacity: 0; font-size: 16px; padding: 0; border: 0; }
+  #nf input { font: 500 22px var(--ui); letter-spacing: 0; text-transform: none; }
+  #f button, #nf button { margin-top: auto; font: 400 26px/1 var(--display); text-transform: uppercase; padding: 18px; border-radius: 22px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #f input:focus-visible, #nf input:focus-visible, #lobby .back:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  #lobby:has(.step:not([hidden])) .blob { display: none; }
+  /* invite: a bottom sheet with the code in tiles, the QR and the link (component lab, pick 16) */
+  #invitebox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
+  #invitebox .sheet { width: min(100%, 460px); box-sizing: border-box; max-height: calc(100dvh - 12px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
+  /* it slides up from the bottom while the backdrop fades in, and back down on close */
+  @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes sheet-down { to { transform: translateY(100%); } }
+  @keyframes scrim-out { to { opacity: 0; } }
+  #invitebox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #invitebox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #invitebox.out { animation: scrim-out .24s ease-in forwards; }
+  #invitebox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #invitebox, #invitebox .sheet, #invitebox.out, #invitebox.out .sheet { animation: none; } }
+  #invitebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #invitebox h2 { margin: 2px 0 0; font: 400 34px/1 var(--display); text-transform: uppercase; }
+  .tiles { display: flex; gap: 4px; align-items: center; }
+  .tiles i { font-style: normal; color: var(--text-mid); padding: 0 2px; }
+  .tiles span { flex: 1; max-width: 44px; aspect-ratio: 3 / 4; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: var(--paper); font: 400 clamp(18px, 6vw, 28px)/1 var(--display); }
+  .copyrow { display: flex; gap: 8px; align-items: center; }
+  .copyrow .tiles, .copyrow #link { flex: 1; min-width: 0; }
+  .copyrow button { flex: none; font: 500 15px var(--ui); padding: 9px 14px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #invitebox .warn { color: var(--text-mid); font-size: 13px; margin-top: -6px; }
+  #invitebox .who { margin: 4px 0 -6px; font: 700 13px var(--ui); letter-spacing: .08em; text-transform: uppercase; }
+  #inroom { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  #inroom li { font-size: 14px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--ink); }
+  #inroom li.empty { border: 0; padding: 5px 0; color: var(--text-mid); flex-basis: 100%; }
+  .qrrow { display: grid; justify-items: center; gap: 10px; text-align: center; }
+  #qr { width: min(320px, 82vw); height: auto; image-rendering: pixelated; }
+  .qrrow p { margin: 0; font-size: 15px; line-height: 1.4; }
+  .qrrow small { color: var(--text-mid); font-size: 13px; }
+  #link { font: 13px var(--ui); width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--line);
+    background: var(--paper); color: var(--text-mid); -webkit-user-select: text; user-select: text; }
+  .pills { display: flex; gap: 10px; }
+  .pills button { flex: 1; font-size: 16px; font-weight: 500; padding: 13px 16px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  .pills .pri { background: var(--ink); color: var(--paper); }
+  /* toasts: a charcoal pill that lands with a small squash and settles (component lab, "Boing, subtle") */
+  #toast { position: fixed; left: 50%; top: calc(62px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+    background: var(--ink); color: var(--paper); padding: 13px 18px; border-radius: 18px; font-size: 15px; font-weight: 500; line-height: 1.35; text-align: center;
+    opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
+  #toast.in { animation: boing .6s cubic-bezier(.2, .8, .3, 1) backwards; }   /* backwards: once landed, the timer's opacity decides */
+  @keyframes boing { 0% { transform: translateX(-50%) translateY(-18px) scale(.97, 1.04); opacity: 0 } 40% { transform: translateX(-50%) translateY(3px) scale(1.03, .97); opacity: 1 }
+    70% { transform: translateX(-50%) translateY(1px) scale(.995, 1.005) } 100% { transform: translateX(-50%) } }
+  @media (prefers-reduced-motion: reduce) { #toast.in { animation: none; } }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hud"></div>
-<div id="toast"></div>
-<div id="bar"><button id="invite" type="button" hidden>Invite</button><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>＋ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
-<div id="lobby"><form id="f">
-  <div>Room code</div>
-  <input id="code" maxlength="10" autocomplete="off" required>
-  <button>Join</button>
-  <button type="button" id="new">New room</button>
-  <small>Make a code with New room, then type it on every device.<br>Test only: anyone with the code can see the photos.</small>
-</form></div>
-<div id="invitebox" hidden><div>
-  <canvas id="qr"></canvas>
-  <input id="link" readonly aria-label="Room link">
-  <div><button type="button" id="copy">Copy</button> <button type="button" id="closeinvite">Close</button></div>
-  <small>Anyone who can see this code or link can join the room.</small>
-</div></div>
+<div id="hud" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="top">
+  <span><button id="leave" type="button" hidden>Leave</button> <button id="info" type="button" aria-label="Status" aria-controls="hud" aria-expanded="false" hidden>i</button></span>
+  <button id="invite" type="button" hidden>Invite</button>
+</div>
+<div id="bar"><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>+ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
+<div id="lobby">
+  <div class="blob" aria-hidden="true"></div>
+  <div class="home" id="s-home">
+    <p class="tag">Share side by side</p>
+    <h1 class="mark" aria-label="heap">he<canvas id="heap-a" aria-hidden="true"></canvas>p</h1>
+    <p class="about">Put phones, tablets and laptops next to each other. Drag a photo across, it lands on theirs.</p>
+    <div id="choose">
+      <button type="button" id="new" class="card solid"><span><b>Start a heap</b><small>You get a code to share</small></span></button>
+      <button type="button" id="joinwith" class="card join" style="margin-top:12px"><span><b>Join with a code</b><small>Someone nearby has one</small></span></button>
+    </div>
+  </div><!-- /s-home -->
+  <div class="step" id="s-code" hidden>
+    <button type="button" class="back" data-to="home">‹ Back</button>
+    <h2>Heap code</h2>
+    <p class="sub">10 letters, on the host's screen under Invite.</p>
+    <form id="f">
+      <div class="codebox">
+        <div class="cells" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+          <i>–</i>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <input id="code" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" required aria-label="Heap code, 10 letters" inputmode="text">
+      </div>
+      <button>Join</button>
+    </form>
+  </div><!-- /s-code -->
+  <div class="step" id="s-name" hidden>
+    <button type="button" class="back" data-to="home">‹ Back</button>
+    <h2>What should others call you?</h2>
+    <p class="sub" id="namewhy">Starting a new heap</p>
+    <form id="nf">
+      <label for="yourname">Your name</label>
+      <input id="yourname" maxlength="80" autocomplete="nickname" autocapitalize="words" spellcheck="false" required>
+      <p class="hint">Shown to everyone in this heap. Remembered on this device.</p>
+      <button id="go">Start heap</button>
+    </form>
+  </div><!-- /s-name -->
+</div><!-- /lobby -->
+<div id="invitebox" hidden><div class="sheet" role="dialog" aria-labelledby="invtitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="invtitle">Invite</h2>
+  <div class="qrrow"><canvas id="qr" aria-label="QR code for the invite link"></canvas><p>Scan to join this heap, or share the code or link.</p></div>
+  <div class="copyrow"><div id="invcode" class="tiles" role="img" aria-label="Heap code"></div><button type="button" id="copycode" aria-label="Copy the heap code">Copy</button></div>
+  <div class="copyrow"><input id="link" readonly aria-label="Heap link"><button type="button" id="copy" aria-label="Copy the link">Copy</button></div>
+  <small class="warn">Anyone who can see this code or link can join.</small>
+  <h3 class="who">In this heap</h3>
+  <ul id="inroom" aria-live="polite"></ul>
+  <div class="pills"><button type="button" id="closeinvite">Close</button></div>
+</div></div><!-- /invitebox -->
 <script src="vendor/supabase.js"></script>
 <script src="vendor/sha256.umd.min.js"></script>
 <script src="vendor/qrcode.js"></script>
@@ -58,14 +190,17 @@ import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
 import { saveBatch, createSaveAll, REVOKE_AFTER } from './saveall.js';
 import { pickRoom, inviteLink, cleanUrl, watchJoin, ROOM_KEY } from './invite.js';
-import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex } from './check.js';
+import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex, cleanName } from './check.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const rnd = new Uint32Array(2); crypto.getRandomValues(rnd);
 const id = rnd[0].toString(36) + rnd[1].toString(36);
-const NAMES = ['Comet', 'Pebble', 'Mango', 'Gecko', 'Noodle', 'Biscuit', 'Pickle', 'Waffle', 'Nova', 'Sprout'];
-const name = NAMES[rnd[0] % NAMES.length];
+// Your name (#156): picked by the person, remembered on this device (localStorage), and sent only
+// to the others in the heap. No random names: with none saved, the home screen asks first
+const NAME_KEY = 'heap-name';
+const savedName = () => { try { return cleanName(localStorage.getItem(NAME_KEY)); } catch { return ''; } };
+let name = savedName();
 const params = new URLSearchParams(location.search);
 // This tab's room (S16): written only once a join is live, so a reload goes straight back in.
 // sessionStorage can throw (storage turned off): the tab then just doesn't remember the room
@@ -80,12 +215,58 @@ function newCode() {
   crypto.getRandomValues(b);
   return [...b].map((x) => CODE_ALPHABET[x & 31]).join('');
 }
-$('new').onclick = () => { $('code').value = newCode(); };
+// Start a heap makes a code and starts at once; Join with a code shows the code form (heap home, issue 158)
+import('./heap-a.js').then(({ reacher, A_GLYPH }) => reacher($('heap-a'), A_GLYPH, { colour: getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() }));
+// the status box (heap code, devices, connections) stays hidden until the i button opens it
+$('info').onclick = () => { $('hud').hidden = !$('hud').hidden; $('info').setAttribute('aria-expanded', String(!$('hud').hidden)); };
+// Leave: forget this tab's heap and start again on the home screen (a fresh load drops every connection)
+$('leave').onclick = () => {
+  if (!confirm('Leave this heap? Photos you haven\'t saved stay with the others, not on this screen.')) return;
+  try { sessionStorage.removeItem(ROOM_KEY); } catch {}
+  location.replace(location.pathname);
+};
+// The lobby is one step at a time: home, then the heap code (to join), then your name (wireframes 1.1–1.4)
+const pending = { mode: 'start', code: '' };
+function screen(k) {
+  for (const n of ['home', 'code', 'name']) $('s-' + n).hidden = n !== k;
+  if (k === 'code') { $('code').focus(); showCells(); }
+  if (k === 'name') { $('yourname').value = $('yourname').value || name; $('yourname').focus(); }
+}
+const askName = (mode, code) => {
+  Object.assign(pending, { mode, code });
+  $('namewhy').textContent = mode === 'start' ? 'Starting a new heap' : 'Joining a heap';
+  $('go').textContent = mode === 'start' ? 'Start heap' : 'Join heap';
+  screen('name');
+};
+$('new').onclick = () => askName('start', newCode());
+$('joinwith').onclick = () => screen('code');
+document.querySelectorAll('#lobby .back').forEach((b) => { b.onclick = () => screen(b.dataset.to); });
+$('nf').onsubmit = (e) => {
+  e.preventDefault();
+  const typed = cleanName($('yourname').value);
+  if (!typed) { $('yourname').focus(); return toast('Add your name first'); }
+  name = typed; $('yourname').value = typed;
+  try { localStorage.setItem(NAME_KEY, typed); } catch {}
+  pending.fresh = pending.mode === 'start';   // a new heap: show its invite as soon as it's live
+  start(pending.code);
+};
+// the 10 boxes show what's in the one real field; only code letters are kept
+function showCells() {
+  const f = $('code'), v = [...f.value.toUpperCase()].filter((c) => CODE_ALPHABET.includes(c)).slice(0, 10).join('');
+  if (f.value !== v) f.value = v;
+  const on = document.activeElement === f;
+  document.querySelectorAll('.cells span').forEach((b, i) => { b.textContent = v[i] || ''; b.classList.toggle('full', !!v[i]); b.classList.toggle('on', on && i === Math.min(v.length, 9)); });
+}
+for (const ev of ['input', 'focus', 'blur', 'keyup']) $('code').addEventListener(ev, showCells);
+$('yourname').value = name;
+if ($('code').value) screen('code');
+showCells();
 
 let net = null, peers = null, W = innerWidth, H = innerHeight;
 // A sticky message stays until unstick(). Other messages show over it for a moment, then it comes back
 function toast(msg, sticky = false) {
   const t = $('toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(toast.h);
+  t.classList.remove('in'); void t.offsetWidth; t.classList.add('in');   // land again for each new message
   if (sticky) toast.sticky = msg;
   else toast.h = setTimeout(() => { if (toast.sticky) t.textContent = toast.sticky; else t.style.opacity = 0; }, 2400);
 }
@@ -301,9 +482,10 @@ function dropped(p) {
 const ORB = 26;
 const home = () => [W / 2, H - 120];
 let drag = null, orbDrag = null, ghosts = [];
+const PILL_BELOW = 40;   // the name pill under a photo is part of it: a tap there saves it too
 function hit(sx, sy) {
   const [mx, my] = meWorld(), x = sx + mx, y = sy + my;
-  return [...prints.values()].reverse().find((p) => { if (!visible(p)) return false; const [px, py] = world(p); return x >= px && x <= px + p.w && y >= py && y <= py + p.h; });
+  return [...prints.values()].reverse().find((p) => { if (!visible(p)) return false; const [px, py] = world(p); return x >= px && x <= px + p.w && y >= py && y <= py + p.h + PILL_BELOW; });
 }
 cv.addEventListener('pointerdown', (e) => {
   const [hx, hy] = home();
@@ -395,6 +577,7 @@ function start(room) {
   peers.onReady(catchUp);
   net.on((ev) => {
     if (ev !== 'peers') return;
+    showWho();
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
   });
@@ -426,12 +609,13 @@ function start(room) {
       if (net !== attempt) return;
       history.replaceState(null, '', cleanUrl(location.href));
       stored.set(room);
-      invite.room = room; $('invite').hidden = false;
+      invite.room = room; $('invite').hidden = false; $('leave').hidden = false; $('info').hidden = false;
+      if (pending.fresh) { pending.fresh = false; $('invite').click(); }
     },
     failed: () => {
       if (net !== attempt) return;
       attempt.leave();
-      $('code').value = room; $('lobby').hidden = false;
+      $('code').value = room; $('lobby').hidden = false; screen('code');
       toast('Couldn’t join the room. Try again');
     },
   });
@@ -446,17 +630,41 @@ function drawQr(text) {
   const qr = window.qrcode(0, 'M'); qr.addData(text); qr.make();
   const n = qr.getModuleCount(), QUIET = 4, CELL = 8, c = $('qr'), g = c.getContext('2d');
   c.width = c.height = (n + 2 * QUIET) * CELL;
-  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
-  g.fillStyle = '#000';
+  g.fillStyle = T.paper; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = T.ink;   // charcoal on soft white is 12:1, plenty for a scanner
   for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (qr.isDark(r, k)) g.fillRect((k + QUIET) * CELL, (r + QUIET) * CELL, CELL, CELL);
 }
 $('invite').onclick = () => {
   if (!invite.room) return;
   const link = inviteLink(location.href, invite.room);
   $('link').value = link; drawQr(link);
-  $('invitebox').hidden = false;
+  const code = invite.room.slice(-10);
+  const tiles = [...code].map((ch) => Object.assign(document.createElement('span'), { textContent: ch }));
+  const dash = Object.assign(document.createElement('i'), { textContent: '–' }); dash.setAttribute('aria-hidden', 'true');
+  $('invcode').replaceChildren(...tiles.slice(0, 5), dash, ...tiles.slice(5));
+  $('invcode').setAttribute('aria-label', `Heap code ${code.split('').join(' ')}`);
+  showWho(); $('invitebox').classList.remove('out'); $('invitebox').hidden = false;
 };
-$('closeinvite').onclick = () => { $('invitebox').hidden = true; };
+function closeInvite() {
+  const b = $('invitebox');
+  if (b.hidden || b.classList.contains('out')) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { b.hidden = true; return; }
+  b.classList.add('out');
+  b.querySelector('.sheet').addEventListener('animationend', () => { b.classList.remove('out'); b.hidden = true; }, { once: true });
+}
+$('closeinvite').onclick = closeInvite;
+// who's in this heap: this device first, then the others by name, or a line saying nobody else is here yet
+function showWho() {
+  const li = (text, cls) => Object.assign(document.createElement('li'), { textContent: text, className: cls || '' });
+  const rest = others().map((k) => net.peers[k]?.name || 'a device');
+  $('inroom').replaceChildren(li(`${name} (you)`), ...(rest.length ? rest.map((n) => li(n)) : [li('Just you so far. Others show here when they join.', 'empty')]));
+}
+$('copycode').onclick = async () => {
+  const code = invite.room.slice(-10);
+  try { await navigator.clipboard.writeText(code); toast('Code copied'); }
+  catch { toast(`Couldn’t copy. The code is ${code.slice(0, 5)} ${code.slice(5)}`); }
+};
+$('invitebox').onclick = (e) => { if (e.target === e.currentTarget) closeInvite(); };
 // No Clipboard API (plain http on a LAN), or it's refused: select the link to copy by hand
 $('copy').onclick = async () => {
   const l = $('link');
@@ -467,16 +675,39 @@ $('copy').onclick = async () => {
 function tryStart(code) {
   code = code.trim().toUpperCase();
   if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
+  $('code').value = code;
+  if (!name) { $('lobby').hidden = false; return askName('join', code); }   // a first visit: ask, then join
   start(code);
 }
-$('f').onsubmit = (e) => { e.preventDefault(); tryStart($('code').value); };
+$('f').onsubmit = (e) => {
+  e.preventDefault();
+  const code = $('code').value.trim().toUpperCase();
+  if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
+  askName('join', code);
+};
 if (opening.join) tryStart(opening.join);
 
 // ---------- drawing ----------
+// the table's colours are heap's tokens, read once from the page (rebrand, issue 158)
+const T = (() => { const st = getComputedStyle(document.documentElement), v = (k) => st.getPropertyValue(k).trim();
+  return { ink: v('--ink'), paper: v('--paper'), mid: v('--text-mid'), line: v('--line'), ui: v('--ui') }; })();
+// a rounded rectangle on the current path; browsers without roundRect (Safari before 16.4) get it drawn with arcs
+function rr(ctx, x, y, w, h, r) {
+  if (ctx.roundRect) return ctx.roundRect(x, y, w, h, r);
+  r = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
 function frame() {
   requestAnimationFrame(frame);
+  // a name pill: outlined, or filled when there's something to do (save it)
+  function pill(text, x, y, filled) {
+    ctx.font = `500 12px ${T.ui}`; const w = ctx.measureText(text).width + 22, h = 22;
+    ctx.beginPath(); rr(ctx, x - w / 2, y - h / 2, w, h, h / 2);
+    ctx.fillStyle = filled ? T.ink : T.paper; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = T.ink; ctx.stroke();
+    ctx.fillStyle = filled ? T.paper : T.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 0.5); ctx.textBaseline = 'alphabetic';
+  }
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-  ctx.fillStyle = '#2b1d14'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = T.paper; ctx.fillRect(0, 0, W, H);
   if (!net) return;
   sizes = Object.fromEntries(Object.entries(net.peers).map(([k, p]) => [k, { w: p.w, h: p.h }]));
   if (!sizes[id]) sizes[id] = { w: W, h: H };
@@ -484,10 +715,10 @@ function frame() {
   rehome();
   const [mx, my] = meWorld(), gid = layout.group[id] || id;
   ctx.save(); ctx.translate(-mx, -my);
-  // wood-grain-ish lines that run straight across joined screens
-  ctx.strokeStyle = '#3a281b'; ctx.lineWidth = 2;
+  // faint lines that run straight across joined screens
+  ctx.strokeStyle = T.line; ctx.lineWidth = 2;
   for (let y = Math.floor(my / 46) * 46; y < my + H; y += 46) { ctx.beginPath(); ctx.moveTo(mx, y + Math.sin(y) * 4); ctx.lineTo(mx + W, y); ctx.stroke(); }
-  ctx.strokeStyle = '#7a5a3a'; ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = T.mid; ctx.setLineDash([6, 6]);
   for (const k of Object.keys(sizes)) if (k !== id && layout.group[k] === gid) ctx.strokeRect(layout.pos[k][0] + 1, layout.pos[k][1] + 1, sizes[k].w - 2, sizes[k].h - 2);
   ctx.setLineDash([]);
   for (const p of prints.values()) {
@@ -495,22 +726,29 @@ function frame() {
     const [px, py] = world(p);
     ctx.save();
     ctx.translate(px + p.w / 2, py + p.h / 2); ctx.rotate(p.rot);
-    ctx.shadowColor = '#0008'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
-    ctx.fillStyle = '#fbf7ef'; ctx.fillRect(-p.w / 2 - 8, -p.h / 2 - 8, p.w + 16, p.h + 30); // polaroid frame
-    ctx.shadowColor = 'transparent';
+    // a print (Figma "Print"): soft white card, charcoal outline, the photo inset with a thin
+    // outline, and a name pill under it. Lifted while dragged: it grows a little, no shadow
+    const lifted = drag && drag.p === p && drag.moved;
+    ctx.scale(lifted ? 1.05 : 1, lifted ? 1.05 : 1);
+    ctx.fillStyle = T.paper; ctx.strokeStyle = T.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); rr(ctx, -p.w / 2 - 8, -p.h / 2 - 8, p.w + 16, p.h + 16, 6); ctx.fill(); ctx.stroke();
     if (p.img) {
-      const s = Math.min(p.w / p.img.width, p.h / p.img.height), iw = p.img.width * s, ih = p.img.height * s;
-      ctx.drawImage(p.img, -iw / 2, -ih / 2, iw, ih);
-    } else { ctx.fillStyle = '#333'; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.fillStyle = '#eee'; ctx.font = '14px system-ui'; ctx.textAlign = 'center'; ctx.fillText(p.type.startsWith('video') ? '▶ video' : p.name, 0, 4); }
-    ctx.fillStyle = '#5a4632'; ctx.font = '12px ui-monospace, monospace'; ctx.textAlign = 'center';
+      // the photo fills the card (cropped to fit), inside a thin outline
+      const s = Math.max(p.w / p.img.width, p.h / p.img.height), sw = p.w / s, sh = p.h / s, iw = p.w, ih = p.h;
+      ctx.drawImage(p.img, (p.img.width - sw) / 2, (p.img.height - sh) / 2, sw, sh, -iw / 2, -ih / 2, iw, ih);
+      ctx.lineWidth = 1.5; ctx.strokeRect(-iw / 2, -ih / 2, iw, ih);
+    } else { ctx.fillStyle = T.ink; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.fillStyle = T.paper; ctx.font = `14px ${T.ui}`; ctx.textAlign = 'center'; ctx.fillText(p.type.startsWith('video') ? '▶ video' : p.name, 0, 4); }
     const mine = p.owner === id, have = files.has(p.pid);
-    ctx.fillText(mine ? (net.peers[p.owner]?.name || name) + ' (mine)' : have ? '✓ yours, tap to save' : (net.peers[p.owner]?.name || '?'), 0, p.h / 2 + 16);
+    const label = mine ? (net.peers[p.owner]?.name || name) + ' (mine)' : have ? '✓ yours, tap to save' : (net.peers[p.owner]?.name || '?');
+    pill(label, 0, p.h / 2 + 26, have && !mine);
     ctx.restore();
   }
   ctx.restore();
   // orb
   const now = performance.now();
-  const glow = (x, y, r, a = 1) => { const g = ctx.createRadialGradient(x, y, 2, x, y, r); g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(0.35, `rgba(255,220,140,${a})`); g.addColorStop(1, 'rgba(255,180,80,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); };
+  // the orb: a charcoal dot with a soft halo (alpha on the ink token)
+  const glow = (x, y, r, a = 1) => { ctx.globalAlpha = 0.14 * a; ctx.fillStyle = T.ink; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(x, y, r * 0.42, 0, 7); ctx.fill(); ctx.globalAlpha = 1; };
   ghosts = ghosts.filter((g) => now - g.t < 2500 && (glow(g.x, g.y, ORB * 2, 1 - (now - g.t) / 2500), true));
   const [ox, oy] = orbDrag ? [orbDrag.x, orbDrag.y] : home();
   glow(ox, oy, ORB * 2);

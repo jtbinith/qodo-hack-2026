@@ -33,6 +33,8 @@ const browser = await chromium.launch();
 async function device(w, h, { at = room, init, relay = RELAY } = {}) {
   const page = await (await browser.newContext({ viewport: { width: w, height: h } })).newPage();
   page.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
+  // every test device has a name of its own, as a person would after their first visit (#156)
+  await page.addInitScript((n) => { try { if (!localStorage.getItem('heap-name')) localStorage.setItem('heap-name', n); } catch {} }, 'T' + Math.random().toString(36).slice(2, 8));
   if (init) await page.addInitScript(init);
   await page.goto(`${BASE}?room=${at}&auto${relay ? '&relay' : ''}`);
   return page;
@@ -533,6 +535,7 @@ try {
   check(off127.length === 0, `the QR code is made on the device: no request outside 127.0.0.1 and the room server (${off127.length ? off127.join(', ') : 'none'})`);
   // scanning the QR code opens the link: that page joins the same room without typing the code
   const I2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await I2.addInitScript(() => { try { localStorage.setItem('heap-name', 'Returning'); } catch {} });   // been here before: a link joins in one tap (#156)
   I2.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
   await I2.goto(box.link);
   const scanned = await until(I2, () => window.__t && Object.keys(window.__t.net.peers).length === 2, null, 20000).then(() => true, () => false);
@@ -583,7 +586,8 @@ try {
   const f1 = await F.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, url: location.href, room: sessionStorage.getItem('room'), invite: document.getElementById('invite')?.hidden === false }));
   check(lobbyBack && f1.lobby && f1.code === inv && f1.url.includes(inv) && f1.room === null && !f1.invite,
     `a join that fails before live shows the lobby again with the code (${f1.code === inv}), keeps the address bar (${f1.url.includes(inv)}), stores nothing (${f1.room === null}) and a late answer from it changes nothing (lobby ${f1.lobby})`);
-  await F.click('#f button', { timeout: 3000 }).catch(() => {});
+  await F.click('#f button', { timeout: 3000 }).catch(() => {});   // the code screen, then the name screen (#156)
+  await F.click('#go', { timeout: 3000 }).catch(() => {});
   const retried = await until(F, (r) => window.__t && window.__t.net.room === r && window.__t.net.status === 'live' && sessionStorage.getItem('room') === r.slice(6) && !location.href.includes(r.slice(6)), 'photo-' + inv, 20000).then(() => true, () => false);
   const f2 = await F.evaluate(() => document.getElementById('lobby')?.hidden === false);
   check(retried && !f2, `joining again after a failed join works as if it were the first try (${retried})`);
@@ -682,6 +686,79 @@ try {
   check(cAfter.joins === dAfter.joins && !cAfter.joins.includes(q.A.id) && !cAfter.joins.includes(q.B.id),
     `when the new time keeper leaves straight away, C takes over and C and D hold the same layout (C ${cAfter.joins}, D ${dAfter.joins})`);
   for (const k of 'CD') await quad[k].context().close();
+  // Leave (#156): once in a heap there's a way out; it forgets this tab's heap and shows the two cards again
+  const L = await device(390, 700, { at: code() });
+  await until(L, () => window.__t && window.__t.net.status === 'live', null, 20000);
+  const leaveShown = await until(L, () => document.getElementById('leave')?.hidden === false, null, 10000).then(() => true, () => false);
+  L.once('dialog', (d) => d.accept());
+  await L.click('#leave', { timeout: 3000 }).catch(() => {});
+  const leftHome = await until(L, () => document.getElementById("lobby")?.hidden === false, null, 10000).then(() => true, () => false);
+  const l1 = await L.evaluate(() => ({ room: sessionStorage.getItem('room'), url: location.href, cards: document.getElementById('choose')?.hidden === false }));
+  check(leaveShown && leftHome && l1.room === null && !l1.url.includes('room=') && l1.cards,
+    `Leave shows in a heap (${leaveShown}), goes back to the home screen (${leftHome}) with the two cards (${l1.cards}), forgets the heap (${l1.room === null}) and leaves no code in the address bar (${!l1.url.includes('room=')})`);
+  await L.context().close();
+  // Your name (#156): a first visit (no saved name) doesn't join from a link; it asks for a name with
+  // the code filled in, and the name typed is the one the other device sees
+  const nr = code();
+  const N1 = await device(390, 700, { at: nr });
+  await until(N1, () => window.__t && window.__t.net.status === 'live', null, 20000);
+  const N2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await N2.goto(`${BASE}?room=${nr}&auto`); await new Promise((r) => setTimeout(r, 1500));
+  const n0 = await N2.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, joined: !!window.__t,
+    asked: document.activeElement?.id === 'yourname', step: document.getElementById('s-name')?.hidden === false }));
+  await N2.fill('#yourname', '  Ada   Lovelace ');
+  await N2.click('#go', { timeout: 3000 }).catch(() => {});
+  const named = await until(N1, () => Object.values(window.__t.net.peers).some((p) => p.name === 'Ada Lovelace'), null, 20000).then(() => true, () => false);
+  const keptName = await N2.evaluate(() => localStorage.getItem('heap-name'));
+  check(n0.lobby && n0.code === nr && !n0.joined && n0.asked && n0.step && named && keptName === 'Ada Lovelace',
+    `a first visit asks for a name instead of joining (lobby ${n0.lobby}, code filled ${n0.code === nr}, joined ${n0.joined}, on the name screen ${n0.step}, name box focused ${n0.asked}), and the other device sees "Ada Lovelace" (${named}), remembered (${keptName})`);
+  await N1.context().close(); await N2.context().close();
+  // Start a heap (#156): the name screen, then straight into the heap with the invite sheet open on its code
+  const S = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await S.addInitScript(() => { try { localStorage.setItem('heap-name', 'Host'); } catch {} });
+  await S.goto(BASE); await new Promise((r) => setTimeout(r, 800));
+  await S.click('#new', { timeout: 3000 }).catch(() => {});
+  const named0 = await S.evaluate(() => document.getElementById('s-name')?.hidden === false && document.getElementById('yourname')?.value);
+  await S.click('#go', { timeout: 3000 }).catch(() => {});
+  const invOpen = await until(S, () => document.getElementById('invitebox')?.hidden === false && window.__t?.net.status === 'live', null, 20000).then(() => true, () => false);
+  const s1 = await S.evaluate(() => ({ tiles: [...document.querySelectorAll('#invcode span')].map((x) => x.textContent).join(''), room: window.__t?.net.room }));
+  check(named0 === 'Host' && invOpen && s1.room === 'photo-' + s1.tiles,
+    `Start a heap asks for the name (pre-filled "${named0}"), then opens the invite sheet once live (${invOpen}) on the heap's own code (${s1.room === 'photo-' + s1.tiles})`);
+  // the invite sheet shows who's in the heap: just the host at first, then the guest once they join
+  const inHeap = () => S.evaluate(() => [...document.querySelectorAll('#inroom li')].map((li) => li.textContent));
+  const hostAlone = await inHeap();
+  const G = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await G.addInitScript(() => { try { localStorage.setItem('heap-name', 'Guest'); } catch {} });
+  await G.goto(`${BASE}?room=${s1.tiles}&auto`);
+  const guestShown = await until(S, () => [...document.querySelectorAll('#inroom li')].some((li) => li.textContent === 'Guest'), null, 20000).then(() => true, () => false);
+  const withGuest = await inHeap();
+  check(hostAlone.length === 2 && hostAlone[0] === 'Host (you)' && /Just you so far/.test(hostAlone[1]) && guestShown && withGuest.length === 2 && withGuest[0] === 'Host (you)',
+    `the invite sheet lists who's in the heap: first ${JSON.stringify(hostAlone)}, then the guest appears (${guestShown}): ${JSON.stringify(withGuest)}`);
+  await G.context().close();
+  // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
+  const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();
+  await SP.addInitScript(() => { try { localStorage.setItem('heap-name', 'Short'); } catch {} });
+  await SP.goto(BASE); await SP.click('#new'); await SP.click('#go');
+  await until(SP, () => !document.getElementById('invitebox').hidden && window.__t?.net.status === 'live', null, 20000);
+  await new Promise((r) => setTimeout(r, 600));
+  const fits = await SP.evaluate(() => { const r = document.querySelector('#invitebox .sheet').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 1; });
+  await SP.evaluate(() => document.getElementById('closeinvite').scrollIntoView());
+  await SP.click('#closeinvite');
+  const closed = await until(SP, () => document.getElementById('invitebox').hidden, null, 3000).then(() => true, () => false);
+  await SP.click('#invite'); await until(SP, () => !document.getElementById('invitebox').hidden, null, 3000);
+  await SP.evaluate(() => document.getElementById('copycode').scrollIntoView()); await SP.click('#copycode');   // says Code copied (or couldn't)
+  await new Promise((r) => setTimeout(r, 3500));
+  const toastGone = await SP.evaluate(() => getComputedStyle(document.getElementById('toast')).opacity === '0');
+  check(fits && closed && toastGone, `on a short phone the invite sheet fits (${fits}) and Close can be reached (${closed}); a toast goes after its time (${toastGone})`);
+  await SP.context().close();
+  const GL = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await GL.goto(`${BASE}?room=ABCDEFGHJK&auto`);
+  await until(GL, () => document.getElementById('s-name')?.hidden === false, null, 10000);
+  await GL.click('#s-name .back');
+  const sharp = await until(GL, () => document.getElementById('heap-a').width > 40, null, 5000).then(() => true, () => false);
+  check(sharp, `after an invite link and Back, the wordmark's a is drawn at its size (${sharp})`);
+  await GL.context().close();
+  await S.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {

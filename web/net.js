@@ -2,7 +2,7 @@
 // The server only relays messages. One device (the earliest to arrive) is the "time
 // keeper": everyone syncs their clock to it, and it decides which orb pushes pair up.
 import { addJoins, matchPushes, isValidJoins } from './layout.js';
-import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk, inRoom } from './check.js';
+import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk, inRoom, cleanName } from './check.js';
 
 const SUPABASE_URL = 'https://aimoujzdcaxkejraattw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_D8DGNTiXWHRFaoE2ae3ACg_8G8Y_yDS'; // public by design
@@ -86,7 +86,7 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     for (const [key, metas] of Object.entries(st)) {
       const m = metas[metas.length - 1];
       if (!validPeerMeta(m)) continue;                        // a device that describes itself badly isn't counted
-      s.peers[key] = { name: m.name, w: m.w, h: m.h, joinedAt: m.joinedAt };
+      s.peers[key] = { name: cleanName(m.name) || 'Someone', w: m.w, h: m.h, joinedAt: m.joinedAt };   // others' names cleaned like mine
     }
     // forget joins to devices that have left, so layouts never mention absent devices
     s.joins = s.joins.filter((j) => s.peers[j.a] && s.peers[j.b]);
