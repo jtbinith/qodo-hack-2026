@@ -231,3 +231,9 @@ test('arriving photos show a progress bar on their card, and the line offers Sto
   assert.match(html, /function stopLanding\(/);
   assert.match(html, /\$\('snackact'\)\.textContent = st\.done \? 'Undo' : 'Stop'/);   // Stop while any are still on the way
 });
+
+test('join strips sit on the table, clear of the header and the bottom bar', () => {
+  assert.match(css, /#joinmode \.strip\[data-edge="T"\] \{[^}]*top: calc\(80px \+ env\(safe-area-inset-top\)\)/, 'below the header');
+  assert.match(css, /#joinmode \.strip\[data-edge="B"\] \{[^}]*bottom: calc\(92px \+ env\(safe-area-inset-bottom\)\)/, 'above the bar');
+  assert.match(css, /#joinmode \.strip\[data-edge="L"\], #joinmode \.strip\[data-edge="R"\] \{[^}]*top: calc\(50% - 18vh\)/, 'sides in the middle of the table');
+});
