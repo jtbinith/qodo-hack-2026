@@ -190,3 +190,10 @@ test('round 3: after a share sheet that never settled, the next tap downloads in
   assert.match(html, /setTimeout\(\(\) => \{ if \(sharingOne\.delete\(p\.pid\)\) stuckShare\.add\(p\.pid\); \}, SHARE_TIMEOUT\)/);
   assert.match(html, /if \(stuckShare\.delete\(p\.pid\)\) \{ downloadFile\(file\); pickSave\.handed\.add\(p\.pid\); return; \}/);
 });
+
+// the fourth look at #163
+test('round 4: Try again keeps who was let in, so guests aren’t sent back to waiting', () => {
+  assert.match(netSrc, /linked = \(\) => false, since = null, admitted = null \}\)/);
+  assert.match(netSrc, /admits: admitted \|\| \{ open: false, ids: \[\], names: \[\], no: \[\] \},/);
+  assert.match(html, /admitted: again \? net\?\.admits : null/);
+});
