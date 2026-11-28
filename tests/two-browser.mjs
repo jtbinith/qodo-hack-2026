@@ -383,10 +383,16 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
   check(downloads.length === NB && await toastOf(B) === 'Nothing new to save', `a second Get downloads nothing again ("${await toastOf(B)}")`);
   // a picked photo that isn't here yet: Get asks for it, says it's arriving, and the next Get saves it
-  const away = await B.evaluate(() => [...window.__t.prints.values()].find((p) => p.owner !== window.__t.id && !window.__t.files.has(p.pid) && p.type.startsWith('image/') && !['IMG_0004.JPG', 'IMG_0005.JPG'].includes(p.name))?.pid);   // not the photos the tap checks below use
+  // not the photos the tap checks below use. If every other photo has reached B by now, B lets one go first
+  const away = await B.evaluate(() => {
+    const t = window.__t, mine = (p) => p.owner === t.id, ok = (p) => !mine(p) && p.type.startsWith('image/') && !['IMG_0004.JPG', 'IMG_0005.JPG'].includes(p.name);
+    let p = [...t.prints.values()].find((p) => ok(p) && !t.files.has(p.pid));
+    if (!p) { p = [...t.prints.values()].reverse().find(ok); if (p) { t.files.delete(p.pid); t.handed.delete(p.pid); p.holders = p.holders.filter((k) => k !== t.id); } }
+    return p?.pid;
+  });
   await B.evaluate(() => document.getElementById('reviewbox').hidden = true);
   await B.click('#allphotos'); await sheetUp(B, 'deckbox');
-  await tapTile(B, 'deckbox', away);
+  if (!(await B.evaluate((a) => document.querySelector(`#decktiles [data-pid="${a}"]`)?.classList.contains('on'), away))) await tapTile(B, 'deckbox', away);   // picked already (Get took it before): stays picked
   await B.evaluate(() => { window.__said = []; new MutationObserver(() => window.__said.push(document.getElementById('toast').textContent)).observe(document.getElementById('toast'), { childList: true, characterData: true, subtree: true }); });   // every toast, so one arriving at the same moment can't hide it
   await B.click('#getpick');
   const arrivingSaid = await B.evaluate(() => window.__said.find((t) => /still arriving/.test(t)) || document.getElementById('toast').textContent);

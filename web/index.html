@@ -1524,7 +1524,7 @@ function start(room) {
       toast('Couldn’t join the room. Try again');
     },
   });
-  window.__t = { endNow, toasts: toastLog, edgeLabels: () => edgeLabels(Object.keys(sizes), layout, sizes, id), mapTiles: () => tilesFor($('mapbox').hidden ? $('dropcv') : $('mapcv')),
+  window.__t = { endNow, toasts: toastLog, handed: pickSave.handed, edgeLabels: () => edgeLabels(Object.keys(sizes), layout, sizes, id), mapTiles: () => tilesFor($('mapbox').hidden ? $('dropcv') : $('mapcv')),
     mapTileBox: (k) => { const t = tilesFor($('mapcv')).find((t) => t.id === k), r = $('mapcv').getBoundingClientRect(); return t && { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2, h: t.h }; },
     mapHitBox: (k) => { const was = $('dropmap').hidden; const t = tilesFor($('dropcv')).find((t) => t.id === k); if (!t) return null; const r = $('dropcv').getBoundingClientRect(); return was && !r.width ? null : { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2 }; },
     holding: () => holdingNear().map(({ from, n }) => ({ from, n })), decks: () => groupDecks(visiblePrints()), net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
