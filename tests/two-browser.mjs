@@ -279,7 +279,7 @@ try {
   await A.mouse.up();
   const k4Flew = await until(B, (pid) => window.__t.files.has(pid) && window.__t.prints.get(pid).anchor === window.__t.id, k4FlickPid, 60000).then(() => true, () => false);
   const k4Snack = await B.evaluate(() => ({ shown: !document.getElementById('snack').hidden, text: document.getElementById('snacktext').textContent }));
-  const k4SentSaid = await toastOf(A);
+  const k4SentSaid = await until(A, () => document.getElementById('toast').textContent.startsWith('Sent to'), null, 15000).then(() => toastOf(A), () => toastOf(A));   // once B has it
   check(k4Flew && k4Snack.shown && k4Snack.text === `1 photo from ${k4Names.a}` && k4SentSaid === `Sent to ${k4Names.b} ✓`,
     `a flick let go on A glides across to B (${k4Flew}); B says "${k4Snack.text}", A says "${k4SentSaid}"`);
   await B.click('#snackact');
@@ -306,6 +306,25 @@ try {
   await A.mouse.move(645, 335); await new Promise((r) => setTimeout(r, 150)); await A.mouse.move(640, 335); await A.mouse.up();   // back on A, let go gently
   const k4LetGo = await until(B, () => !window.__t.holding().length, null, 5000).then(() => true, () => false);
   check(k4Holding && k4LetGo, `B sees A holding a photo near the seam (${k4Holding}), and stops once A lets go (${k4LetGo})`);
+  // #161 review: two photos flicked one after another both land on B; a vertical swipe in the deck sheet doesn't pull a photo out;
+  // Send to with a photo A doesn't have says so
+  const two = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 2); return d ? d.pids.slice(0, 2) : []; });
+  for (const [n, pid] of two.entries()) {
+    await A.evaluate(([pid, y]) => { const t = window.__t, p = t.prints.get(pid); p.anchor = t.id; p.x = 560; p.y = y; t.prints.delete(pid); t.prints.set(pid, p); }, [pid, 80 + n * 220]);
+    const y0 = 80 + n * 220 + 75;
+    await A.mouse.move(635, y0); await A.mouse.down(); for (const x of [650, 670, 695, 720]) await A.mouse.move(x, y0); await A.mouse.up();
+  }
+  const bothLanded = await until(B, (ps) => ps.every((pid) => window.__t.files.has(pid)), two, 60000).then(() => true, () => false);
+  const dk = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); if (!d) return null; const [wx, wy] = t.world(d.top), me = t.layout.pos[t.id]; return { x: wx - me[0] + 75, y: wy - me[1] + 75 }; });
+  let swipeKept = false;
+  if (dk) {
+    await A.mouse.click(dk.x, dk.y); await until(A, () => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length, null, 5000);
+    const tl = await A.evaluate(() => { const r = document.querySelector('#decktiles button').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    await A.mouse.move(tl.x, tl.y); await A.mouse.down(); for (let k = 1; k <= 6; k++) await A.mouse.move(tl.x + 2, tl.y - k * 15); await A.mouse.up();
+    swipeKept = await A.evaluate(() => !document.getElementById('deckbox').hidden);
+    await A.evaluate(() => { document.getElementById('deckbox').hidden = true; });
+  }
+  check(two.length === 2 && bothLanded && swipeKept, `two flicks in a row both land on B (${bothLanded}); a vertical swipe in the deck sheet keeps it open (${swipeKept})`);
   void k4HoldPid;
 
   // a device that never sends its key asks A for a photo. A gives up after 10 s and says so,
