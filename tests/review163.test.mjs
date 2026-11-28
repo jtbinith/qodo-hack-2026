@@ -36,7 +36,7 @@ test('3: Save before leaving opens the share sheet inside the tap', () => {
 
 test('4: Try again reconnects without reloading, so photos already here stay', () => {
   assert.doesNotMatch(html, /\$\('losttry'\)\.onclick = \(\) => location\.reload\(\)/);
-  assert.match(html, /\$\('losttry'\)\.onclick = \(\) => \{[\s\S]{0,300}start\(room\)/);
+  assert.match(html, /\$\('losttry'\)\.onclick = \(\) => \{[\s\S]{0,300}start\(room(, true)?\)/);
 });
 
 test('5: All photos counts what this screen shows, and hides when nothing shows', () => {
@@ -161,4 +161,17 @@ test('17: the words depend on both secrets, and the signals are checked', async 
   assert.ok(validSignal(env({ reveal: 'A'.repeat(24), again: true })));
   assert.ok(!validSignal(env({ reveal: 'A'.repeat(400) })), 'a secret is small');
   assert.ok(!validSignal(env({ pub: 'AAAA', commit: 'A'.repeat(400) })));
+});
+
+// the re-review of #163
+test('re-review: Try again rejoins with the same keys, so the other devices still understand it', () => {
+  assert.match(html, /function start\(room, again = false\)/);
+  assert.match(html, /if \(!again\) \{\s*peers = createPeers\(/, 'the same keys and links: the others keep the key they have for this device');
+  assert.match(html, /if \(!again\) peers\.onReady\(catchUp\);/);
+  assert.match(html, /\$\('losttry'\)\.onclick = \(\) => \{[\s\S]{0,300}start\(room, true\)/);
+});
+
+test('re-review: a share sheet that never settles frees that photo after SHARE_TIMEOUT', () => {
+  assert.match(html, /setTimeout\(\(\) => sharingOne\.delete\(p\.pid\), SHARE_TIMEOUT\)/);
+  assert.match(html, /import \{[^}]*SHARE_TIMEOUT[^}]*\} from '\.\/saveall\.js';/);
 });
