@@ -175,3 +175,18 @@ test('re-review: a share sheet that never settles frees that photo after SHARE_T
   assert.match(html, /setTimeout\(\(\) => sharingOne\.delete\(p\.pid\), SHARE_TIMEOUT\)/);
   assert.match(html, /import \{[^}]*SHARE_TIMEOUT[^}]*\} from '\.\/saveall\.js';/);
 });
+
+// the third look at #163
+const netSrc = readFileSync(new URL('../web/net.js', import.meta.url), 'utf8');
+test('round 3: Try again keeps this device’s place in the queue, so nobody who came later becomes the host', () => {
+  assert.match(netSrc, /export function joinRoom\(\{ room, id, name, size, onSignal, onReturn = \(\) => \{\}, linked = \(\) => false, since = null \}\)/);
+  assert.match(netSrc, /const joinedAt = since \?\? wall\(\);/);
+  assert.match(netSrc, /joinedAt,\s*\/\/ when this device joined/);
+  assert.match(html, /since: again \? net\?\.joinedAt : null/);
+});
+
+test('round 3: after a share sheet that never settled, the next tap downloads instead', () => {
+  assert.match(html, /const stuckShare = new Set\(\);/);
+  assert.match(html, /setTimeout\(\(\) => \{ if \(sharingOne\.delete\(p\.pid\)\) stuckShare\.add\(p\.pid\); \}, SHARE_TIMEOUT\)/);
+  assert.match(html, /if \(stuckShare\.delete\(p\.pid\)\) \{ downloadFile\(file\); pickSave\.handed\.add\(p\.pid\); return; \}/);
+});
