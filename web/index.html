@@ -119,7 +119,6 @@
     font: 700 10px/21px var(--ui); text-align: center; }
   #decktiles .save { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px; background: var(--ink); color: var(--paper); font-size: 12px; text-align: left; }
   #deckbox .sheet { grid-template-rows: auto auto auto 1fr auto; }
-  #pairbtn { justify-self: start; background: none; border: 0; padding: 4px 0; font: 500 14px var(--ui); color: var(--ink); text-decoration: underline; }
   #pickall { justify-self: end; background: none; border: 0; color: var(--ink); font: 500 15px var(--ui); padding: 6px 0; }
   #decktiles button.on, #reviewtiles button.on { outline: 3px solid var(--ink); outline-offset: -3px; }
   #decktiles button.on::after { content: '✓'; position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper);
@@ -314,6 +313,28 @@
   #arrangelist button { display: flex; justify-content: space-between; width: 100%; padding: 14px 4px; background: none; border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: 500 17px var(--ui); text-align: left; }
   #arrangelist button::after { content: '›'; color: var(--text-mid); }
   #movesub { margin: 0; font-size: 14px; color: var(--text-mid); line-height: 1.45; }
+  #pairbox, #rejoinbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 6; }
+  #rejoinbox { align-items: center; }
+  #pairbox .sheet, #rejoinbox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
+  #rejoinbox .sheet { border-radius: 22px; border-bottom: 2px solid var(--ink); width: min(92%, 380px); }
+  #pairbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #pairbox h2, #rejoinbox h2 { margin: 4px 0; font: 700 18px var(--ui); text-align: center; }
+  .pairsub, #rejoinsub { margin: 0; font-size: 14px; color: var(--text-mid); line-height: 1.45; }
+  #pairqr { justify-self: center; width: min(260px, 70vw); height: auto; image-rendering: pixelated; }
+  #pairlink { font: 13px var(--ui); width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--paper); color: var(--text-mid); }
+  #paircopy { font: 500 14px var(--ui); padding: 8px 11px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #pairbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); } #pairbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  #rejoinkeep, #rejoinnew { font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #rejoinnew { background: var(--ink); color: var(--paper); }
+  #joinpair { background: none; border: 0; color: var(--text-mid); font: 13px var(--ui); text-decoration: underline; }
+  #joinmode .strip.joined { background: var(--ink); color: var(--paper); border: 2.5px solid var(--paper); }
+  #mapcv { touch-action: none; }
+  #maphint { margin: 0; font-size: 13px; color: var(--text-mid); text-align: center; }
+  #mapask { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 14px; background: var(--line); font-size: 14px; }
+  #mapask[hidden] { display: none; } #mapasktext { flex: 1; }
+  #mapaskgo { font: 500 15px var(--ui); padding: 9px 16px; border-radius: 999px; border: 0; background: var(--ink); color: var(--paper); }
+  #movecv { width: 100%; height: 150px; border-radius: 12px; background: var(--line); }
   /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
@@ -415,6 +436,7 @@
     <b id="jointitle">Which side is the other screen?</b>
     <p id="joinsub">Put the screens side by side. Each person taps the edge that faces the other one.</p>
     <button type="button" id="jointry" hidden>Try again</button>
+    <button type="button" id="joinpair">Your own other device? Show a code</button>
     <button type="button" id="joincancel">Cancel</button>
   </div>
 </div><!-- /joinmode -->
@@ -422,10 +444,11 @@
   <span class="handle" aria-hidden="true"></span>
   <h2 id="maptitle"></h2>
   <canvas id="mapcv" aria-hidden="true"></canvas>
+  <p id="maphint"></p>
+  <div id="mapask" hidden><span id="mapasktext"></span><button type="button" class="pri" id="mapaskgo">Ask</button></div>
   <p id="mapkey"></p>
   <button type="button" id="mapjoin" class="pri">Join a screen</button>
-  <button type="button" id="mapmove">Move my screen</button>
-  <button type="button" id="maparrange" hidden>Arrange screens</button>
+  <button type="button" id="maparrange" hidden>Use a list instead</button>
   <button type="button" id="mapclose">Close</button>
 </div></div><!-- /mapbox -->
 <div id="dropmap" hidden><small>Or drop on the map</small><canvas id="dropcv"></canvas></div>
@@ -529,9 +552,24 @@
   <span class="handle" aria-hidden="true"></span>
   <h2 id="movetitle"></h2>
   <p id="movesub"></p>
+  <canvas id="movecv" aria-hidden="true"></canvas>
   <div class="pills"><button type="button" id="moveno"></button><button type="button" class="pri" id="moveyes"></button></div>
   <p class="deckhint" id="movenote"></p>
 </div></div><!-- /movebox -->
+<div id="pairbox" hidden><div class="sheet" role="dialog" aria-label="Add your other device">
+  <span class="handle" aria-hidden="true"></span>
+  <h2>Add your other device</h2>
+  <p class="pairsub">Scan this with your other device’s camera. It joins this heap as you, without asking the host, and lines up next to this screen. Only for your own devices.</p>
+  <canvas id="pairqr" aria-label="QR code for your other device"></canvas>
+  <div class="copyrow"><input id="pairlink" readonly aria-label="Link for your other device"><button type="button" id="paircopy">Copy</button></div>
+  <div class="pills"><button type="button" id="pairclose">Close</button></div>
+</div></div><!-- /pairbox -->
+<div id="rejoinbox" hidden><div class="sheet" role="alertdialog" aria-labelledby="rejointitle">
+  <h2 id="rejointitle"></h2>
+  <p id="rejoinsub"></p>
+  <button type="button" id="rejoinkeep"></button>
+  <button type="button" class="pri" id="rejoinnew">Join a new screen</button>
+</div></div><!-- /rejoinbox -->
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -633,7 +671,6 @@
   <div class="copyrow"><div id="invcode" class="tiles" role="img" aria-label="Heap code"></div><button type="button" id="copycode" aria-label="Copy the heap code">Copy</button></div>
   <div class="copyrow"><input id="link" readonly aria-label="Heap link"><button type="button" id="copy" aria-label="Copy the link">Copy</button></div>
   <small class="warn">Anyone who can see this code or link can join.</small>
-  <button type="button" id="pairbtn">Join my other device</button>
   <h3 class="who">In this heap</h3>
   <ul id="inroom" aria-live="polite"></ul>
   <div class="pills"><button type="button" id="closeinvite">Close</button></div>
@@ -647,10 +684,10 @@ import { heapTitle, heapSub, initials, batchLine, landingState } from './words.j
 import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
-import { deviceKind, mapTiles, edgeLabels, proposeJoin, sideWords } from './map.js';
+import { deviceKind, mapTiles, edgeLabels, proposeJoin, sideWords, dropSide } from './map.js';
 import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen, forgetOpen } from './gate.js';
 import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
-import { solveLayout } from './layout.js';
+import { solveLayout, addJoins } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
 import { saveBatch, createSaveAll, REVOKE_AFTER } from './saveall.js';
@@ -1360,6 +1397,7 @@ function start(room) {
     },
   });
   window.__t = { toasts: toastLog, edgeLabels: () => edgeLabels(Object.keys(sizes), layout, sizes, id), mapTiles: () => tilesFor($('mapbox').hidden ? $('dropcv') : $('mapcv')),
+    mapTileBox: (k) => { const t = tilesFor($('mapcv')).find((t) => t.id === k), r = $('mapcv').getBoundingClientRect(); return t && { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2, h: t.h }; },
     mapHitBox: (k) => { const was = $('dropmap').hidden; const t = tilesFor($('dropcv')).find((t) => t.id === k); if (!t) return null; const r = $('dropcv').getBoundingClientRect(); return was && !r.width ? null : { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2 }; },
     holding: () => holdingNear().map(({ from, n }) => ({ from, n })), decks: () => groupDecks(visiblePrints()), net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
 }
@@ -1368,9 +1406,9 @@ function start(room) {
 // The room's link and its QR code, drawn here by the vendored qrcode-generator: the code never
 // goes to an outside service. Anyone who sees either can join, the same as with a typed code
 const invite = { room: null };
-function drawQr(text) {
+function drawQr(text, c = $('qr')) {
   const qr = window.qrcode(0, 'M'); qr.addData(text); qr.make();
-  const n = qr.getModuleCount(), QUIET = 4, CELL = 8, c = $('qr'), g = c.getContext('2d');
+  const n = qr.getModuleCount(), QUIET = 4, CELL = 8, g = c.getContext('2d');
   c.width = c.height = (n + 2 * QUIET) * CELL;
   g.fillStyle = T.paper; g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = T.ink;   // charcoal on soft white is 12:1, plenty for a scanner
@@ -1386,7 +1424,6 @@ $('invite').onclick = () => {
   const dash = Object.assign(document.createElement('i'), { textContent: '–' }); dash.setAttribute('aria-hidden', 'true');
   $('invcode').replaceChildren(...tiles.slice(0, 5), dash, ...tiles.slice(5));
   $('invcode').setAttribute('aria-label', `Heap code ${code.split('').join(' ')}`);
-  $('invtitle').textContent = 'Invite'; $('qrline').textContent = 'Scan to join this heap, or share the code or link.'; $('pairbtn').hidden = false;
   showWho(); openSheet('invitebox');
 };
 // bottom sheets slide up when opened and back down when closed (still for reduced motion)
@@ -1406,13 +1443,15 @@ function closeInvite() { closeSheet('invitebox'); }
 $('closeinvite').onclick = closeInvite;
 // your own other device (4.9): a link with a one-off token; it joins as you (named "you (2)") and lines up on this screen's right
 let pairToken = null;
-$('pairbtn').onclick = () => {
+function openPair() {
   const b = new Uint8Array(12); crypto.getRandomValues(b); pairToken = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
   const link = `${inviteLink(location.href, invite.room)}&pair=${pairToken}&by=${id}&as=${encodeURIComponent(name + ' (2)')}`;
-  $('link').value = link; drawQr(link);
-  $('invtitle').textContent = 'Join my other device'; $('pairbtn').hidden = true;
-  $('qrline').textContent = 'Scan this with your other device’s camera. It joins this heap as you and lines up next to this screen.';
-};
+  $('pairlink').value = link; drawQr(link, $('pairqr'));
+  closeJoin(); openSheet('pairbox');
+}
+$('joinpair').onclick = openPair;
+$('pairclose').onclick = () => closeSheet('pairbox');
+$('paircopy').onclick = async () => { try { await navigator.clipboard.writeText($('pairlink').value); toast('Link copied'); } catch { $('pairlink').select(); toast('Couldn’t copy. The link is selected'); } };
 const pairing = (() => { const q = new URLSearchParams(location.search), t = q.get('pair'), by = q.get('by');
   return t && /^[0-9a-f]{24}$/.test(t) && by && by.length <= 40 ? { token: t, by, as: cleanName(q.get('as') || '') } : null; })();
 // the menu (wireframe 4.1)
@@ -1671,15 +1710,19 @@ function undoLanding(b) {
 // the map (2C): tiles for every screen; mine dark, the one under a dragged photo lit, not joined dashed
 const nameOf = (k) => (k === id ? name : net.peers[k]?.name) || 'a device';
 const sizeOf = (k) => (k === id ? { w: W, h: H } : sizes[k] || (net.peers[k] && { w: net.peers[k].w, h: net.peers[k].h }));
-function tilesFor(cv) {
-  const r = cv.getBoundingClientRect(), all = [id, ...others()], sz = Object.fromEntries(all.map((k) => [k, sizeOf(k)]).filter(([, v]) => v));
-  return mapTiles(Object.keys(sz), layout, sz, id, { w: r.width - 16, h: r.height - 16 }).map((t) => ({ ...t, x: t.x + 8, y: t.y + 8, name: nameOf(t.id) }));
+const mapSizes = () => Object.fromEntries([id, ...others()].map((k) => [k, sizeOf(k)]).filter(([, v]) => v));
+// the layout if a move went ahead: what the time keeper would make of it (4.7, 4.11)
+function previewLayout(j) { const sz = mapSizes(); return solveLayout(Object.keys(sz), addJoins(net.joins, [j], sz), sz); }
+function tilesFor(cv, lay = layout) {
+  const r = cv.getBoundingClientRect(), sz = mapSizes();
+  return mapTiles(Object.keys(sz), lay, sz, id, { w: r.width - 16, h: r.height - 16 }).map((t) => ({ ...t, x: t.x + 8, y: t.y + 8, name: nameOf(t.id) }));
 }
-function drawMap(cv, hot = null) {
+function drawMap(cv, hot = null, lay = layout, drag = null) {
   const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
   cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
   const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, r.width, r.height);
-  const tiles = tilesFor(cv), apart = tiles.filter((t) => !t.joined);
+  const tiles = tilesFor(cv, lay), apart = tiles.filter((t) => !t.joined);
+  if (drag) for (const t of tiles) if (t.id === drag.k) { t.x += drag.dx; t.y += drag.dy; }   // the screen being dragged follows the finger
   g.font = `500 10px ${T.ui}`; g.textBaseline = 'top';
   if (apart.length) { g.fillStyle = T.mid; g.fillText('Not joined', apart[0].x, apart[0].y - 13); }
   for (const t of tiles) {
@@ -1696,7 +1739,8 @@ function openMap() {
   const all = [id, ...others()], apart = others().filter((k) => (layout.group[k] || k) !== (layout.group[id] || id));
   $('maptitle').textContent = `${$('heapname').textContent} · ${all.length} screen${all.length === 1 ? '' : 's'}`;
   $('mapkey').textContent = [`You = ${name}’s ${deviceKind({ w: W, h: H })}`, ...apart.map((k) => `${nameOf(k)} isn’t joined yet`)].join(' · ');
-  $('maparrange').hidden = net.leader !== id; $('mapmove').hidden = !others().length;
+  $('maparrange').hidden = !others().length; $('mapask').hidden = true;
+  $('maphint').textContent = !others().length ? '' : net.leader === id ? 'Drag a screen next to another to move it. Each person is asked first.' : 'Drag your screen next to another to move it.';
   openSheet('mapbox'); requestAnimationFrame(() => drawMap($('mapcv')));
 }
 $('mapbtn').onclick = openMap;
@@ -1712,8 +1756,37 @@ function startArrange(own) {
   else arrangeStep('Which screen moves?', [id, ...others()].map((k) => [k, k === id ? `You · ${deviceName(k)}` : deviceName(k)]), 'You’re the host, so you can move anyone’s screen. Each person is asked before their screen moves.');
   closeSheet('mapbox', () => { $('arrangebox').hidden = false; });
 }
-$('mapmove').onclick = () => startArrange(true);
-$('maparrange').onclick = () => startArrange(false);
+$('maparrange').onclick = () => startArrange(net.leader !== id);
+// drag to arrange (4.7): the host can drag any screen, everyone else their own; it snaps to a side of the nearest screen
+let mapDrag = null, mapPlan = null;
+$('mapcv').onpointerdown = (e) => {
+  const r = $('mapcv').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const t = tilesFor($('mapcv')).find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
+  if (!t || (net.leader !== id && t.id !== id) || !others().length) return;
+  $('mapcv').setPointerCapture(e.pointerId); mapDrag = { k: t.id, sx: x, sy: y, t }; mapPlan = null; $('mapask').hidden = true;
+};
+$('mapcv').onpointermove = (e) => {
+  if (!mapDrag) return;
+  const r = $('mapcv').getBoundingClientRect();
+  drawMap($('mapcv'), null, layout, { k: mapDrag.k, dx: e.clientX - r.left - mapDrag.sx, dy: e.clientY - r.top - mapDrag.sy });
+};
+$('mapcv').onpointerup = (e) => {
+  const d = mapDrag; mapDrag = null; if (!d) return;
+  const r = $('mapcv').getBoundingClientRect(), pt = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const near = tilesFor($('mapcv')).filter((t) => t.id !== d.k).sort((a, b) => Math.hypot(pt.x - a.x - a.w / 2, pt.y - a.y - a.h / 2) - Math.hypot(pt.x - b.x - b.w / 2, pt.y - b.y - b.h / 2))[0];
+  if (!near || Math.hypot(pt.x - d.sx, pt.y - d.sy) < 8) return drawMap($('mapcv'));
+  const side = dropSide(pt, near), j = proposeJoin(d.k, near.id, side, mapSizes());
+  mapPlan = { j, to: d.k === id ? near.id : d.k, side };
+  drawMap($('mapcv'), d.k, previewLayout(j));   // how it would look
+  const where = near.id === id ? `your ${kindOf(id)}` : deviceName(near.id);
+  $('mapasktext').textContent = d.k === id ? `Ask ${nameOf(near.id)} to let you join ${sideWords(side)} their ${kindOf(near.id)}` : `Ask ${nameOf(d.k)} to move ${sideWords(side)} ${where}`;
+  $('mapask').hidden = false;
+};
+$('mapaskgo').onclick = () => {
+  const p = mapPlan; mapPlan = null; if (!p) return;
+  net.askMove({ ...p.j }, p.to); moveSide = p.side;
+  closeSheet('mapbox', () => toast(`Waiting for ${nameOf(p.to)} to accept…`));
+};
 $('arrangecancel').onclick = () => { $('arrangebox').hidden = true; };
 $('arrangelist').onclick = (e) => {
   const k = e.target.closest('button')?.dataset.k; if (!k) return;
@@ -1743,6 +1816,7 @@ function moveAsked(ask) {
     $('moveno').textContent = 'No'; $('moveyes').textContent = 'Accept'; $('movenote').textContent = '';
   }
   $('movebox').hidden = false;
+  requestAnimationFrame(() => drawMap($('movecv'), j.a, previewLayout(j)));   // the new arrangement, the moving screen lit
   clearTimeout(moveTimer); moveTimer = setTimeout(() => { if (moveAsk === ask) { $('movebox').hidden = true; net.answerMove(ask, false); moveAsk = null; } }, 30000);
 }
 $('moveyes').onclick = () => { const a = moveAsk; moveAsk = null; clearTimeout(moveTimer); $('movebox').hidden = true; if (a) net.answerMove(a, true); };
@@ -1780,20 +1854,39 @@ const joinCard = (title, sub, { count = false, retry = false } = {}) => {
 };
 function openJoin() {
   clearInterval(joinTick);
-  for (const st of document.querySelectorAll('#joinmode .strip')) st.classList.remove('on');
+  const sides = Object.fromEntries(edgeLabels(Object.keys(sizes), layout, sizes, id).map((l) => [l.side, l.id]));
+  for (const strip of document.querySelectorAll('#joinmode .strip')) {   // a side that's joined says who it's joined to
+    const k = sides[strip.dataset.edge];
+    strip.classList.remove('on'); strip.classList.toggle('joined', !!k); strip.dataset.who = k || '';
+    strip.textContent = k ? `Joined · ${nameOf(k)}` : strip.dataset.edge === 'T' || strip.dataset.edge === 'B' ? 'Tap here' : 'Tap';
+  }
   joinCard('Which side is the other screen?', 'Put the screens side by side. Each person taps the edge that faces the other one.');
   $('joinmode').hidden = false;
 }
 const closeJoin = () => { clearInterval(joinTick); $('joinmode').hidden = true; };
+let rejoin = null;
 for (const st of document.querySelectorAll('#joinmode .strip')) st.onclick = (e) => {
-  const edge = st.dataset.edge, along = edge === 'L' || edge === 'R' ? e.clientY : e.clientX;
+  const along = st.dataset.edge === 'L' || st.dataset.edge === 'R' ? e.clientY : e.clientX;
+  if (st.dataset.who) {   // already joined on this side: say what joining someone else here would end
+    rejoin = { st, along, k: st.dataset.who };
+    $('rejointitle').textContent = `${deviceName(rejoin.k)} is joined on this side`;
+    $('rejoinsub').textContent = `Join another screen here? You’ll lose the join with ${nameOf(rejoin.k)}.`;
+    $('rejoinkeep').textContent = `Keep ${nameOf(rejoin.k).split(/\s+/)[0]}`; $('rejoinbox').hidden = false;
+    return;
+  }
+  pushEdge(st, along);
+};
+$('rejoinkeep').onclick = () => { rejoin = null; $('rejoinbox').hidden = true; };
+$('rejoinnew').onclick = () => { const r = rejoin; rejoin = null; $('rejoinbox').hidden = true; if (!r) return; net.unjoin(r.k); r.st.classList.remove('joined'); r.st.dataset.who = ''; pushEdge(r.st, r.along); };
+function pushEdge(st, along) {
+  const edge = st.dataset.edge;
   for (const o of document.querySelectorAll('#joinmode .strip')) o.classList.toggle('on', o === st);
   net.push(edge, along);
   let left = JOIN_WINDOW_S;
   joinCard(String(left), 'Now tap the facing edge on the other screen. Both taps must land within 2 seconds', { count: true });
   clearInterval(joinTick);
   joinTick = setInterval(() => { left--; if (left > 0) $('jointitle').textContent = String(left); else { clearInterval(joinTick); joinCard('Waiting for a match…', 'Checking with the other screen'); } }, 1000);
-};
+}
 $('joincancel').onclick = closeJoin;
 $('jointry').onclick = openJoin;
 // what came of the latest tap

@@ -28,8 +28,7 @@ test('the time keeper moves a screen only with a yes from one of the two screens
   assert.match(net, /s\.askMove = \(/); assert.match(net, /s\.answerMove = \(/);
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   assert.match(html, /<div id="arrangebox"[\s\S]*?<h2 id="arrangetitle"><\/h2>[\s\S]*?<div id="arrangelist" role="list"><\/div>/);
-  assert.match(html, /id="mapmove">Move my screen<\/button>/);
-  assert.match(html, /id="maparrange"[^>]*>Arrange screens<\/button>/);
+  assert.match(html, /id="maparrange"[^>]*>Use a list instead<\/button>/, 'dragging on the map, or a list');
   assert.match(html, /<div id="movebox"[\s\S]*?<h2 id="movetitle"><\/h2>[\s\S]*?id="moveno"[\s\S]*?id="moveyes"/);
   assert.match(html, /The host wants to move your screen/);
   assert.match(html, /wants to join \$\{sideWords\(/);
@@ -41,8 +40,7 @@ test('your own other device (4.9): a pairing link, let in and lined up next to y
   const net = readFileSync(new URL('../web/net.js', import.meta.url), 'utf8');
   assert.match(net, /s\.pairHello = \(/);
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
-  assert.match(html, /<button type="button" id="pairbtn">Join my other device<\/button>/);
-  assert.match(html, /Scan this with your other device’s camera\. It joins this heap as you and lines up next to this screen\./);
+  assert.match(html, /<button type="button" id="joinpair">Your own other device\? Show a code<\/button>/);
   assert.match(html, /&pair=\$\{pairToken\}&by=\$\{id\}/);
   assert.match(html, /ev === 'pair'[\s\S]{0,80}d\.token === pairToken/, 'only the token from this screen');
 });

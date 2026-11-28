@@ -188,7 +188,7 @@ test('the map (2C.7): a Map chip in the header opens every screen in the room, w
   const top = (html.match(/<header id="top"[^>]*>([\s\S]*?)<\/header>/) || [, ''])[1];
   assert.match(top, /<button id="mapbtn" type="button" aria-label="Map of the screens in this heap" aria-controls="mapbox"[^>]*>/);
   const box = (html.match(/<div id="mapbox"[^>]*>([\s\S]*?)<\/div><!-- \/mapbox -->/) || [, ''])[1];
-  assert.match(box, /<h2 id="maptitle"><\/h2>\s*<canvas id="mapcv"[^>]*><\/canvas>\s*<p id="mapkey"><\/p>/);
+  assert.match(box, /<h2 id="maptitle"><\/h2>\s*<canvas id="mapcv"[^>]*><\/canvas>[\s\S]*?<p id="mapkey"><\/p>/);
   assert.match(box, /<button type="button" id="mapjoin" class="pri">Join a screen<\/button>/);
   assert.match(html, /function drawMap\(/);
   assert.match(css, /#mapbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/);

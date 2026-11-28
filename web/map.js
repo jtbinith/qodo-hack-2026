@@ -49,3 +49,8 @@ export function proposeJoin(a, b, side, sizes) {
   return { a, b, edgeA, edgeB, alongA: len(a, edgeA) / 2, alongB: len(b, edgeB) / 2 };
 }
 export const sideWords = (side) => ({ below: 'below', above: 'above', left: 'on the left of', right: 'on the right of' })[side];
+// which side of tile t a screen dropped at pt goes on (4.7, dragging on the map), by how far off-centre it is
+export function dropSide(pt, t) {
+  const dx = (pt.x - (t.x + t.w / 2)) / t.w, dy = (pt.y - (t.y + t.h / 2)) / t.h;
+  return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'below' : 'above');
+}
