@@ -1426,6 +1426,7 @@ function start(room) {
     if (from !== id && !inHeap(from)) return;   // not let in yet: nothing it sends is taken (Qodo on #162)
     if (blocked.has(from)) return;   // blocked: nothing from them counts (5.6)
     if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
+    if (m.t === 'vouch') { if (net.leader === id && inHeap(from) && typeof m.who === 'string' && net.peers[m.who]) admitDevice(m.who); return; }   // a member vouches for their own other device (4.9)
     if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
       const p = validPidMsg(m) && prints.get(m.pid);
       if (p && p.owner === from) {
@@ -1470,11 +1471,10 @@ function start(room) {
     if (ev === 'status') netState();
     if (ev === 'pair' && pairToken && d.token === pairToken) {   // my other device: let it in and line it up on my right
       pairToken = null; const p = net.peers[d.from];
-      if (p) { if (net.leader === id) admitDevice(d.from); else net.vouch(d.from); }   // not the host: ask the host to let it in
+      if (p) { if (net.leader === id) admitDevice(d.from); else peers.send(net.leader, { t: 'vouch', who: d.from }); }   // not the host: ask the host, over our encrypted link, so it knows who's asking
       const all = Object.fromEntries([id, d.from].map((x) => [x, sizeOf(x) || { w: p?.w || 390, h: p?.h || 844 }]));
       net.askMove(proposeJoin(d.from, id, 'right', all), d.from);
     }
-    if (ev === 'vouch' && net.leader === id && inHeap(d.from) && net.peers[d.who]) admitDevice(d.who);   // someone in the heap vouches for their own device
     if (ev === 'moveask' && pairing && d.by === pairing.by && d.j.a === id) { net.answerMove(d, true); return; }   // lining up with my own device: yes
     if (ev === 'moveask') moveAsked(d);
     if (ev === 'moveno') toast(`${nameOf(d.from)} kept their screen where it is`);

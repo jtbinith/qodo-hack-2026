@@ -8,14 +8,11 @@ const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8')
 const net = readFileSync(new URL('../web/net.js', import.meta.url), 'utf8');
 
 test('1: a member who isn’t the host can still let their own other device in: they vouch, the host admits', () => {
-  assert.match(net, /s\.vouch = \(who\) => send\('vouch', \{ from: id, who \}\);/);
-  assert.match(net, /ch\.on\('broadcast', \{ event: 'vouch' \}/);
-  assert.match(html, /if \(net\.leader === id\) admitDevice\(d\.from\); else net\.vouch\(d\.from\);/);
-  assert.match(html, /ev === 'vouch' && net\.leader === id && inHeap\(d\.from\) && net\.peers\[d\.who\]/);
+  assert.match(html, /if \(net\.leader === id\) admitDevice\(d\.from\); else peers\.send\(net\.leader, \{ t: 'vouch', who: d\.from \}\);/);   // over the encrypted link since round 2
 });
 
 test('2: Undo after a move puts back the joins the move replaced', () => {
-  assert.match(net, /lastMoves\.set\(j\.a, \{ j, before: s\.joins\.filter\(\(x\) => x\.a === j\.a \|\| x\.b === j\.a\) \}\)/);
+  assert.match(net, /lastMoves\.set\(j\.a, \{ j, before, after: JSON\.stringify\(s\.joins\) \}\)/);   // both screens since round 2
   assert.match(net, /s\.unmove = \(\) =>/);
   assert.match(html, /net\.unmove\(\); toast\('Moved back'\)/);
 });
@@ -55,7 +52,7 @@ test('round 2: a vouch comes over the encrypted link from a member, not as a roo
 });
 
 test('round 2: Undo after a move restores both screens’ joins, and only if nothing has moved since', () => {
-  assert.match(net, /before: s\.joins\.filter\(\(x\) => \[x\.a, x\.b\]\.some\(\(k\) => k === j\.a \|\| k === j\.b\)\)/);
+  assert.match(net, /const before = s\.joins\.filter\(\(x\) => \[x\.a, x\.b\]\.some\(\(k\) => k === j\.a \|\| k === j\.b\)\)/);
   assert.match(net, /after: JSON\.stringify\(s\.joins\)/);
   assert.match(net, /if \(JSON\.stringify\(s\.joins\) !== m\.after\) return;/);
 });

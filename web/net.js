@@ -279,8 +279,9 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     if (s.leader !== id || !j || !okSides(j)) return;
     if (payload.from !== j.a && payload.from !== j.b) return;
     if (payload.by !== s.leader && payload.by !== j.a && payload.by !== j.b) return;
-    lastMoves.set(j.a, { j, before: s.joins.filter((x) => x.a === j.a || x.b === j.a) });
+    const before = s.joins.filter((x) => [x.a, x.b].some((k) => k === j.a || k === j.b));   // both screens' joins: either can lose one
     s.joins = addJoins(s.joins, [j], sizesNow()); sendLayout();
+    lastMoves.set(j.a, { j, before, after: JSON.stringify(s.joins) });
     announce('moved', { j, by: payload.by, from: id });
   }
   ch.on('broadcast', { event: 'moveask' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.by) && payload.j && okSides(payload.j)) emit('moveask', payload); });
@@ -289,13 +290,11 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   // your own other device (4.9): it says hello with the token from the screen that showed the QR
   ch.on('broadcast', { event: 'pair' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.from) && typeof payload.token === 'string' && payload.token.length <= 64) emit('pair', payload); });
   s.pairHello = (token, to) => send('pair', { from: id, token, to });
-  // a member lets their own other device in (4.9): only the host's list counts, so they ask the host to add it
-  ch.on('broadcast', { event: 'vouch' }, ({ payload }) => { if (s.leader === id && Object.hasOwn(s.peers, payload?.from) && typeof payload.who === 'string' && Object.hasOwn(s.peers, payload.who)) emit('vouch', payload); });
-  s.vouch = (who) => send('vouch', { from: id, who });
   // Undo after a move (4.12): the moved screen goes back to the joins it had before
   function undoMove(a) {
     const m = lastMoves.get(a); if (s.leader !== id || !m) return;
     lastMoves.delete(a);
+    if (JSON.stringify(s.joins) !== m.after) return;   // something moved since: Undo would undo that too, so it does nothing
     const here = [...Object.keys(s.peers), id], back = m.before.filter((x) => isValidJoins([x], here));
     s.joins = addJoins(removeJoin(s.joins, m.j.a, m.j.b), back, sizesNow()); sendLayout();
   }
