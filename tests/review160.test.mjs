@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { cleanName } from '../web/check.js';
+import { cleanName, validPeerMeta } from '../web/check.js';
 
 const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
 const css = (html.match(/<style>([\s\S]*?)<\/style>/) || [, ''])[1];
@@ -42,6 +42,15 @@ test('12: names keep the joiners some scripts and emoji need, and count what you
   assert.equal(cleanName('می‌خواهم'), 'می‌خواهم', 'ZWNJ kept (Persian)');
   assert.equal(cleanName('👩‍👩‍👧'), '👩‍👩‍👧', 'ZWJ emoji kept');
   assert.equal(cleanName('Jo‮hn​'), 'John', 'direction overrides and zero-width spaces still go');
-  assert.equal(cleanName('👩‍👩‍👧'.repeat(25)), '👩‍👩‍👧'.repeat(20), 'twenty visible characters');
+  assert.equal(cleanName('x'.repeat(30)), 'x'.repeat(20), 'twenty characters');
+  assert.equal(cleanName('🍪'.repeat(25)), '🍪'.repeat(20), 'twenty emoji');
   assert.doesNotMatch(html, /<input id="yourname" maxlength="20"/, 'the box doesn’t cut emoji names short');
+});
+
+test('re-review of #160: a name of long emoji still fits what other devices accept, cut at a whole emoji', () => {
+  const fam = '👩‍👩‍👧';   // one emoji, 8 code units
+  const n = cleanName(fam.repeat(6));
+  assert.equal(n, fam.repeat(5), 'five whole family emoji fit in 40 code units');
+  assert.ok(validPeerMeta({ name: n, w: 390, h: 844, joinedAt: 1 }), 'other devices accept it');
+  for (const s of ['🏳️‍🌈'.repeat(9), 'é'.repeat(30), 'می‌خواهم'.repeat(4)]) assert.ok(validPeerMeta({ name: cleanName(s), w: 390, h: 844, joinedAt: 1 }), s);
 });
