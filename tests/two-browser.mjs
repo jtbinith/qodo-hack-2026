@@ -1060,6 +1060,15 @@ try {
   const turned = await until(D2, () => document.getElementById('s-home')?.hidden === false && document.getElementById('toast').textContent, null, 15000).then(() => D2.evaluate(() => document.getElementById('toast').textContent), () => '');
   check(turned === 'Host didn’t let you in this time', `Not now sends Dee back to the home screen ("${turned}")`);
   await D2.context().close();
+  // 2D.11, 2D.12: the host ends the heap: G is told it closes in five minutes, adding stops, and at the end G sees it has ended
+  await sheetsDown(S); await S.click('#menu'); await S.click('#endheap'); await until(S, () => !document.getElementById('endbox').hidden, null, 5000);
+  const endAsk = await S.evaluate(() => document.getElementById('endtitle').textContent);
+  await S.click('#endyes');
+  const endLine = await until(G, () => !document.getElementById('endbanner').hidden, null, 10000).then(() => G.evaluate(() => [document.getElementById('endbanner').textContent, document.getElementById('share').disabled]), () => ['', false]);
+  await G.evaluate(() => window.__t.endNow());
+  const endedSaid = await until(G, () => document.getElementById('s-ended')?.hidden === false, null, 10000).then(() => G.evaluate(() => document.getElementById('endedsub').textContent), () => '');
+  check(endAsk === 'End “Host’s heap” for everyone?' && /^Host ended the heap\. It closes in [45]:\d\d\.$/.test(endLine[0]) && endLine[1] && /^Nothing from “Host’s heap” is kept\.$/.test(endedSaid),
+    `ending asks "${endAsk}"; G sees "${endLine[0]}" with adding off (${endLine[1]}), then "${endedSaid}"`);
   await G.context().close();
   // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
   const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();
@@ -1085,6 +1094,17 @@ try {
   check(sharp, `after an invite link and Back, the wordmark's a is drawn at its size (${sharp})`);
   await GL.context().close();
   await S.context().close();
+  // 2D.9, 2D.10: the host leaves: the other device is told, and it's the host now
+  const hostPage = async (n) => { const p = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage(); await p.addInitScript((n) => { try { localStorage.setItem('heap-name', n); localStorage.setItem('heap-open', '1'); } catch {} }, n); return p; };
+  const X = await hostPage('Xena'); await X.goto(BASE); await X.click('#new'); await X.click('#go');
+  await until(X, () => window.__t?.net.status === 'live' && !document.getElementById('invitebox').hidden, null, 20000);
+  const xc = await X.evaluate(() => [...document.querySelectorAll('#invcode span')].map((x) => x.textContent).join(''));
+  const Y = await hostPage('Yuri'); await Y.goto(`${BASE}?room=${xc}&auto`); await enter(Y);
+  await until(Y, () => window.__t?.net.status === 'live' && document.getElementById('lobby').hidden && Object.keys(window.__t.net.peers).length === 2, null, 20000);
+  await X.context().close();
+  const hostNow = await until(Y, () => !document.getElementById('hostbox').hidden, null, 45000).then(() => Y.evaluate(() => [document.getElementById('hostsub').textContent, window.__t.toasts.some((t) => t === 'Xena left. Yuri is now the host.')]), () => ['', false]);
+  check(hostNow[0] === 'Xena left, so you look after the heap.' && hostNow[1], `when the host leaves, the other device is told (${hostNow[1]}) and sees "You’re the host now": "${hostNow[0]}"`);
+  await Y.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {
