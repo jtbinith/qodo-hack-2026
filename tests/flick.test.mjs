@@ -22,7 +22,7 @@ test('it glides on, slowing down, and stops after a while', () => {
 });
 
 test('it lands on the last screen it crossed, even if it would have slid past it', () => {
-  const on = (x) => (x < 100 ? 'me' : x < 200 ? 'them' : null);   // two screens side by side, nothing beyond
+  const on = (x) => (x < 0 ? null : x < 100 ? 'me' : x < 200 ? 'them' : null);   // two screens side by side, nothing either side
   assert.deepEqual(landing([50, 120, 180, 260, 400], on), { at: 180, on: 'them' });
   assert.deepEqual(landing([50, 60, 70], on), { at: 70, on: 'me' }, 'stayed on my screen');
   assert.deepEqual(landing([50, 80, 120], on), { at: 120, on: 'them' });

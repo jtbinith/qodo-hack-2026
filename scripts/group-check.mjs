@@ -147,6 +147,7 @@ async function drag(from, to, name) {
   const toX = at.tx + Math.min(to.w / 2, 200), toY = at.ty + Math.min(to.h / 2, 260);
   await from.page.mouse.move(at.x, at.y); await from.page.mouse.down();
   for (let k = 1; k <= 12; k++) await from.page.mouse.move(at.x + (toX - at.x) * k / 12, at.y + (toY - at.y) * k / 12);
+  await new Promise((r) => setTimeout(r, 150)); await from.page.mouse.move(toX + 1, toY);   // settle before letting go: a place, not a flick
   await from.page.mouse.up();
   return null;
 }

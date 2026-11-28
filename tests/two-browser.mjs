@@ -229,6 +229,7 @@ try {
     }
     await page.mouse.move(at.x, at.y); await page.mouse.down();
     for (let k = 1; k <= 12; k++) await page.mouse.move(at.x + ((toX - at.x) * k) / 12, at.y);
+    await new Promise((r) => setTimeout(r, 150)); await page.mouse.move(toX + 1, at.y);   // settle before letting go, so it's a place, not a flick (2A.3)
     await page.mouse.up();
   }
   // what A shared sits as one deck, on both screens (2A.1)
@@ -274,7 +275,7 @@ try {
   const k4Names = { a: await A.evaluate(() => localStorage.getItem('heap-name')), b: await B.evaluate(() => localStorage.getItem('heap-name')) };
   const k4BId = await B.evaluate(() => window.__t.id);
   const k4FlickPid = await A.evaluate((b) => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1), p = t.prints.get(d.pids[0]);
-    p.x = 560; p.y = 260; t.prints.delete(p.pid); t.prints.set(p.pid, p); t.peers.send(b, { t: 'move', pid: p.pid, anchor: p.anchor, x: p.x, y: p.y, final: true }); return p.pid; }, k4BId);
+    p.anchor = t.id; p.x = 560; p.y = 260; t.prints.delete(p.pid); t.prints.set(p.pid, p); t.peers.send(b, { t: 'move', pid: p.pid, anchor: p.anchor, x: p.x, y: p.y, final: true }); return p.pid; }, k4BId);
   await A.mouse.move(635, 335); await A.mouse.down();
   for (const x of [650, 670, 695, 720]) await A.mouse.move(x, 335);
   await A.mouse.up();
@@ -286,11 +287,11 @@ try {
   await B.click('#snackact');
   const k4Undone = await until(A, ([pid, a]) => window.__t.prints.get(pid).anchor === a, [k4FlickPid, aId], 10000).then(() => true, () => false);
   check(k4Undone, `Undo on B puts the photo back on A's screen (${k4Undone})`);
-  // 2A.8: let go where no screen is joined: the photo comes k4Back and Send to… lists B; choosing B sends it
+  // 2A.8: let go where no screen is joined: the photo comes back and Send to… lists B; choosing B sends it
   const k4Lost = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); return d.pids[0]; });
-  await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); p.x = 40; p.y = 300; t.prints.delete(pid); t.prints.set(pid, p); }, k4Lost);
-  await A.mouse.move(110, 370); await A.mouse.down();
-  for (let k = 1; k <= 8; k++) await A.mouse.move(110 - k * 25, 370);
+  await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); p.anchor = t.id; p.x = 150; p.y = 300; t.prints.delete(pid); t.prints.set(pid, p); }, k4Lost);
+  await A.mouse.move(225, 370); await A.mouse.down();   // flicked left and let go on A: it glides off the edge, where nothing is joined
+  for (const x of [200, 170, 130, 95, 70]) await A.mouse.move(x, 370);
   await A.mouse.up();
   const k4SendUp = await until(A, () => !document.getElementById('sendbox').hidden, null, 5000).then(() => true, () => false);
   const k4Back = await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); return t.screenAt(...t.world(p).map((v, i) => v + (i ? p.h : p.w) / 2)) === t.id; }, k4Lost);
@@ -298,12 +299,13 @@ try {
   await A.click(`#sendlist button[data-to="${k4BId}"]`);
   const k4Given = await until(B, (pid) => window.__t.files.has(pid), k4Lost, 60000).then(() => true, () => false);
   check(k4SendUp && k4Back && k4Rows.some((r) => r.startsWith(k4Names.b)) && k4Given, `let go off every screen: it comes back (${k4Back}), Send to… opens (${k4SendUp}) listing ${JSON.stringify(k4Rows)}, and choosing B sends it (${k4Given})`);
-  // 2A.5: while A holds a photo near the seam, B sees who is k4Holding it
-  const k4HoldPid = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); const p = t.prints.get(d.pids[0]); p.x = 600; p.y = 260; t.prints.delete(p.pid); t.prints.set(p.pid, p); return p.pid; });
+  // 2A.5: while A holds a photo near the seam, B sees who is holding it
+  await until(A, () => document.getElementById('sendbox').hidden, null, 5000);   // Send to… has finished closing
+  const k4HoldPid = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); const p = t.prints.get(d.pids[0]); p.anchor = t.id; p.x = 600; p.y = 260; t.prints.delete(p.pid); t.prints.set(p.pid, p); return p.pid; });
   await A.mouse.move(675, 335); await A.mouse.down();
   for (let k = 1; k <= 6; k++) await A.mouse.move(675 + k * 25, 335);
   const k4Holding = await until(B, (a) => window.__t.holding().some((h) => h.from === a && h.n === 1), aId, 5000).then(() => true, () => false);
-  await A.mouse.move(640, 335); await A.mouse.up();
+  await A.mouse.move(645, 335); await new Promise((r) => setTimeout(r, 150)); await A.mouse.move(640, 335); await A.mouse.up();   // back on A, let go gently
   const k4LetGo = await until(B, () => !window.__t.holding().length, null, 5000).then(() => true, () => false);
   check(k4Holding && k4LetGo, `B sees A holding a photo near the seam (${k4Holding}), and stops once A lets go (${k4LetGo})`);
   void k4HoldPid;
@@ -525,6 +527,7 @@ try {
   const deckAt = await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid), [wx, wy] = t.world(p), me = t.layout.pos[t.id]; return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 }; }, rest[rest.length - 1]);
   await A.mouse.move(deckAt.x, deckAt.y); await A.mouse.down();
   for (let k = 1; k <= 12; k++) await A.mouse.move(deckAt.x + ((900 + 150 - deckAt.x) * k) / 12, deckAt.y);
+  await new Promise((r) => setTimeout(r, 150)); await A.mouse.move(900 + 151, deckAt.y);
   await A.mouse.up();
   const deckCame = await until(B, (pids) => pids.every((p) => window.__t.files.has(p)), rest, 60000).then(() => true, () => false);
   check(rest.length > 1 && deckCame, `dragging A's deck of ${rest.length} onto B sends them all (${deckCame})`);
