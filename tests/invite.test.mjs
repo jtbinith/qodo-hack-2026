@@ -10,19 +10,19 @@ const A = 'ABCDEFGHJK', B = 'MNPQRSTUVW';
 
 test('a ?room=CODE&auto link joins that room', () => {
   has('pickRoom');
-  assert.deepEqual(m.pickRoom(`?room=${A}&auto`, null), { fill: A, join: A });
-  assert.deepEqual(m.pickRoom(`?room=${A.toLowerCase()}&auto`, null), { fill: A, join: A });
+  assert.deepEqual(m.pickRoom(`?room=${A}&auto`, null), { fill: A, join: A, from: 'link' });
+  assert.deepEqual(m.pickRoom(`?room=${A.toLowerCase()}&auto`, null), { fill: A, join: A, from: 'link' });
 });
 
 test('a ?room=CODE&auto link wins over the room stored for this tab', () => {
   has('pickRoom');
-  assert.deepEqual(m.pickRoom(`?room=${A}&auto`, B), { fill: A, join: A });
+  assert.deepEqual(m.pickRoom(`?room=${A}&auto`, B), { fill: A, join: A, from: 'link' });
 });
 
 test('a reload with no link goes straight back to the stored room', () => {
   has('pickRoom');
-  assert.deepEqual(m.pickRoom('', A), { fill: A, join: A });
-  assert.deepEqual(m.pickRoom('?relay', A), { fill: A, join: A });
+  assert.deepEqual(m.pickRoom('', A), { fill: A, join: A, from: 'stored' });
+  assert.deepEqual(m.pickRoom('?relay', A), { fill: A, join: A, from: 'stored' });
 });
 
 test('a stored code is checked with isRoomCode: a bad one is ignored', () => {
@@ -32,13 +32,13 @@ test('a stored code is checked with isRoomCode: a bad one is ignored', () => {
 
 test('a bad ?room=…&auto link is still the newer choice: it goes to the join check, not to the stored room', () => {
   has('pickRoom');
-  assert.deepEqual(m.pickRoom('?room=TEST&auto', A), { fill: 'TEST', join: 'TEST' });
+  assert.deepEqual(m.pickRoom('?room=TEST&auto', A), { fill: 'TEST', join: 'TEST', from: 'link' });
 });
 
 test('a ?room=CODE link without &auto only fills the lobby, even with a stored room', () => {
   has('pickRoom');
-  assert.deepEqual(m.pickRoom(`?room=${A}`, B), { fill: A, join: null });
-  assert.deepEqual(m.pickRoom(`?room=${A}`, null), { fill: A, join: null });
+  assert.deepEqual(m.pickRoom(`?room=${A}`, B), { fill: A, join: null, from: 'link' });
+  assert.deepEqual(m.pickRoom(`?room=${A}`, null), { fill: A, join: null, from: 'link' });
 });
 
 test('nothing stored and no link: an empty lobby', () => {

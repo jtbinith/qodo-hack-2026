@@ -161,3 +161,25 @@ test('a sheet that is already closed still carries on to what comes next (the av
   assert.match(html, /function closeSheet\(k, then\) \{\s*const b = \$\(k\);\s*if \(b\.hidden\) return then\?\.\(\);/);
   assert.match(css, /#toast \{[^}]*top: calc\(124px/, 'toasts sit below the All photos chip');
 });
+
+test('the invite code tiles fit their row, letters sized to it, with a compact Copy', () => {
+  assert.match(css, /\.copyrow \.tiles \{[^}]*container-type: inline-size/, 'the row is the size the letters follow');
+  assert.match(css, /\.copyrow \.tiles span \{[^}]*font-size: min\(7cqw, 26px\)/, 'letters scale with the row');
+  assert.match(css, /\.copyrow \.tiles span \{[^}]*min-width: 0/, 'tiles can shrink');
+});
+
+test('the add button says what it adds', () => {
+  assert.match(html, /<label id="share">\+ Add photos &amp; videos<input id="pick"/);
+  assert.doesNotMatch(html, />\+ Share</);
+});
+
+test('an invite link asks for your name (pre-filled), a reload of your heap does not', () => {
+  assert.match(html, /opening\.from === 'link' \? openLink\(opening\.join\) : tryStart\(opening\.join\)/);
+  assert.match(html, /function openLink\(code\) \{[\s\S]*?askName\('join', code\)/);
+});
+
+test('a Join button in the header, one tap to join a screen', () => {
+  const top = (html.match(/<header id="top"[^>]*>([\s\S]*?)<\/header>/) || [, ''])[1];
+  assert.match(top, /<button id="joinbtn" type="button"[^>]*>Join<\/button>\s*<button id="people"/);
+  assert.match(html, /\$\('joinbtn'\)\.onclick = openJoin/);
+});

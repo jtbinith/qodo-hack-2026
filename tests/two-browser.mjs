@@ -30,6 +30,11 @@ let failed = false;
 const check = (ok, what) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${what}`); if (!ok) failed = true; };
 
 const browser = await chromium.launch();
+// an invite link opens the name screen with the saved name filled in (the link joins once it's confirmed)
+async function enter(page) {
+  const named = await page.waitForFunction(() => document.getElementById('s-name')?.hidden === false && document.getElementById('yourname').value, null, { timeout: 10000 }).then(() => true, () => false);
+  if (named) await page.click('#go');
+}
 async function device(w, h, { at = room, init, relay = RELAY } = {}) {
   const page = await (await browser.newContext({ viewport: { width: w, height: h } })).newPage();
   page.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
@@ -37,6 +42,7 @@ async function device(w, h, { at = room, init, relay = RELAY } = {}) {
   await page.addInitScript((n) => { try { if (!localStorage.getItem('heap-name')) localStorage.setItem('heap-name', n); } catch {} }, 'T' + Math.random().toString(36).slice(2, 8));
   if (init) await page.addInitScript(init);
   await page.goto(`${BASE}?room=${at}&auto${relay ? '&relay' : ''}`);
+  await enter(page);
   return page;
 }
 // A wait that times out says which one it was: its line in this file and that line's code.
@@ -645,12 +651,14 @@ try {
   check(off127.length === 0, `the QR code is made on the device: no request outside 127.0.0.1 and the room server (${off127.length ? off127.join(', ') : 'none'})`);
   // scanning the QR code opens the link: that page joins the same room without typing the code
   const I2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
-  await I2.addInitScript(() => { try { localStorage.setItem('heap-name', 'Returning'); } catch {} });   // been here before: a link joins in one tap (#156)
+  await I2.addInitScript(() => { try { localStorage.setItem('heap-name', 'Returning'); } catch {} });   // been here before: a link asks for the name, filled in, then joins
   I2.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
   await I2.goto(box.link);
+  const askedName = await I2.evaluate(() => document.getElementById('s-name')?.hidden === false).catch(() => false);
+  await enter(I2);
   const scanned = await until(I2, () => window.__t && Object.keys(window.__t.net.peers).length === 2, null, 20000).then(() => true, () => false);
   const i2 = await where(I2);
-  check(scanned && i2.net === 'photo-' + inv && !i2.url.includes(inv), `the invite link joins the same room without typing (${scanned}), then leaves the address bar (${!i2.url.includes(inv)})`);
+  check(askedName && scanned && i2.net === 'photo-' + inv && !i2.url.includes(inv), `the invite link asks for the name (${askedName}), then joins the same room without typing (${scanned}), then leaves the address bar (${!i2.url.includes(inv)})`);
   // Back doesn't step to a page with the code: the joined entry was replaced, not added
   await I2.goBack().catch(() => {});
   const back = I2.url();
@@ -669,7 +677,7 @@ try {
   await tab.close();
   // a ?room=CODE&auto link wins over the room stored for this tab
   const inv2 = code();
-  await I1.goto(`${BASE}?room=${inv2}&auto`);
+  await I1.goto(`${BASE}?room=${inv2}&auto`); await enter(I1);
   const won = await until(I1, (r) => window.__t && window.__t.net.room === r && sessionStorage.getItem('room') === r.slice(6), 'photo-' + inv2, 20000).then(() => true, () => false);
   check(won, `a ?room=CODE&auto link wins over the stored room (${won})`);
   await I1.context().close();
@@ -840,6 +848,9 @@ try {
   const G = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
   await G.addInitScript(() => { try { localStorage.setItem('heap-name', 'Guest'); } catch {} });
   await G.goto(`${BASE}?room=${s1.tiles}&auto`);
+  const linkAsk = await G.evaluate(() => ({ step: document.getElementById('s-name')?.hidden === false, name: document.getElementById('yourname').value })).catch(() => ({}));
+  await G.fill('#yourname', 'Guest'); await G.click('#go');
+  check(linkAsk.step && linkAsk.name === 'Guest', `an invite link asks for the name first, filled in with the saved one (${JSON.stringify(linkAsk)})`);
   const guestShown = await until(S, () => [...document.querySelectorAll('#inroom li')].some((li) => li.textContent === 'Guest'), null, 20000).then(() => true, () => false);
   const withGuest = await inHeap();
   const head = await S.evaluate(() => ({ name: document.getElementById('heapname').textContent, sub: document.getElementById('heapsub').textContent, faces: [...document.querySelectorAll('#people i')].map((x) => x.textContent) }));

@@ -74,6 +74,8 @@ for (const [i, d] of s.devices.entries()) {
   if (d.share) await page.addInitScript(shareStub(d.share, d.hangMs));
   const downloads = []; page.on('download', async (dl) => { const p = join(OUT, `dl-${i}-${downloads.length}-${dl.suggestedFilename()}`); downloads.push({ name: dl.suggestedFilename(), path: p, done: dl.saveAs(p) }); });
   await page.goto(`${base}?room=${String(ABSENT) === String(i) ? other : room}&auto`);
+  // an invite link opens the name screen with the saved name filled in: press Join heap, as a person would
+  if (await page.waitForFunction(() => document.getElementById('s-name')?.hidden === false && document.getElementById('yourname').value, null, { timeout: 10000 }).then(() => true, () => false)) await page.click('#go');
   dev.push({ i, size: d.size, w, h, page, errors, downloads, mark: 0 });
 }
 const until = (p, fn, arg, t = 30000) => p.waitForFunction(fn, arg, { timeout: t }).then(() => true, () => false);
