@@ -213,10 +213,99 @@
   .askopen { display: flex; gap: 8px; align-items: center; font-size: 14px; }
   .askopen input { width: 20px; height: 20px; accent-color: var(--ink); }
   @media (prefers-reduced-motion: no-preference) { #askbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); } }
+  /* people and safety (5.1–5.10): sheets that share one look */
+  #peoplebox, #personbox, #checkbox, #warnbox, #blockbox, #leavebox, #lostbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 5; }
+  #peoplebox .sheet, #personbox .sheet, #checkbox .sheet, #warnbox .sheet, #blockbox .sheet, #leavebox .sheet, #lostbox .sheet { width: min(100%, 480px); box-sizing: border-box; max-height: 90vh; overflow: auto;
+    background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0; border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
+  #blockbox, #lostbox { align-items: center; } #blockbox .sheet, #lostbox .sheet { border-radius: 22px; border-bottom: 2px solid var(--ink); width: min(92%, 380px); }
+  #peoplebox .handle, #personbox .handle, #leavebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #peoplebox h2, #personbox h2, #checkbox h2, #blockbox h2, #leavebox h2, #lostbox h2 { margin: 2px 0; font: 700 18px var(--ui); text-align: center; }
+  #peopleback { justify-self: start; background: none; border: 0; color: var(--text-mid); font: 500 15px var(--ui); }
+  #peoplelist { display: grid; }
+  #peoplelist button, #peoplelist .me { display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; background: none; border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); text-align: left; font: inherit; }
+  #peoplelist i { width: 36px; height: 36px; border-radius: 50%; background: var(--ink); color: var(--paper); font: normal 700 12px/36px var(--ui); text-align: center; }
+  #peoplelist b { display: block; font-size: 16px; font-weight: 500; } #peoplelist small { display: block; font-size: 13px; color: var(--text-mid); }
+  #peoplelist .badge { font-size: 12px; padding: 4px 8px; border-radius: 8px; border: 1.5px solid var(--ink); }
+  #peoplelist .badge.ok { background: var(--ink); color: var(--paper); }
+  #personbox .item { display: flex; justify-content: space-between; align-items: center; text-align: left; width: 100%; padding: 12px 2px; background: none; border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: inherit; }
+  #personbox .item b, #personbox .item small { display: block; } #personbox .item b { font-size: 17px; font-weight: 500; } #personbox .item small { font-size: 13px; color: var(--text-mid); }
+  #personbox .item.quiet b { color: var(--text-mid); }
+  #checkcancel { justify-self: start; background: none; border: 0; color: var(--text-mid); font: 500 15px var(--ui); }
+  #checksub, #warnsub, #blockbox p, #leavebox p, #lostbox p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--text-mid); }
+  #checkwords { display: grid; gap: 6px; padding: 18px; border-radius: 16px; background: var(--line); text-align: center; }
+  #checkwords span { font: 700 26px var(--ui); }
+  .warnmark { width: 52px; height: 52px; border-radius: 12px; background: var(--ink); color: var(--paper); font: 700 24px/52px var(--ui); text-align: center; }
+  #warntitle { margin: 0; font: 700 24px/1.2 var(--ui); }
+  #checkyes, #checkno, #warnleave, #warnstay, #blockyes, #blockno, #leaveclear, #leavestay, #losttry, #lostleave, #clearednew, #clearedhome { font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #checkyes, #warnleave, #blockyes, #leaveclear, #losttry, #clearednew { background: var(--ink); color: var(--paper); }
+  #blockno, #leavestay, #lostleave, #clearedhome { border-color: transparent; }
+  #leaveunsaved { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--line); }
+  #leaveunsaved[hidden] { display: none; } #leaveunsaved b, #leaveunsaved small { display: block; } #leaveunsaved small { font-size: 12px; color: var(--text-mid); }
+  #leavesave { background: none; border: 0; font: 500 15px var(--ui); color: var(--ink); text-decoration: underline; }
+  #s-cleared { text-align: center; align-content: center; min-height: 70vh; gap: 10px; }
+  #s-cleared .waitdot.done { justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px solid var(--ink); font: 700 24px/52px var(--ui); }
+  #peoplebox:not([hidden]) .sheet, #personbox:not([hidden]) .sheet, #checkbox:not([hidden]) .sheet, #leavebox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #peoplebox.out .sheet, #personbox.out .sheet, #checkbox.out .sheet, #leavebox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #peoplebox .sheet, #personbox .sheet, #checkbox .sheet, #leavebox .sheet { animation: none !important; } }
+  #netbanner { position: fixed; left: 0; right: 0; top: calc(66px + env(safe-area-inset-top)); z-index: 3; padding: 10px 16px; background: var(--ink); color: var(--paper); font-size: 14px; }
+  #netbanner[hidden] { display: none; }
+  /* share more than photos (3.1, 3.4), problems (3.9) and the preview (3.10) */
+  #sharebox, #textbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 5; }
+  #sharebox .sheet, #textbox .sheet { width: min(100%, 480px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+  #sharebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #sharebox h2, #textbox h2 { margin: 4px 0; font: 700 18px var(--ui); text-align: center; }
+  #sharebox .item { display: flex; align-items: center; text-align: left; width: 100%; padding: 12px 2px; background: none; border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: inherit; cursor: pointer; }
+  #sharebox .item b, #sharebox .item small { display: block; } #sharebox .item b { font-size: 17px; font-weight: 500; } #sharebox .item small { font-size: 13px; color: var(--text-mid); }
+  #textcancel { justify-self: start; background: none; border: 0; color: var(--text-mid); font: 500 15px var(--ui); }
+  #textfield { font: 16px/1.4 var(--ui); padding: 12px; border-radius: 12px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); resize: vertical; }
+  #textshare, #shareclose { font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #shareclose { background: none; color: var(--ink); border-color: transparent; }
+  #sharebox:not([hidden]) .sheet, #textbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #sharebox.out .sheet, #textbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #sharebox .sheet, #textbox .sheet { animation: none !important; } }
+  #deckproblems { display: grid; gap: 6px; } #deckproblems:empty { display: none; }
+  #deckproblems div { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: var(--line); font-size: 14px; }
+  #deckproblems small { display: block; color: var(--text-mid); font-size: 12px; }
+  #deckproblems button { background: none; border: 0; font: 500 14px var(--ui); color: var(--ink); text-decoration: underline; }
+  #previewbox { position: fixed; inset: 0; z-index: 6; background: var(--ink); color: var(--paper); }
+  #previewbox .sheet { height: 100%; box-sizing: border-box; display: grid; grid-template-rows: auto 1fr auto auto; gap: 12px; padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+  #previewback { background: none; border: 0; color: var(--paper); font: 500 16px var(--ui); }
+  .prevstage { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; min-height: 0; }
+  #previewimg { max-width: 100%; max-height: 100%; object-fit: contain; justify-self: center; min-height: 0; }
+  #previewprev, #previewnext { background: none; border: 0; color: var(--paper); font: 400 34px var(--ui); }
+  #previewinfo { margin: 0; font-size: 15px; } #previewinfo small { display: block; color: var(--line); font-size: 13px; }
+  #previewbox .pills button { font: 500 15px var(--ui); padding: 12px 8px; border-radius: 12px; border: 0; background: var(--text-mid); color: var(--paper); }
+  #previewbox .pills .pri { background: var(--paper); color: var(--ink); }
+  /* moments and the Show filter (2B.1, 2B.4, 2B.5) */
+  #decktiles { display: block; }
+  #decktiles .moment { margin-bottom: 12px; }
+  #decktiles .mhead { display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; }
+  #decktiles .mhead b { flex: 1; font: 700 15px var(--ui); }
+  #decktiles .mhead i { width: 22px; height: 22px; border-radius: 50%; background: var(--line); }
+  #decktiles .mpick { background: none; border: 0; color: var(--text-mid); font: 500 14px var(--ui); }
+  #decktiles .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+  #decktiles .msub { margin: -4px 0 8px; font-size: 13px; color: var(--text-mid); }
+  #kindrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: var(--line); font-size: 13px; }
+  #kindrow[hidden] { display: none; }
+  #kindrow #kindbtn { font: 500 14px var(--ui); padding: 6px 12px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #kindrow.on #kindbtn { background: var(--ink); color: var(--paper); }
+  #kindnote { flex: 1; color: var(--text-mid); }
+  #kindall { background: none; border: 0; font: 500 14px var(--ui); color: var(--ink); } #kindrow:not(.on) #kindall, #kindrow:not(.on) #kindnote { visibility: hidden; }
+  #kindbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 6; }
+  #kindbox .sheet { width: min(100%, 480px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+  #kindbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #kindbox h2 { margin: 4px 0; font: 700 18px var(--ui); text-align: center; }
+  #kindlist button { display: flex; justify-content: space-between; width: 100%; padding: 14px 12px; border-radius: 12px; border: 0; background: none; color: var(--ink); font: 500 17px var(--ui); }
+  #kindlist button[aria-checked="true"] { background: var(--line); }
+  #kindlist button::before { content: '○'; margin-right: 12px; } #kindlist button[aria-checked="true"]::before { content: '●'; }
+  #kindlist button span { margin-left: auto; color: var(--text-mid); }
   /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
   #snack[hidden] { display: none; }
+  #snack { pointer-events: none; } #snackact { pointer-events: auto; }   /* a status line: presses go through to the table, except on its button */
   #snacktext { flex: 1; }
   #snackact { font: 500 15px var(--ui); padding: 8px 14px; border-radius: 10px; border: 0; background: var(--paper); color: var(--ink); }
   @media (prefers-reduced-motion: no-preference) { #snack:not([hidden]) { animation: sheet-up .3s cubic-bezier(.2, .9, .3, 1); } }
@@ -301,9 +390,9 @@
   <button id="mapbtn" type="button" aria-label="Map of the screens in this heap" aria-controls="mapbox"><i aria-hidden="true"></i>Map</button>
   <button id="menu" type="button" aria-label="Menu" aria-controls="menubox" aria-expanded="false"><span aria-hidden="true">≡</span></button>
 </header>
-<div id="bar"><label id="share">+ Add photos &amp; videos<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="pickedbtn" type="button">Picked · 0</button></div>
+<div id="bar"><button type="button" id="share">+ Add photos &amp; files</button><button id="pickedbtn" type="button">Picked · 0</button></div>
 <button type="button" id="allphotos" hidden></button>
-<div id="empty" aria-hidden="true" hidden><i></i><b>The table is empty</b><span>Tap + Add photos &amp; videos to put yours down. Others take only what they want.</span><small id="emptytip"></small></div>
+<div id="empty" aria-hidden="true" hidden><i></i><b>The table is empty</b><span>Tap + Add photos &amp; files to put yours down. Others take only what they want.</span><small id="emptytip"></small></div>
 <div id="joinmode" hidden>
   <button type="button" class="strip" data-edge="T" aria-label="Tap here: the other screen is above">Tap here</button>
   <button type="button" class="strip" data-edge="B" aria-label="Tap here: the other screen is below">Tap here</button>
@@ -332,6 +421,89 @@
   <div class="pills"><button type="button" id="notnow">Not now</button><button type="button" id="letin" class="pri">Let in</button></div>
   <label class="askopen"><input id="askopen" type="checkbox"> Let everyone in without asking</label>
 </div></div><!-- /askbox -->
+<div id="netbanner" role="status" hidden>Reconnecting… Your joined screens and downloads will carry on.</div>
+<div id="peoplebox" hidden><div class="sheet" role="dialog" aria-labelledby="peopletitle">
+  <span class="handle" aria-hidden="true"></span>
+  <button type="button" id="peopleback">‹ Back</button>
+  <h2 id="peopletitle"></h2>
+  <div id="peoplelist" role="list"></div>
+  <p class="deckhint">Tap a person to check or block them.</p>
+</div></div><!-- /peoplebox -->
+<div id="personbox" hidden><div class="sheet" role="dialog" aria-labelledby="persontitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="persontitle"></h2>
+  <button type="button" class="item" id="pcheck"><span><b>Check this device</b><small>Make sure nobody is in the middle</small></span></button>
+  <button type="button" class="item" id="phide"><span><b>Hide their photos</b><small>You can show them again</small></span></button>
+  <button type="button" class="item" id="pblock"><span><b>Block</b><small>Their photos go and they can’t send to you</small></span></button>
+  <button type="button" class="item quiet" id="premove"><span><b>Remove from heap</b><small>Host only</small></span></button>
+  <div class="pills"><button type="button" id="personclose">Close</button></div>
+</div></div><!-- /personbox -->
+<div id="checkbox" hidden><div class="sheet" role="dialog" aria-labelledby="checktitle">
+  <button type="button" id="checkcancel" class="quiet">Cancel</button>
+  <h2 id="checktitle"></h2>
+  <p id="checksub"></p>
+  <div id="checkwords" aria-live="polite"></div>
+  <p class="deckhint">Only do this in person or on a call you trust.</p>
+  <button type="button" class="pri" id="checkyes">Yes, they match</button>
+  <button type="button" id="checkno">No, they’re different</button>
+</div></div><!-- /checkbox -->
+<div id="warnbox" hidden><div class="sheet" role="alertdialog" aria-labelledby="warntitle">
+  <b class="warnmark" aria-hidden="true">!</b>
+  <h2 id="warntitle">This connection may not be private</h2>
+  <p id="warnsub"></p>
+  <button type="button" class="pri" id="warnleave">Leave the heap</button>
+  <button type="button" id="warnstay"></button>
+</div></div><!-- /warnbox -->
+<div id="blockbox" hidden><div class="sheet" role="alertdialog" aria-labelledby="blocktitle">
+  <h2 id="blocktitle"></h2>
+  <p>For the rest of this heap, their photos disappear from your screen and they can’t send you anything. They aren’t told. Unblock any time in People.</p>
+  <button type="button" id="blockyes" class="pri">Block</button>
+  <button type="button" id="blockno">Cancel</button>
+</div></div><!-- /blockbox -->
+<div id="leavebox" hidden><div class="sheet" role="dialog" aria-labelledby="leavetitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2>Leave and clear?</h2>
+  <p>Removes the heap, every photo you received and your keys from this browser. Save anything you want to keep first.</p>
+  <div id="leaveunsaved" hidden><span><b id="leaveunsavedn"></b><small>Save them before leaving</small></span><button type="button" id="leavesave">Save</button></div>
+  <button type="button" class="pri" id="leaveclear">Leave and clear</button>
+  <button type="button" id="leavestay">Stay</button>
+</div></div><!-- /leavebox -->
+<div id="lostbox" hidden><div class="sheet" role="alertdialog" aria-labelledby="losttitle">
+  <h2 id="losttitle">Can’t reach the heap</h2>
+  <p>Check your Wi-Fi or mobile data. Photos you already have are safe here.</p>
+  <button type="button" class="pri" id="losttry">Try again</button>
+  <button type="button" id="lostleave">Leave</button>
+</div></div><!-- /lostbox -->
+<input id="pick" type="file" accept="image/*,video/*" multiple hidden>
+<input id="pickfile" type="file" multiple hidden>
+<div id="sharebox" hidden><div class="sheet" role="dialog" aria-labelledby="sharetitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="sharetitle">Add to the table</h2>
+  <label class="item" for="pick"><span><b>Photos and videos</b><small>From your camera roll</small></span></label>
+  <label class="item" for="pickfile"><span><b>Files</b><small>Any file up to 200 MB. Programs and scripts can’t be shared</small></span></label>
+  <button type="button" class="item" id="sharelink"><span><b>Paste a link</b><small>Shown as plain text</small></span></button>
+  <button type="button" class="item" id="sharenote"><span><b>Write a note</b><small>Short text for everyone</small></span></button>
+  <div class="pills"><button type="button" id="shareclose">Close</button></div>
+</div></div><!-- /sharebox -->
+<div id="textbox" hidden><div class="sheet" role="dialog" aria-labelledby="texttitle">
+  <button type="button" id="textcancel" class="quiet">Cancel</button>
+  <h2 id="texttitle"></h2>
+  <textarea id="textfield" maxlength="500" rows="4" aria-labelledby="texttitle"></textarea>
+  <p class="deckhint">Everyone sees it as plain text. Nothing opens until they tap it.</p>
+  <button type="button" class="pri" id="textshare">Share</button>
+</div></div><!-- /textbox -->
+<div id="previewbox" hidden><div class="sheet" role="dialog" aria-label="Photo">
+  <div class="prevtop"><button type="button" id="previewback">‹ Back</button></div>
+  <div class="prevstage"><button type="button" id="previewprev" aria-label="Previous">‹</button><img id="previewimg" alt=""><button type="button" id="previewnext" aria-label="Next">›</button></div>
+  <p id="previewinfo"></p>
+  <div class="pills"><button type="button" id="previewget" class="pri">Get</button><button type="button" id="previewpick">Pick</button><button type="button" id="previewsend">Send to…</button></div>
+</div></div><!-- /previewbox -->
+<div id="kindbox" hidden><div class="sheet" role="dialog" aria-labelledby="kindtitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2>Show</h2>
+  <div id="kindlist" role="radiogroup"></div>
+  <p class="deckhint">Only kinds in this heap are listed</p>
+</div></div><!-- /kindbox -->
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -344,7 +516,9 @@
   <div class="deckhead"><button type="button" id="deckback">‹ Table</button>
   <h2 id="decktitle"></h2>
   <button type="button" id="pickall">Pick all</button></div>
-  <p class="deckhint">Tap photos to pick them. Drag one out to put it on the table or send it.</p>
+  <p class="deckhint">Tap photos to pick them. Hold one to look closer. Drag one out to put it on the table or send it.</p>
+  <div id="kindrow" hidden><button type="button" id="kindbtn"></button><span id="kindnote"></span><button type="button" id="kindall">Show all</button></div>
+  <div id="deckproblems" role="status"></div>
   <div id="decktiles" role="list"></div>
   <div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"></button><button type="button" id="getpick" class="pri"></button><button type="button" id="removepick" hidden></button></div>
 </div></div><!-- /deckbox -->
@@ -416,6 +590,13 @@
     <p class="sub" id="waitsub"></p>
     <button type="button" id="waitcancel">Cancel</button>
   </div><!-- /s-wait -->
+  <div class="step" id="s-cleared" hidden>
+    <div class="waitdot done" aria-hidden="true">✓</div>
+    <h2>All cleared</h2>
+    <p class="sub" id="clearedsub"></p>
+    <button type="button" class="big" id="clearednew">Start a new heap</button>
+    <button type="button" id="clearedhome">Home</button>
+  </div><!-- /s-cleared -->
 </div><!-- /lobby -->
 <div id="invitebox" hidden><div class="sheet" role="dialog" aria-labelledby="invtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -438,18 +619,22 @@ import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels } from './map.js';
-import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen } from './gate.js';
+import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen, forgetOpen } from './gate.js';
+import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
-import { saveBatch, createSaveAll, REVOKE_AFTER } from './saveall.js';
+import { saveBatch, createSaveAll, REVOKE_AFTER, SHARE_TIMEOUT } from './saveall.js';
 import { pickRoom, inviteLink, cleanUrl, watchJoin, ROOM_KEY } from './invite.js';
-import { LIMITS, validPrint, validMove, validMoves, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex, cleanName } from './check.js';
+import { LIMITS, BIG_FILE, refused, cleanText, isWebLink, validPrint, validMove, validMoves, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex, cleanName } from './check.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const rnd = new Uint32Array(2); crypto.getRandomValues(rnd);
 const id = rnd[0].toString(36) + rnd[1].toString(36);
+// this tab's ids before a reload: the old one can linger in the room for a moment, and isn't someone else with my name
+const PREV_KEY = 'heap-me-before';
+const before = (() => { try { const b = JSON.parse(sessionStorage.getItem(PREV_KEY) || '[]'); sessionStorage.setItem(PREV_KEY, JSON.stringify([...(Array.isArray(b) ? b : []).slice(-4), id])); return Array.isArray(b) ? b.filter((x) => typeof x === 'string') : []; } catch { return []; } })();
 // Your name (#156): picked by the person, remembered on this device (localStorage), and sent only
 // to the others in the heap. No random names: with none saved, the home screen asks first
 const NAME_KEY = 'heap-name';
@@ -474,15 +659,29 @@ import('./heap-a.js').then(({ reacher, A_GLYPH }) => reacher($('heap-a'), A_GLYP
 // the status box (heap code, devices, connections) stays hidden until the i button opens it
 $('info').onclick = () => { closeMenu(); $('hud').hidden = !$('hud').hidden; $('info').setAttribute('aria-expanded', String(!$('hud').hidden)); };
 // Leave: forget this tab's heap and start again on the home screen (a fresh load drops every connection)
+// Leave and clear (5.7, 5.8): a sheet that says what isn't saved yet, then All cleared
 $('leave').onclick = () => {
-  if (!confirm('Leave this heap? Photos you haven\'t saved stay with the others, not on this screen.')) return;
-  try { sessionStorage.removeItem(ROOM_KEY); } catch {}
-  location.replace(location.pathname);
+  if (!$('menubox').hidden) closeMenu();
+  const unsaved = [...files.keys()].filter((k) => prints.get(k) && prints.get(k).owner !== id && !pickSave.handed.has(k));
+  $('leaveunsaved').hidden = !unsaved.length; $('leaveunsavedn').textContent = `${unsaved.length} photo${unsaved.length === 1 ? '' : 's'} not saved yet`;
+  $('leaveunsaved').dataset.pids = unsaved.join(',');
+  openSheet('leavebox');
 };
+$('leavesave').onclick = () => { for (const k of $('leaveunsaved').dataset.pids.split(',').filter(Boolean)) picked.add(k); showPicks(); getPicked(); closeSheet('leavebox'); };   // inside the tap: the share sheet opens only there
+$('leavestay').onclick = () => closeSheet('leavebox');
+$('leaveclear').onclick = () => leaveAndClear();
+function leaveAndClear() {
+  const heap = $('heapname').textContent || 'this heap';
+  try { const room = net?.room.replace(/^photo-/, ''); if (room) localStorage.setItem(OPEN_KEY, forgetOpen(localStorage.getItem(OPEN_KEY), room)); } catch {}   // nothing of it stays
+  try { sessionStorage.removeItem(ROOM_KEY); sessionStorage.setItem('heap-bounce', JSON.stringify({ k: 'cleared', heap })); } catch {}
+  location.replace(location.pathname);
+}
+$('clearedhome').onclick = () => screen('home');
+$('clearednew').onclick = () => $('new').click();
 // The lobby is one step at a time: home, then the heap code (to join), then your name (wireframes 1.1–1.4)
 const pending = { mode: 'start', code: '' };
 function screen(k) {
-  for (const n of ['home', 'code', 'name', 'wait']) $('s-' + n).hidden = n !== k;
+  for (const n of ['home', 'code', 'name', 'wait', 'cleared']) $('s-' + n).hidden = n !== k;
   if (k === 'code') { $('code').focus(); showCells(); }
   if (k === 'name') { $('yourname').value = $('yourname').value || name; $('yourname').focus(); }
 }
@@ -526,7 +725,7 @@ function gate() {
   } else if (net.leader === id && trimAdmits(net.admits, net.peers, id).ids.length !== net.admits.ids.length) admit(net.admits);   // someone left: off the list
   const room = net.room.replace(/^photo-/, ''), host = net.peers[net.leader]?.name || 'the host';
   if (performance.now() - joinedAt < 8000) {   // just arrived: is my name taken, or the heap full?
-    const other = nameTaken(id, net.peers);
+    const other = nameTaken(id, net.peers, before);
     if (other) return bounce({ k: 'name', code: room, other });
     if (overLimit(id, net.peers, LIMITS.devices)) return bounce({ k: 'full', code: room });   // only those after the first 20
   }
@@ -559,6 +758,7 @@ $('yourname').addEventListener('input', () => { $('nameerr').hidden = true; });
     $('nameerr').textContent = `Someone in this heap is already called ${why.other}. Pick a different name.`; $('nameerr').hidden = false;
   } else if (why?.k === 'full' && isRoomCode(why.code)) { $('code').value = why.code; screen('code'); $('fullerr').hidden = false; }
   else if (why?.k === 'no') setTimeout(() => toast(`${why.host} didn’t let you in this time`), 300);
+  else if (why?.k === 'cleared') { $('clearedsub').textContent = `Nothing from “${why.heap}” is left on this device.`; screen('cleared'); }
 }
 // code not found (1.3): leave, and come back to the code screen with the code and why
 const NOT_FOUND_KEY = 'heap-notfound';
@@ -585,7 +785,9 @@ showCells();
 
 let net = null, peers = null, W = innerWidth, H = innerHeight;
 // A sticky message stays until unstick(). Other messages show over it for a moment, then it comes back
+const toastLog = [];   // the last few messages, for the device check
 function toast(msg, sticky = false) {
+  toastLog.push(msg); if (toastLog.length > 12) toastLog.shift();
   const t = $('toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(toast.h);
   t.classList.remove('in'); void t.offsetWidth; t.classList.add('in');   // land again for each new message
   if (sticky) toast.sticky = msg;
@@ -653,32 +855,65 @@ async function imgFrom(bytes) {
 }
 const pidOf = () => { const b = new Uint8Array(8); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); };
 
-$('pick').onchange = async (e) => {
-  const list = [...e.target.files];
-  e.target.value = '';
-  const keep = $('keep').checked;   // the choice made for this pick, even if the box changes while it runs
+// add to the table (3.1): photos and videos, files, or a link or note as a small text file with its text
+async function addFiles(list, keep, text = null) {
   let added = 0;
   const spot = deckSpot(prints, id, { w: W, h: H });   // what I share goes on my deck (2A.1)
   const kept = [];   // files sent with their details still in them
-  for (const picked of list) {
-    if (picked.size > LIMITS.fileBytes) { toast(`${picked.name} is too big`); continue; }
+  for (const one of list) {
+    if (refused(one.name, one.type)) { toast(`${one.name} was refused. Programs and scripts can’t be shared here`); continue; }
+    if (one.size > LIMITS.fileBytes) { toast(`${one.name} is too big`); continue; }
     // location and camera details come out of JPEGs before the fingerprint is taken (S6)
-    const { file, warn } = await prepareFile(picked, keep);
+    const { file, warn } = await prepareFile(one, keep);
     if (warn) kept.push(file.name);
     const pid = pidOf(), thumb = await thumbOf(file), sha = await sha256Hex(file); // receivers check the file against this
-    const w = 150, h = thumb ? 150 : 110;
+    const w = 150, h = thumb || text ? 150 : 110;
     const p = { pid, owner: id, name: file.name.slice(0, 200) || 'file', type: file.type.slice(0, 100), size: file.size, sha,
-      anchor: id, x: spot.x, y: spot.y,
+      anchor: id, x: spot.x, y: spot.y, at: Math.round(net?.now() ?? Date.now()), ...(text ? { text } : {}),
       w, h, rot: (Math.random() - 0.5) * 0.12, img: await imgFrom(thumb), thumb, holders: [id] };
     prints.set(pid, p); files.set(pid, file); added++;
     broadcast((peer) => announce(peer, p));
   }
   if (added) toast(`${added} on the table` + (kept.length ? `. Details not removed from ${kept.join(', ')}` : ''));
+}
+$('pick').onchange = async (e) => {
+  const list = [...e.target.files]; e.target.value = '';
+  closeSheet('sharebox');
+  await addFiles(list, $('keep').checked);   // the choice made for this pick, even if the box changes while it runs
 };
+$('pickfile').onchange = async (e) => { const list = [...e.target.files]; e.target.value = ''; closeSheet('sharebox'); await addFiles(list, $('keep').checked); };
+$('share').onclick = () => openSheet('sharebox');
+$('shareclose').onclick = () => closeSheet('sharebox');
+$('sharebox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('sharebox'); };
+// a link or a note (3.4): plain text; a link must be a web address
+let textKind = 'note';
+let textSending = false;   // one note per Share, however many taps
+const openText = (kind) => closeSheet('sharebox', () => {
+  textKind = kind; textSending = false; $('texttitle').textContent = kind === 'link' ? 'Paste a link' : 'Write a note';
+  $('textfield').value = ''; $('textfield').placeholder = kind === 'link' ? 'https://' : 'Meet at the gate at 8';
+  openSheet('textbox'); $('textfield').focus();
+});
+$('sharelink').onclick = () => openText('link');
+$('sharenote').onclick = () => openText('note');
+$('textcancel').onclick = () => closeSheet('textbox');
+$('textshare').onclick = () => {
+  if (textSending) return;
+  const t = cleanText($('textfield').value); if (!t) return toast('Write something first');
+  if (textKind === 'link' && !isWebLink(t)) return toast('That isn’t a web link. Links start with https://');
+  textSending = true; addText(textKind, t);
+};
+function addText(kind, text) {
+  if (kind === 'link' && !isWebLink(text)) return toast('That isn’t a web link. Links start with https://');
+  closeSheet('textbox');
+  const file = new File([text], kind === 'link' ? 'link.txt' : 'note.txt', { type: 'text/plain' });
+  addFiles([file], true, text);
+}
 
 // who is in the heap (1.6, 1.7): the host, and whoever the host let in. Nobody else is sent anything or answered
 const gateOf = () => ({ leader: net.leader, admits: net.admits, peers: net.peers });
-const inHeap = (k) => !net || isIn(k, gateOf());
+const blocked = new Set(), hiddenOwners = new Set(), checked = new Set();   // this heap only (5.2–5.6)
+// me, when the time keeper is my own tab before a reload (it lingers in the room a moment): I'm not waiting for myself
+const inHeap = (k) => !net || (k === id && before.includes(net.leader)) || (!blocked.has(k) && isIn(k, gateOf()));
 const others = () => (inHeap(id) ? Object.keys(net?.peers || {}).filter((k) => k !== id && inHeap(k)) : []);   // waiting to be let in: nobody yet
 const broadcast = (f) => others().forEach(f);
 const announced = new Map(); // pid -> devices we've announced it to
@@ -721,8 +956,9 @@ function expect(fid, from, size) {
 }
 function onMessage(from, m, bytes) {
   if (m.t === 'print') {
-    if (prints.has(m.pid) || prints.size >= LIMITS.prints || !validPrint(m)) return;
+    if (prints.has(m.pid) || prints.size >= LIMITS.prints || !validPrint(m) || refused(m.name, m.type)) return;   // a program is refused here too
     const { t, thumbSize, ...meta } = m;
+    if (meta.text !== undefined) meta.text = cleanText(meta.text);   // plain text only (3.4)
     prints.set(m.pid, { ...meta, img: null, thumb: null });
     if (thumbSize) expect('thumb:' + m.pid, from, thumbSize);
     if (cutShort.delete(m.pid)) dropped(prints.get(m.pid));   // back after its owner's Undo: here or arriving before, so ask again
@@ -784,7 +1020,7 @@ async function done(fid, parts) {
   const p = prints.get(fid); if (!p) return;
   // the bytes must match the fingerprint announced with the print, or it isn't the photo
   if (await sha256Hex(parts) !== p.sha) {
-    const from = p.holders.find((k) => k !== id && net.peers[k] && k !== p.lastSource);
+    const from = p.holders.find((k) => k !== id && net.peers[k] && inHeap(k) && k !== p.lastSource);
     p.holders = p.holders.filter((k) => k !== p.lastSource);   // stop trusting that source
     toast(from ? 'That copy was damaged. Trying another' : 'That copy was damaged. Drag it again to retry');
     if (from) { p.lastSource = from; expect(p.pid, from, p.size); peers.send(from, { t: 'want', pid: p.pid }); }
@@ -822,25 +1058,44 @@ function screenAt(x, y) {
   return null;
 }
 const onMyScreen = (p) => { const [x, y] = world(p); return screenAt(x + p.w / 2, y + p.h / 2) === id; };
-function dropped(p) {
-  // landed on my screen and I don't have it yet: ask the owner for the full photo
+// who to ask for a photo: someone holding it who is here and let in, else its owner if they are. Never a device
+// that has gone or is blocked: its pieces would be dropped (Qodo on #163)
+function sourceOf(p) {
+  const held = (p.holders || []).find((k) => k !== id && net.peers[k] && inHeap(k));
+  return held || (p.owner !== id && net.peers[p.owner] && inHeap(p.owner) ? p.owner : null);
+}
+function askFor(p) {
+  const src = sourceOf(p);
+  if (!src) return toast(`Nobody here has ${p.name} now`);
+  if (!expect(p.pid, src, p.size)) return toast('Too many photos arriving. Try again in a moment');
+  p.lastSource = src;
+  peers.send(src, { t: 'want', pid: p.pid });
+  toast('Receiving…');
+}
+function dropped(p, tapped = false) {
+  // landed on my screen and I don't have it yet: ask for the full photo. A big file waits for a tap (3.9)
   if (onMyScreen(p) && !files.has(p.pid) && !incoming.has(p.pid)) {
-    const src = p.holders.find((k) => k !== id && net.peers[k]) || p.owner;
-    if (!expect(p.pid, src, p.size)) return toast('Too many photos arriving. Try again in a moment');
-    p.lastSource = src;
-    peers.send(src, { t: 'want', pid: p.pid });
-    toast('Receiving…');
+    if (p.size > BIG_FILE && !tapped) return toast(`${p.name} is ${mb(p.size)}. Tap it to get it`);
+    askFor(p);
   }
+}
+// Get on one photo (the preview, a problem row): just that one. Here: saved in this tap. Not here: asked for
+function getOne(p) {
+  if (files.has(p.pid)) return save(p);
+  if (incoming.has(p.pid)) return toast('Receiving…');
+  askFor(p);
 }
 
 // ---------- input: decks and photos (drag, flick, tap to open or save) ----------
 let drag = null, flies = [];   // several photos can glide at once
 const held = (p) => !!(drag?.ps.includes(p) || flies.some((f) => f.ps.includes(p)));   // moved by this device right now: others' moves wait
 const PILL_BELOW = 40;   // the name pill under a photo is part of it: a tap there saves it too
+// photos shown on this screen: not from someone I've hidden or blocked (5.2, 5.6)
+function visiblePrints() { return new Map([...prints].filter(([, p]) => !hiddenOwners.has(p.owner) && !blocked.has(p.owner))); }
 // the deck under a point on my screen, top-most first
 function hit(sx, sy) {
   const [mx, my] = meWorld(), x = sx + mx, y = sy + my;
-  return groupDecks(prints).reverse().find((d) => { const p = d.top; if (!visible(p)) return false; const [px, py] = world(p); return x >= px && x <= px + p.w && y >= py && y <= py + p.h + PILL_BELOW; });
+  return groupDecks(visiblePrints()).reverse().find((d) => { const p = d.top; if (!visible(p)) return false; const [px, py] = world(p); return x >= px && x <= px + p.w && y >= py && y <= py + p.h + PILL_BELOW; });
 }
 const toTop = (ps) => ps.forEach((p) => { prints.delete(p.pid); prints.set(p.pid, p); });
 // a drag holds a deck (or one photo pulled out of one): every photo in it moves together
@@ -921,18 +1176,26 @@ function glide() {
   }
 }
 // Saving must happen inside the tap, with the file already in hand (iOS rule).
+const sharingOne = new Set();   // photos whose own share sheet is open
+const stuckShare = new Set();   // photos whose share sheet never settled: the browser won't open another, so they download
 function save(p) {
   const file = files.get(p.pid);
   if (!file) {
     if (p.owner === id) return toast('Yours');
     if (incoming.has(p.pid)) return toast('Receiving…');   // already asked: don't ask twice
-    if (onMyScreen(p)) return dropped(p);                  // on my screen: a tap fetches it, like a drop (C6)
+    if (onMyScreen(p)) return dropped(p, true);            // on my screen: a tap fetches it, like a drop (C6), big or not
     return toast('Drag it onto your screen first');
   }
   if (p.owner === id) return toast('Already yours');
   // handed over once it was shared or its download started, so Save all doesn't save it again (F13)
-  if (pickSave.holds(p.pid)) return toast('Still saving this one. If the share sheet is stuck, tap Get again');
-  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); });
+  if (stuckShare.delete(p.pid)) { downloadFile(file); pickSave.handed.add(p.pid); return; }
+  if (pickSave.holds(p.pid) || sharingOne.has(p.pid)) return toast('Still saving this one. If the share sheet is stuck, tap Get again');
+  if (navigator.canShare?.({ files: [file] })) {
+    sharingOne.add(p.pid);   // one share sheet for this photo at a time (Qodo on #163)
+    navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); })
+      .finally(() => sharingOne.delete(p.pid));
+    setTimeout(() => { if (sharingOne.delete(p.pid)) stuckShare.add(p.pid); }, SHARE_TIMEOUT);   // a sheet that never settles (WebKit): the next tap downloads
+  }
   else { downloadFile(file); pickSave.handed.add(p.pid); }
 }
 function downloadFile(file) {
@@ -954,7 +1217,7 @@ const pickSave = createSaveAll({
 function getPicked() {
   let full = false;
   for (const p of toFetch(prints, picked, files, incoming, id)) {
-    const src = (p.holders || []).find((k) => k !== id && net.peers[k]) || p.owner;
+    const src = sourceOf(p); if (!src) continue;   // nobody here has it: the problems row says so
     if (!expect(p.pid, src, p.size)) { full = true; break; }
     p.lastSource = src; peers.send(src, { t: 'want', pid: p.pid });
   }
@@ -963,28 +1226,33 @@ function getPicked() {
 }
 
 // ---------- start ----------
-function start(room) {
+// again: Try again after a lost connection. The same keys and links stay, because the others keep the key
+// they already have for this device and would ignore a new one (Qodo re-review of #163)
+function start(room, again = false) {
   $('lobby').hidden = true;
-  const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
-  peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
-  peers.on((from, m, bytes) => {
-    if (from !== id && !inHeap(from)) return;   // not let in yet: nothing it sends is taken (Qodo on #162)
-    if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
-    if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
-      const p = validPidMsg(m) && prints.get(m.pid);
-      if (p && p.owner === from) {
-        if ((incoming.has(p.pid) || files.has(p.pid)) && cutShort.size < 500) cutShort.add(p.pid);   // if Undo brings it back, ask for it again
-        prints.delete(p.pid); files.delete(p.pid); incoming.delete(p.pid); picked.delete(p.pid); moving.delete(p.pid); showPicks();
+  const attempt = net = joinRoom({ since: again ? net?.joinedAt : null, admitted: again ? net?.admits : null, room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
+  if (!again) {
+    peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
+    peers.on((from, m, bytes) => {
+      if (from !== id && !inHeap(from)) return;   // not let in yet: nothing it sends is taken (Qodo on #162)
+      if (blocked.has(from)) return;   // blocked: nothing from them counts (5.6)
+      if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
+      if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
+        const p = validPidMsg(m) && prints.get(m.pid);
+        if (p && p.owner === from) {
+          if ((incoming.has(p.pid) || files.has(p.pid)) && cutShort.size < 500) cutShort.add(p.pid);   // if Undo brings it back, ask for it again
+          prints.delete(p.pid); files.delete(p.pid); incoming.delete(p.pid); picked.delete(p.pid); moving.delete(p.pid); showPicks();
+        }
+        return;
       }
-      return;
-    }
-    if (m.t === 'give') {   // sent to me with Send to…: only from someone who has it
-      const p = validPidMsg(m) && prints.get(m.pid);
-      if (p && (p.owner === from || (p.holders || []).includes(from))) given(from, p, m.drop);   // already here: it still lands on my screen
-      return;
-    }
-    onMessage(from, m, bytes);
-  });
+      if (m.t === 'give') {   // sent to me with Send to…: only from someone who has it
+        const p = validPidMsg(m) && prints.get(m.pid);
+        if (p && (p.owner === from || (p.holders || []).includes(from))) given(from, p, m.drop);   // already here: it still lands on my screen
+        return;
+      }
+      onMessage(from, m, bytes);
+    });
+  }
   const known = new Set();
   // Catch everyone up. The owner announces its prints; once the owner has left, anyone
   // still holding a print announces it. Re-checked on every change in who's here, because
@@ -997,7 +1265,7 @@ function start(room) {
       for (const k of others()) if (!sentTo(p.pid).has(k)) announce(k, p);
     }
   };
-  peers.onReady(catchUp);
+  if (!again) peers.onReady(catchUp);
   const roomChanged = () => {
     showWho(); showHeader(); gate();
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
@@ -1008,7 +1276,7 @@ function start(room) {
     showWho(); showHeader();
     roomChanged();
   });
-  net.on((ev) => { if (ev === 'admits' || ev === 'leader') roomChanged(); });
+  net.on((ev) => { if (ev === 'admits' || ev === 'leader') roomChanged(); if (ev === 'status') netState(); });
   // Join results go to the whole room: each one is shown only on the devices it names.
   // For results that answer this device's latest push (d.latest), until it pushes again,
   // "Joined" always wins and "Try again" stays on screen and isn't replaced by "No match".
@@ -1041,7 +1309,7 @@ function start(room) {
       stored.set(room);
       invite.room = room; $('top').hidden = false; showHeader();
       if (pending.fresh) { pending.fresh = false; $('invite').click(); }
-      joinedAt = performance.now(); gate();
+      joinedAt = performance.now(); gate(); netState();
       if (pending.mustExist) {   // heaps exist only while someone is in them: alone after a moment means no such heap
         pending.mustExist = false;
         let tries = 0;
@@ -1056,9 +1324,9 @@ function start(room) {
       toast('Couldn’t join the room. Try again');
     },
   });
-  window.__t = { edgeLabels: () => edgeLabels(Object.keys(sizes), layout, sizes, id), mapTiles: () => tilesFor($('mapbox').hidden ? $('dropcv') : $('mapcv')),
+  window.__t = { toasts: toastLog, edgeLabels: () => edgeLabels(Object.keys(sizes), layout, sizes, id), mapTiles: () => tilesFor($('mapbox').hidden ? $('dropcv') : $('mapcv')),
     mapHitBox: (k) => { const was = $('dropmap').hidden; const t = tilesFor($('dropcv')).find((t) => t.id === k); if (!t) return null; const r = $('dropcv').getBoundingClientRect(); return was && !r.width ? null : { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2 }; },
-    holding: () => holdingNear().map(({ from, n }) => ({ from, n })), decks: () => groupDecks(prints), net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
+    holding: () => holdingNear().map(({ from, n }) => ({ from, n })), decks: () => groupDecks(visiblePrints()), net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
 }
 
 // ---------- invite (S16) ----------
@@ -1094,7 +1362,9 @@ function closeSheet(k, then) {
   const done = () => { b.classList.remove('out'); b.hidden = true; then?.(); };
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
   b.classList.add('out');
-  b.querySelector('.sheet').addEventListener('animationend', done, { once: true });
+  const sheet = b.querySelector('.sheet');
+  sheet.addEventListener('animationend', done, { once: true });
+  requestAnimationFrame(() => { if (!sheet.getAnimations().length && b.classList.contains('out')) done(); });   // a sheet without a slide closes at once
 }
 function closeInvite() { closeSheet('invitebox'); }
 $('closeinvite').onclick = closeInvite;
@@ -1106,31 +1376,44 @@ $('closemenu').onclick = () => closeMenu();
 $('menubox').onclick = (e) => { if (e.target === e.currentTarget) closeMenu(); };
 $('joinhow').onclick = () => closeMenu(openJoin);
 $('joinbtn').onclick = openJoin;
-$('peoplebtn').onclick = $('people').onclick = () => closeMenu(() => $('invite').click());
+$('peoplebtn').onclick = $('people').onclick = () => closeMenu(openPeople);
 // the deck sheet (2B.1, 2B.2): a deck's photos newest first, or everyone's. A tap saves one; dragging one out
 // puts it on the table under the finger and keeps it moving, so it can be dropped on another screen (2A.7)
 let deckUrls = [];
-function openDeck(pids, all = false) {
-  const list = pids.map((k) => prints.get(k)).filter(Boolean).reverse();   // newest first
-  if (!list.length) return;
-  const owner = list[0].owner, who = owner === id ? 'You' : net.peers[owner]?.name || 'Someone';
-  $('decktitle').textContent = all ? `All photos · ${list.length}` : `${who} · ${list.length} photo${list.length === 1 ? '' : 's'}`;
+const KIND_WORD = { photos: ['photo', 'photos'], videos: ['video', 'videos'], files: ['file', 'files'], text: ['link or note', 'links and notes'] };
+const KIND_NAME = { all: 'All', photos: 'Photos', videos: 'Videos', files: 'Files', text: 'Links and text' };
+let deckOpen = { pids: [], all: false }, deckKind = 'all';
+function openDeck(pids, all = false, kind = 'all') {
+  deckOpen = { pids, all }; deckKind = all ? kind : 'all';
+  const every = pids.map((k) => prints.get(k)).filter(Boolean);
+  if (!every.length) return;
+  const list = every.filter((p) => deckKind === 'all' || itemKind(p) === deckKind).reverse();   // newest first
+  const owner = every[0].owner, who = owner === id ? 'You' : net.peers[owner]?.name || 'Someone';
+  $('decktitle').textContent = all ? `All photos · ${every.length}` : `${who} · ${every.length} photo${every.length === 1 ? '' : 's'}`;
+  // All photos: a Show button, and a strip saying what's hidden (2B.4, 2B.5)
+  $('kindrow').hidden = !all; $('kindrow').classList.toggle('on', deckKind !== 'all');
+  $('kindbtn').textContent = `${KIND_NAME[deckKind]} ▾`;
+  if (deckKind !== 'all') { const n = list.length; $('kindnote').textContent = `Showing ${n} ${KIND_WORD[kind][n === 1 ? 0 : 1]} of ${every.length} items`; }
   deckUrls.forEach((u) => URL.revokeObjectURL(u)); deckUrls = [];
-  $('decktiles').replaceChildren(...list.map((p) => {
+  const tile = (p) => {
     const b = Object.assign(document.createElement('button'), { type: 'button' });
     b.setAttribute('role', 'listitem'); b.dataset.pid = p.pid;
     b.setAttribute('aria-label', `${p.name}, from ${p.owner === id ? 'you' : net.peers[p.owner]?.name || 'someone'}`);
     if (p.thumb) { const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); deckUrls.push(u); b.append(Object.assign(document.createElement('img'), { src: u, alt: '' })); }
-    else b.append(p.type.startsWith('video') ? '▶ video' : p.name);
+    else b.append(p.text ? p.text.slice(0, 60) : p.type.startsWith('video') ? '▶ video' : p.name);
     if (all) b.append(Object.assign(document.createElement('span'), { className: 'who', textContent: initials(p.owner === id ? name : net.peers[p.owner]?.name) }));
     if (files.has(p.pid) && p.owner !== id) b.append(Object.assign(document.createElement('span'), { className: 'save', textContent: 'Here' }));
     b.onpointerdown = (e) => {
       const sx = e.clientX, sy = e.clientY;
       b.setPointerCapture(e.pointerId);
-      const letGo = () => { b.onpointermove = b.onpointerup = b.onpointercancel = null; b.releasePointerCapture?.(e.pointerId); };   // a scroll, or the browser took over
+      let held = false;
+      const hold = setTimeout(() => { held = true; b.onpointermove = b.onpointerup = b.onpointercancel = null; openPreview(list, list.indexOf(p)); }, 500);   // hold to look closer (3.10)
+      b.addEventListener('pointerup', () => clearTimeout(hold), { once: true });
+      const letGo = () => { clearTimeout(hold); b.onpointermove = b.onpointerup = b.onpointercancel = null; b.releasePointerCapture?.(e.pointerId); };   // a scroll, or the browser took over
       b.onpointercancel = letGo;
       b.onpointermove = (m) => {
         if (Math.hypot(m.clientX - sx, m.clientY - sy) < 10) return;
+        clearTimeout(hold);
         if (Math.abs(m.clientY - sy) > Math.abs(m.clientX - sx)) return letGo();   // up or down: that's scrolling the sheet
         b.onpointermove = b.onpointerup = b.onpointercancel = null;
         b.releasePointerCapture?.(m.pointerId);
@@ -1139,15 +1422,75 @@ function openDeck(pids, all = false) {
         setWorld(p, mx + m.clientX - p.w / 2, my + m.clientY - p.h / 2);
         startDrag([p], m.clientX, m.clientY, true, m.pointerId);
       };
-      b.onpointerup = () => { b.onpointermove = b.onpointerup = null; togglePick(p.pid); };
+      b.onpointerup = () => { b.onpointermove = b.onpointerup = null; if (!held) togglePick(p.pid); };
     };
     return b;
+  };
+  // moments (2B.1): newest first, each with its own Pick all
+  $('decktiles').replaceChildren(...moments(list).map((m) => {
+    const sec = Object.assign(document.createElement('div'), { className: 'moment' }), head = Object.assign(document.createElement('div'), { className: 'mhead' });
+    const pick = Object.assign(document.createElement('button'), { type: 'button', className: 'mpick', textContent: 'Pick all' });
+    pick.onclick = () => { const ks = m.items.map((p) => p.pid), on = ks.every((k) => picked.has(k)); for (const k of ks) on ? picked.delete(k) : picked.add(k); showPicks(); };
+    head.append(Object.assign(document.createElement('i'), {}), Object.assign(document.createElement('b'), { textContent: momentLabel(m) }), pick);
+    sec.append(head);
+    if (all) { const whoAll = [...new Set(m.items.map((p) => (p.owner === id ? 'you' : nameOf(p.owner))))]; sec.append(Object.assign(document.createElement('p'), { className: 'msub', textContent: `${m.items.length} item${m.items.length === 1 ? '' : 's'} · from ${whoAll.length < 2 ? whoAll.join('') : whoAll.slice(0, -1).join(', ') + ' and ' + whoAll.at(-1)}` })); }
+    const grid = Object.assign(document.createElement('div'), { className: 'mgrid' });
+    grid.append(...m.items.map(tile)); sec.append(grid);
+    return sec;
   }));
   $('decktiles').scrollTop = 0;
+  showProblems(list);
   showPicks();
   openSheet('deckbox');
 }
 $('deckback').onclick = () => closeSheet('deckbox');
+$('kindbtn').onclick = () => {
+  const counts = kindCounts(deckOpen.pids.map((k) => prints.get(k)).filter(Boolean)), total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const row = (k, n) => { const b = Object.assign(document.createElement('button'), { type: 'button' }); b.dataset.kind = k; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(deckKind === k));
+    b.append(KIND_NAME[k], Object.assign(document.createElement('span'), { textContent: String(n) })); return b; };
+  $('kindlist').replaceChildren(row('all', total), ...KINDS.filter((k) => counts[k]).map((k) => row(k, counts[k])));
+  $('kindbox').hidden = false;
+};
+$('kindlist').onclick = (e) => { const k = e.target.closest('button')?.dataset.kind; if (!k) return; $('kindbox').hidden = true; openDeck(deckOpen.pids, deckOpen.all, k); };
+$('kindbox').onclick = (e) => { if (e.target === e.currentTarget) $('kindbox').hidden = true; };
+$('kindall').onclick = () => openDeck(deckOpen.pids, deckOpen.all, 'all');
+// problems (3.9): what can't arrive, and big files that wait for a tap
+function showProblems(list) {
+  const gone = list.filter((p) => p.owner !== id && !files.has(p.pid) && !incoming.has(p.pid) && ![p.owner, ...(p.holders || [])].some((k) => k !== id && net.peers[k] && inHeap(k)));
+  const big = list.filter((p) => p.owner !== id && !files.has(p.pid) && !incoming.has(p.pid) && p.size > BIG_FILE && !gone.includes(p));
+  const row = (title, sub, act, onAct) => {
+    const d = document.createElement('div'), t = document.createElement('span');
+    t.append(Object.assign(document.createElement('b'), { textContent: title }), Object.assign(document.createElement('small'), { textContent: sub }));
+    d.append(t); if (act) { const b = Object.assign(document.createElement('button'), { type: 'button', textContent: act }); b.onclick = onAct; d.append(b); }
+    return d;
+  };
+  $('deckproblems').replaceChildren(
+    ...(gone.length ? [row(`${gone.length} couldn’t arrive`, `${nameOf(gone[0].owner) === 'a device' ? 'Their owner' : nameOf(gone[0].owner)} left the heap. Nobody else has them.`)] : []),
+    ...big.slice(0, 3).map((p) => row(`${p.name} · ${mb(p.size)}`, 'Big files wait until you tap them.', 'Get', () => getOne(p))));
+}
+// the preview (3.10): hold a photo to look closer; Get, Pick or Send to, and the next one either side
+let previewList = [], previewAt = 0, previewUrl = '';
+function openPreview(list, i) {
+  previewList = list; previewAt = i; showPreview(); $('previewbox').hidden = false;
+}
+function showPreview() {
+  const p = previewList[previewAt]; if (!p) return;
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  const f = files.get(p.pid), src = f && f.type.startsWith('image/') ? f : p.thumb ? new Blob([p.thumb], { type: 'image/jpeg' }) : null;
+  previewUrl = src ? URL.createObjectURL(src) : '';
+  $('previewimg').src = previewUrl; $('previewimg').hidden = !src;
+  $('previewinfo').replaceChildren(`From ${p.owner === id ? 'you' : nameOf(p.owner)}`, Object.assign(document.createElement('small'), { textContent: `${p.name} · ${mb(p.size)}${p.text ? ' · ' + p.text.slice(0, 80) : ''}` }));
+  $('previewget').textContent = p.owner === id ? 'Yours' : files.has(p.pid) ? 'Save' : 'Get';
+  $('previewget').disabled = p.owner === id;
+  $('previewpick').textContent = picked.has(p.pid) ? 'Unpick' : 'Pick';
+  $('previewprev').disabled = previewAt === 0; $('previewnext').disabled = previewAt >= previewList.length - 1;
+}
+$('previewback').onclick = () => { $('previewbox').hidden = true; if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = ''; showPicks(); };
+$('previewprev').onclick = () => { if (previewAt > 0) { previewAt--; showPreview(); } };
+$('previewnext').onclick = () => { if (previewAt < previewList.length - 1) { previewAt++; showPreview(); } };
+$('previewget').onclick = () => { const p = previewList[previewAt]; if (p) getOne(p); };   // just this one
+$('previewpick').onclick = () => { const p = previewList[previewAt]; if (p) { togglePick(p.pid); showPreview(); } };
+$('previewsend').onclick = () => { const p = previewList[previewAt]; if (p) { $('previewbox').hidden = true; openSendTo([p]); } };
 // picking (2B.3–2B.6): a tap picks or unpicks; every sheet and the bar say how many and how big
 function togglePick(pid) { if (!picked.delete(pid)) picked.add(pid); showPicks(); }
 function tileOf(p, onTap) {
@@ -1167,15 +1510,16 @@ function showPicks() {
   $('getpick').textContent = `Get ${s.n} · ${mb(s.bytes)}`;
   const allMine = s.n > 0 && [...picked].every((k) => prints.get(k)?.owner === id);
   $('removepick').hidden = !allMine; $('getpick').hidden = allMine; $('removepick').textContent = `Remove ${s.n}`;
-  const tiles = [...document.querySelectorAll('#decktiles button')];
+  const tiles = [...document.querySelectorAll('#decktiles button[data-pid]')];
   for (const t of tiles) { const on = picked.has(t.dataset.pid); t.classList.toggle('on', on); t.setAttribute('aria-pressed', String(on)); }
   $('pickall').textContent = tiles.length && tiles.every((t) => picked.has(t.dataset.pid)) ? 'Unpick all' : 'Pick all';
+  for (const sec of document.querySelectorAll('#decktiles .moment')) { const ks = [...sec.querySelectorAll('button[data-pid]')].map((t) => t.dataset.pid); sec.querySelector('.mpick').textContent = ks.length && ks.every((k) => picked.has(k)) ? 'Unpick all' : 'Pick all'; }
   $('reviewtitle').textContent = `Picked · ${s.n}`;
   $('reviewline').textContent = s.n ? pickLine(s) : 'Nothing picked yet. Open a deck and tap photos to pick them.';
   $('getall').textContent = `Get all ${s.n} · ${mb(s.bytes)}`; $('getall').disabled = !s.n;
 }
 $('pickall').onclick = () => {
-  const pids = [...document.querySelectorAll('#decktiles button')].map((t) => t.dataset.pid), all = pids.every((k) => picked.has(k));
+  const pids = [...document.querySelectorAll('#decktiles button[data-pid]')].map((t) => t.dataset.pid), all = pids.every((k) => picked.has(k));
   for (const k of pids) all ? picked.delete(k) : picked.add(k);
   showPicks();
 };
@@ -1216,13 +1560,14 @@ function removeMine(pids) {
 $('closereview').onclick = () => closeSheet('reviewbox');
 $('reviewbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('reviewbox'); };
 $('deckbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('deckbox'); };
-$('allphotos').onclick = () => openDeck([...prints.keys()], true);
+$('allphotos').onclick = () => openDeck([...visiblePrints().keys()], true);
 // landed (2A.4): photos that came onto this screen from someone, counted together for a moment, with Undo.
 // Undo puts them back on the sender's screen (on their deck if they're the owner)
 let landings = [];   // each drop still arriving, newest last (Qodo on #162)
 let landed = null, snackTimer = 0;   // the drop the line shows
 let snackUndo = null;   // what Undo on the line above the bar does now
 function noteLanding(from, p, drop) {
+  if (!net.peers[from] || !inHeap(from)) return;   // from someone who has gone: nothing to say
   // one drop (a deck lands as many photos at once) counts together; a later drop, even a moment after, starts again
   drop = typeof drop === 'string' ? drop.slice(0, 32) : '';
   let b = landings.at(-1);
@@ -1233,23 +1578,28 @@ function noteLanding(from, p, drop) {
   landings = landings.filter((x) => x === b || !landingState([x], hasFile, onTheWay).done).slice(-20);
   updateLanding();
 }
-const hasFile = (pid) => files.has(pid), onTheWay = (pid) => incoming.has(pid);
+// a big file waits on my screen for a tap (3.9): for the line it has landed, not "didn't come"
+const waitsForTap = (pid) => { const p = prints.get(pid); return !!p && p.size > BIG_FILE && !files.has(pid) && !incoming.has(pid); };
+const hasFile = (pid) => files.has(pid) || waitsForTap(pid), onTheWay = (pid) => incoming.has(pid);
 // the line for what's landing: how many of how many while they arrive, Stop until they're all here, then Undo.
 // One that gave up, or that there wasn't room to ask for, counts as didn't come, so the line ends
 let landedSaid = '';
 function updateLanding() {
   if (!$('dropmap').hidden) return;   // the map has the line's place while dragging
+  // a sender who left: what hadn't come from them can't come now, so stop waiting for it
+  for (const x of landings) if (!net.peers[x.from]) for (const pid of x.pids) if (!files.has(pid) && incoming.get(pid)?.from === x.from) incoming.delete(pid);   // only what was coming from them
   if (!landings.length) return;
   const st = landingState(landings, hasFile, onTheWay), b = landed = st.b, n = b.pids.length;
   const relay = /relay/.test(peers.path(b.from) || ''), who = net.peers[b.from]?.name || 'someone';
-  const text = batchLine({ n, k: st.k, lost: st.lost, who, relay }), state = text + st.done + b.from + b.drop;
+  const gone = !net.peers[b.from];
+  const text = gone && st.k < n ? `${st.k} of ${n} came. ${who} left the heap` : batchLine({ n, k: st.k, lost: st.lost, who, relay }), state = text + st.done + b.from + b.drop;
   if (state === landedSaid && !$('snack').hidden) return;
   landedSaid = state;
   $('snacktext').textContent = text;
   $('snackact').textContent = st.done ? 'Undo' : 'Stop';
-  snackUndo = st.done ? () => undoLanding(b) : () => stopLanding(b); $('snackact').hidden = false; $('snack').hidden = false;
+  snackUndo = gone ? null : st.done ? () => undoLanding(b) : () => stopLanding(b); $('snackact').hidden = gone; $('snack').hidden = false;
   clearTimeout(snackTimer);
-  if (st.done) snackTimer = setTimeout(() => { $('snack').hidden = true; landings = []; landed = null; snackUndo = null; landedSaid = ''; }, 6000);
+  if (st.done) snackTimer = setTimeout(() => { $('snack').hidden = true; $('snackact').hidden = false; landings = []; landed = null; snackUndo = null; landedSaid = ''; }, 6000);
 }
 // Stop: whatever hasn't arrived yet stops (the sender is told, so it stops sending), and goes back to the sender's screen
 function stopLanding(b) {
@@ -1358,6 +1708,105 @@ function snackSay(text, undo = null, ms = 6000) {
   landings = []; landed = null; snackUndo = undo; $('snacktext').textContent = text; $('snackact').hidden = !undo; $('snack').hidden = false;
   clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; snackUndo = null; }, ms);
 }
+// People (5.1): everyone in the heap; tap someone to check, hide, block or (host) remove them
+const kindOf = (k) => deviceKind(sizeOf(k) || { w: 390, h: 844 });
+const deviceName = (k) => `${nameOf(k)}’s ${kindOf(k)}`;
+function openPeople() {
+  const all = [id, ...others()], sides = Object.fromEntries(edgeLabels(Object.keys(sizes), layout, sizes, id).map((l) => [l.id, l.side]));
+  const SIDES = { R: 'joined on your right', L: 'joined on your left', T: 'joined above you', B: 'joined below you' };
+  $('peopletitle').textContent = `People (${all.length + [...blocked].filter((k) => net.peers[k]).length})`;
+  const row = (k) => {
+    const me = k === id, el = Object.assign(document.createElement(me ? 'div' : 'button'), me ? { className: 'me' } : { type: 'button' });
+    if (!me) el.dataset.who = k;
+    el.setAttribute('role', 'listitem');
+    const sub = [k === net.leader ? 'Host' : '', sides[k] ? SIDES[sides[k]] : '', blocked.has(k) ? 'Blocked' : hiddenOwners.has(k) ? 'Photos hidden' : '', me ? 'This device' : ''].filter(Boolean).join(' · ') || 'In the heap';
+    const face = Object.assign(document.createElement('i'), { textContent: initials(nameOf(k)) });
+    const text = document.createElement('span');
+    text.append(Object.assign(document.createElement('b'), { textContent: me ? `You · ${deviceName(k)}` : deviceName(k) }), Object.assign(document.createElement('small'), { textContent: sub }));
+    const badge = Object.assign(document.createElement('span'), { className: 'badge' + (checked.has(k) ? ' ok' : ''), textContent: me ? '' : checked.has(k) ? '✓ Checked' : 'Not checked' });
+    if (me) badge.hidden = true;
+    el.append(face, text, badge);
+    return el;
+  };
+  $('peoplelist').replaceChildren(...all.map(row), ...[...blocked].filter((k) => net.peers[k]).map(row));
+  openSheet('peoplebox');
+}
+$('peopleback').onclick = () => closeSheet('peoplebox');
+$('peoplebox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('peoplebox'); };
+$('peoplelist').onclick = (e) => { const k = e.target.closest('button')?.dataset.who; if (k) closeSheet('peoplebox', () => openPerson(k)); };
+let personK = null;
+function openPerson(k) {
+  personK = k; const first = nameOf(k).split(/\s+/)[0];
+  $('persontitle').textContent = deviceName(k);
+  $('phide').querySelector('b').textContent = hiddenOwners.has(k) ? 'Show their photos' : 'Hide their photos';
+  $('pblock').querySelector('b').textContent = blocked.has(k) ? `Unblock ${first}` : `Block ${first}`;
+  $('premove').hidden = net.leader !== id;
+  openSheet('personbox');
+}
+$('personclose').onclick = () => closeSheet('personbox');
+$('personbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('personbox'); };
+$('phide').onclick = () => {
+  if (hiddenOwners.has(personK)) hiddenOwners.delete(personK);
+  else { hiddenOwners.add(personK); for (const k of [...picked]) if (prints.get(k)?.owner === personK) picked.delete(k); }   // hidden: not picked either
+  closeSheet('personbox'); showPicks();
+};
+$('pblock').onclick = () => {
+  if (blocked.has(personK)) { blocked.delete(personK); closeSheet('personbox'); return roomChangedLater(); }
+  closeSheet('personbox', () => { $('blocktitle').textContent = `Block ${deviceName(personK)}?`; $('blockbox').hidden = false; });
+};
+$('blockyes').onclick = () => { blockNow(personK); $('blockbox').hidden = true; };
+$('blockno').onclick = () => { $('blockbox').hidden = true; };
+function blockNow(k) { blocked.add(k); for (const p of [...picked]) if (prints.get(p)?.owner === k) picked.delete(p); showPicks(); roomChangedLater(); }
+const roomChangedLater = () => setTimeout(() => { showWho(); showHeader(); }, 0);
+$('premove').onclick = () => {   // host only: turn them away, as if Not now
+  const a = net.admits, p = net.peers[personK];
+  admit({ ...a, ids: a.ids.filter((x) => x !== personK), names: a.names.filter((x) => !p || x !== nameKey(p.name)), no: [...a.no, personK] });
+  closeSheet('personbox');
+};
+// Check this device (5.3–5.5): the same four words on both screens means nobody is in the middle
+$('pcheck').onclick = () => closeSheet('personbox', async () => {
+  const k = personK;
+  $('checktitle').textContent = `Check ${deviceName(k)}`;
+  $('checksub').textContent = `Look at ${nameOf(k)}’s screen together. It should show these same four words.`;
+  $('checkwords').replaceChildren(Object.assign(document.createElement('small'), { textContent: 'Waiting for their key…' }));
+  $('checkyes').disabled = true; delete $('checkyes').dataset.for;   // Yes only once these words are on screen
+  openSheet('checkbox');
+  for (let i = 0; i < 40; i++) {
+    const w = await peers.words(k);
+    if (personK !== k || $('checkbox').hidden) return;   // closed, or someone else's check now: these words aren't theirs
+    if (w) { $('checkwords').replaceChildren(...w.map((x) => Object.assign(document.createElement('span'), { textContent: x }))); $('checkyes').dataset.for = k; $('checkyes').disabled = false; return; }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (personK === k && !$('checkbox').hidden) $('checkwords').replaceChildren(Object.assign(document.createElement('small'), { textContent: 'Couldn’t get their words. Close this and try again in a moment' }));
+});
+$('checkcancel').onclick = () => closeSheet('checkbox');
+$('checkyes').onclick = () => {
+  const k = $('checkyes').dataset.for; if (!k || $('checkyes').disabled) return;
+  checked.add(k); closeSheet('checkbox'); toast(`Your connection to ${deviceName(k)} is private ✓`);
+};
+$('checkno').onclick = () => {
+  const k = personK; blockNow(k); closeSheet('checkbox');
+  $('warnsub').textContent = `The words were different, so something may be passing itself off as ${deviceName(k)}. Nothing more will be sent to or from ${deviceName(k)}.`;
+  $('warnstay').textContent = `Stay, but block ${nameOf(k).split(/\s+/)[0]}`; $('warnbox').hidden = false;
+};
+$('warnleave').onclick = () => leaveAndClear();
+$('warnstay').onclick = () => { $('warnbox').hidden = true; };
+// Reconnecting and connection lost (5.9, 5.10): short drops recover by themselves
+let lostTimer = 0, wasLive = false;
+function netState() {
+  if (!net) return;
+  if (net.status === 'live') { wasLive = true; clearTimeout(lostTimer); lostTimer = 0; $('netbanner').hidden = true; $('lostbox').hidden = true; return; }
+  if (!wasLive) return;
+  $('netbanner').hidden = false;
+  if (!lostTimer) lostTimer = setTimeout(() => { if (net.status !== 'live') { $('netbanner').hidden = true; $('lostbox').hidden = false; } }, 15000);
+}
+// Try again: join the room again in this tab, so photos already here stay (a reload would lose them)
+$('losttry').onclick = () => {
+  $('lostbox').hidden = true; wasLive = false; clearTimeout(lostTimer); lostTimer = 0;
+  const room = net.room.replace(/^photo-/, ''); net.leave(); announced.clear();
+  start(room, true);
+};
+$('lostleave').onclick = () => { try { sessionStorage.removeItem(ROOM_KEY); } catch {} location.replace(location.pathname); };
 // Send to… (2A.8): let go where no screen is joined: choose who gets it instead
 let sending = [];
 function openSendTo(ps) {
@@ -1426,7 +1875,8 @@ function showHeader() {
   $('empty').hidden = !!prints.size;
   const nextTo = others().find((k) => (layout.group[k] || k) === (layout.group[id] || id));
   $('emptytip').textContent = nextTo ? `Flick a photo toward ${net.peers[nextTo]?.name || 'the other screen'} to pass it across.` : '';
-  $('allphotos').hidden = !prints.size; $('allphotos').textContent = `All photos · ${prints.size}`;
+  const shown = visiblePrints().size;
+  $('allphotos').hidden = !shown; $('allphotos').textContent = `All photos · ${shown}`;   // what this screen shows, not hidden people's
   const all = [name, ...others().map((k) => net.peers[k]?.name || '?')];
   const face = (t, cls) => Object.assign(document.createElement('i'), { textContent: t, className: cls || '' });
   $('peoplebtn').querySelector('b').textContent = `People (${all.length})`;
@@ -1508,7 +1958,7 @@ function frame() {
   ctx.strokeStyle = T.mid; ctx.setLineDash([6, 6]);
   for (const k of Object.keys(sizes)) if (k !== id && layout.group[k] === gid) ctx.strokeRect(layout.pos[k][0] + 1, layout.pos[k][1] + 1, sizes[k].w - 2, sizes[k].h - 2);
   ctx.setLineDash([]);
-  for (const deck of groupDecks(prints)) {
+  for (const deck of groupDecks(visiblePrints())) {
     const p = deck.top;
     if (!visible(p)) continue;
     const [px, py] = world(p);
@@ -1531,6 +1981,12 @@ function frame() {
       const s = Math.max(p.w / p.img.width, p.h / p.img.height), sw = p.w / s, sh = p.h / s, iw = p.w, ih = p.h;
       ctx.drawImage(p.img, (p.img.width - sw) / 2, (p.img.height - sh) / 2, sw, sh, -iw / 2, -ih / 2, iw, ih);
       ctx.lineWidth = 1.5; ctx.strokeRect(-iw / 2, -ih / 2, iw, ih);
+    } else if (p.text) {   // a link or note: its plain text on the card (3.4), never as a page
+      ctx.fillStyle = T.paper; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.lineWidth = 1.5; ctx.strokeRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.fillStyle = T.mid; ctx.font = `500 11px ${T.ui}`; ctx.textAlign = 'left'; ctx.fillText(isWebLink(p.text) ? '🔗 Link' : 'Note', -p.w / 2 + 10, -p.h / 2 + 18);
+      ctx.fillStyle = T.ink; ctx.font = `500 14px ${T.ui}`;
+      const lines = []; for (const para of p.text.split('\n')) { let line = ''; for (const word of para.split(' ')) { const t = line ? line + ' ' + word : word; if (ctx.measureText(t).width > p.w - 20 && line) { lines.push(line); line = word; } else line = t; } lines.push(line); }
+      lines.slice(0, 6).forEach((l, i) => ctx.fillText(i === 5 && lines.length > 6 ? l + '…' : l, -p.w / 2 + 10, -p.h / 2 + 40 + i * 18));
     } else { ctx.fillStyle = T.ink; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.fillStyle = T.paper; ctx.font = `14px ${T.ui}`; ctx.textAlign = 'center'; ctx.fillText(p.type.startsWith('video') ? '▶ video' : p.name, 0, 4); }
     // still arriving (3.5): a bar along the bottom of the photo fills as it comes
     const coming = incoming.get(p.pid);

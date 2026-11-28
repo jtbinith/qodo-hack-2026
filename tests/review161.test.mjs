@@ -54,7 +54,7 @@ test('8, 10: a photo already here still says who it came from; each drop has its
 });
 
 test('9 and its re-review: a tap waits only for photos Get is handing over, and says how to recover a stuck share', () => {
-  assert.match(html, /if \(pickSave\.holds\(p\.pid\)\) return toast\('Still saving this one\. If the share sheet is stuck, tap Get again'\);/);
+  assert.match(html, /if \(pickSave\.holds\(p\.pid\) \|\| sharingOne\.has\(p\.pid\)\) return toast\('Still saving this one\. If the share sheet is stuck, tap Get again'\);/);   // and its own share sheet since #163
   assert.doesNotMatch(html, /pickSave\.busy\(\)/, 'other photos aren’t blocked');
 });
 

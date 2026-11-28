@@ -29,17 +29,20 @@ const wall = () => performance.timeOrigin + performance.now();
 // Its relay frames are then passed on as onSignal(from, data, true): "away", not to be used
 // yet. Only peers.js can tell a real frame from a forged one, so it opens each, holds the real
 // ones and uses none until `onReturn(from)` says presence lists that device again.
-export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, linked = () => false }) {
+// since: when this device first joined (Try again after a lost connection), so it keeps its place: the time
+// keeper and host are whoever has been here longest, and a rejoin isn't newer than someone who came later
+export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, linked = () => false, since = null, admitted = null }) {
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   const ch = client.channel('stitch:' + room, { config: { broadcast: { self: false }, presence: { key: id } } });
-  const joinedAt = wall();
+  const joinedAt = since ?? wall();
   const s = {
     id, name, room, status: 'connecting',
+    joinedAt,   // when this device joined
     peers: {},            // id -> { name, w, h, joinedAt }
     leader: null,
     offset: 0, rtt: null, samples: [],
     joins: [],
-    admits: { open: false, ids: [], names: [], no: [] },   // who the host has let in (1.6, 1.7); shared by the time keeper
+    admits: admitted || { open: false, ids: [], names: [], no: [] },   // who the host has let in (1.6, 1.7); shared by the time keeper. Kept over a Try again
     listeners: new Set(),
     now: () => wall() + s.offset,   // shared clock (ms)
   };

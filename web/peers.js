@@ -7,7 +7,7 @@
 // Direct links use "perfect negotiation": either side may start; if both start at once the
 // "polite" side (smaller id) backs off.
 
-import { makeKeyPair, deriveKey, seal, open, b64, unb64 } from './seal.js';
+import { makeKeyPair, deriveKey, seal, open, b64, unb64, checkWords, commitTo } from './seal.js';
 
 const ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
 const DIRECT_CHUNK = 64 * 1024;
@@ -59,6 +59,10 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
   const handlers = new Set(), readyHandlers = new Set();
   const emit = (from, msg, bytes) => handlers.forEach((f) => f(from, msg, bytes));
   const mine = makeKeyPair();
+  // check words (5.3): a secret, sent only after the other device's commitment has arrived, and its
+  // commitment, sent with every key. Nobody can pick keys to match the words once they've seen ours
+  const nonce = crypto.getRandomValues(new Uint8Array(16)), commit = commitTo(nonce);
+  const myKey = (extra = {}) => Promise.all([mine, commit]).then(([{ pub }, c]) => ({ pub: b64(pub), commit: b64(c), ...extra }));
 
   function link(peer) {
     if (links[peer]) return links[peer];
@@ -72,7 +76,7 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
     // holds up only its own frames. `away` holds frames that came while the peer was away.
     // `rxCount`/`rxBytes`: frames on the chain not yet used (RELAY_RX, RELAY_RX_BYTES)
     L.rx = Promise.resolve(); L.away = null; L.rxCount = 0; L.rxBytes = 0;
-    mine.then(({ pub }) => signal(peer, { pub: b64(pub) }));     // swap public keys
+    myKey().then((k) => signal(peer, k));     // swap public keys, each with its commitment
     const attach = (dc) => {
       L.dc = dc;
       dc.binaryType = 'arraybuffer';
@@ -112,18 +116,26 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
     if (data.pub) {
       // Answer a first-time key with ours, in case our earlier one was sent before they
       // were listening (a device that just joined can miss it). Replies aren't answered.
-      if (!data.reply) mine.then(({ pub }) => signal(from, { pub: b64(pub), reply: true }));
+      if (!data.reply) myKey({ reply: true }).then((k) => signal(from, k));
       L.heard = true;                       // it has seen us: an offer it lost can be sent again
       resendLater(from, L);
       if (L.key || L.keyFailed) return;     // first key wins; ignore later swaps
       try {
         const { kp } = await mine;
-        L.key = await deriveKey(kp, unb64(data.pub), { table, a: myId, b: from });
+        L.theirPub = unb64(data.pub);   // kept for the check words (5.3)
+        L.key = await deriveKey(kp, L.theirPub, { table, a: myId, b: from });
+        if (data.commit) { L.theirCommit = unb64(data.commit); revealTo(from, L); }   // theirs is here: now ours can be seen
       } catch (e) {
         L.keyFailed = true;                 // malformed key: stop waiting on this peer
         console.warn('bad key from', from, e);
       }
       keyArrived(from, L);
+    } else if (data.reveal) {               // their secret: it must match the commitment that came with their key
+      if (data.again && L.theirCommit) revealTo(from, L, true);   // they missed ours: send it again (at most once a second)
+      if (!L.theirCommit || L.theirNonce || L.revealBad) return;
+      const n = unb64(data.reveal), c = await commitTo(n);
+      if (c.length === L.theirCommit.length && c.every((b, i) => b === L.theirCommit[i])) L.theirNonce = n;
+      else L.revealBad = true;   // not what they committed to: no words for this device
     } else if (data.r) {                    // relayed, encrypted frame
       if (L.keyFailed) return;
       if (!L.key) { if (!away && L.inbox.length < HOLD) L.inbox.push(data.r); return; }
@@ -267,6 +279,12 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
   // false if it was dropped, so the caller can send it again (see onReady).
   const send = (peer, msg) => sendFrame(peer, frame(msg)).catch((e) => { console.warn('dropped message to', peer, e.message); return false; });
 
+  // our secret goes only to a device whose commitment we hold, so it was fixed before it saw ours
+  function revealTo(peer, L, again = false) {
+    if (!L.theirCommit || (again && performance.now() - (L.revealedAt || 0) < 1000)) return;
+    L.revealedAt = performance.now();
+    signal(peer, { reveal: b64(nonce) });
+  }
   // Stream a File/Blob in pieces without loading it all into memory. `only` resends
   // just the listed pieces (after the receiver reports gaps). Rejects with SendTimeout if the
   // device stops answering; the rest of the file is not sent. Says how many of its pieces left:
@@ -303,5 +321,14 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
     onReady: (f) => readyHandlers.add(f),   // f(peer) when a peer's key arrives
     path: (peer) => { const L = links[peer]; return !L ? 'none' : L.open ? 'direct' : L.key ? 'relay (encrypted)' : 'keys…'; },
     state: (peer) => links[peer]?.pc.connectionState || 'none',
+    // the four check words for this peer, once its key is here (5.3); null before
+    words: async (peer) => {
+      const L = links[peer]; if (!L?.theirPub || !L.theirCommit || L.revealBad) return null;
+      if (!L.theirNonce) {   // their secret hasn't come: ask again (at most once a second)
+        if (performance.now() - (L.askedRevealAt || 0) > 1000) { L.askedRevealAt = performance.now(); signal(peer, { reveal: b64(nonce), again: true }); }
+        return null;
+      }
+      const { pub } = await mine; return checkWords(pub, L.theirPub, table, nonce, L.theirNonce);
+    },
   };
 }

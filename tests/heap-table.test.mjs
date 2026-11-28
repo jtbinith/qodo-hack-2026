@@ -46,7 +46,7 @@ test('the menu sheet (4.1): Join a screen, People, Invite, Keep photo details, L
 
 test('the bottom bar: a wide + Share and Picked, no checkbox', () => {
   const bar = (html.match(/<div id="bar">([\s\S]*?)<\/div>/) || [, ''])[1];
-  assert.match(bar, /<label id="share">\+ Add photos &amp; videos<input id="pick" type="file"[^>]*><\/label>\s*<button id="pickedbtn" type="button">Picked · 0<\/button>/);
+  assert.match(bar, /<button type="button" id="share">\+ Add photos &amp; files<\/button>\s*<button id="pickedbtn" type="button">Picked · 0<\/button>/);
   assert.doesNotMatch(bar, /id="keep"/, 'Keep photo details lives in the menu now');
   assert.match(css, /#bar #share \{[^}]*flex: 1/, '+ Share takes the width');
 });
@@ -61,9 +61,9 @@ test('the header is filled from the room, as text', () => {
 
 test('decks on the table: a stack per person with a name and count pill, no loose photos', () => {
   const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
-  assert.match(frame, /groupDecks\(prints\)/, 'drawn deck by deck');
+  assert.match(frame, /groupDecks\(visiblePrints\(\)\)/, 'drawn deck by deck, without hidden or blocked people');
   assert.match(frame, /deck\.pids\.length > 1 \? `\$\{who\} \$\{deck\.pids\.length\}`/, 'the pill says whose and how many');
-  assert.match(html, /\$\('pick'\)\.onchange[\s\S]*?deckSpot\(prints, id/, 'what I share goes on my deck');
+  assert.match(html, /function addFiles\([\s\S]*?deckSpot\(prints, id/, 'what I share goes on my deck');
   assert.match(html, /t: 'moves', pids: /, 'a deck moves as one message');
   assert.match(html, /m\.t === 'moves'[\s\S]{0,80}validMoves\(m\)/, 'checked when it arrives');
 });
@@ -73,7 +73,7 @@ test('the deck sheet (2B.1, 2B.2): ‹ Table, whose deck and how many, the photo
   assert.match(box, /<div class="sheet" role="dialog" aria-labelledby="decktitle">/);
   assert.match(box, /<button type="button" id="deckback">‹ Table<\/button>\s*<h2 id="decktitle"><\/h2>/);
   assert.match(box, /<div id="decktiles" role="list"><\/div>/);
-  assert.match(box, /Tap photos to pick them\. Drag one out to put it on the table or send it\./, 'says how to pick and how to send one');
+  assert.match(box, /Tap photos to pick them\. Hold one to look closer\. Drag one out to put it on the table or send it\./, 'says how to pick, look and send');
   assert.match(html, /function openDeck\(/);
   assert.match(html, /\.reverse\(\)/, 'newest first');
   assert.match(html, /<button type="button" id="allphotos" hidden>/, 'an All photos chip on the table');
@@ -85,7 +85,7 @@ test('picking in the deck sheet (2B.3): tap picks, Pick all, then Review and Get
   assert.match(box, /<button type="button" id="pickall">Pick all<\/button>/);
   assert.match(box, /<div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"><\/button><button type="button" id="getpick" class="pri"><\/button><button type="button" id="removepick" hidden><\/button><\/div>/);
   assert.match(html, /function togglePick\(/, 'a tap picks or unpicks');
-  assert.match(html, /b\.onpointerup = \(\) => \{ b\.onpointermove = b\.onpointerup = null; togglePick\(p\.pid\)/, 'tapping a photo in the sheet picks it');
+  assert.match(html, /b\.onpointerup = \(\) => \{ b\.onpointermove = b\.onpointerup = null; if \(!held\) togglePick\(p\.pid\)/, 'tapping a photo in the sheet picks it (holding opens the preview)');
   assert.match(html, /`Get \$\{s\.n\} · \$\{mb\(s\.bytes\)\}`/, 'Get says how many and how big');
   assert.match(html, /aria-pressed/, 'picked photos say so to screen readers');
 });
@@ -153,7 +153,7 @@ test('code not found (1.3): a typed code with nobody in that heap goes back to t
 });
 
 test('empty table (2D.1): says so and how to start', () => {
-  assert.match(html, /<div id="empty" aria-hidden="true" hidden><i><\/i><b>The table is empty<\/b><span>Tap \+ Add photos &amp; videos to put yours down\. Others take only what they want\.<\/span><small id="emptytip"><\/small><\/div>/);
+  assert.match(html, /<div id="empty" aria-hidden="true" hidden><i><\/i><b>The table is empty<\/b><span>Tap \+ Add photos &amp; files to put yours down\. Others take only what they want\.<\/span><small id="emptytip"><\/small><\/div>/);
   assert.match(html, /\$\('empty'\)\.hidden = !!prints\.size/);
 });
 
@@ -169,7 +169,7 @@ test('the invite code tiles fit their row, letters sized to it, with a compact C
 });
 
 test('the add button says what it adds', () => {
-  assert.match(html, /<label id="share">\+ Add photos &amp; videos<input id="pick"/);
+  assert.match(html, /<button type="button" id="share">\+ Add photos &amp; files<\/button>/);
   assert.doesNotMatch(html, />\+ Share</);
 });
 
