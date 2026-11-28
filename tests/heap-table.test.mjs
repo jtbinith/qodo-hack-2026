@@ -101,7 +101,7 @@ test('the review sheet (2B.6): what is picked, tap to unpick, Get all', () => {
 
 test('landing (2A.4): the receiver is told who it came from with Undo, the sender where it went', () => {
   assert.match(html, /<div id="snack" role="status" hidden><span id="snacktext"><\/span><button type="button" id="snackact">Undo<\/button><\/div>/);
-  assert.match(html, /batchLine\(\{ n, k, who, relay \}\)/, 'how many and from whom (words.js)');
+  assert.match(html, /batchLine\(\{ n, k: st\.k, lost: st\.lost, who, relay \}\)/, 'how many and from whom (words.js)');
   assert.match(html, /toast\(`Sent to \$\{/, 'the sender sees where it went');
 });
 
@@ -227,7 +227,7 @@ test('a deck arriving (2A.6, 3.6): how many of how many, through relay while it 
 test('arriving photos show a progress bar on their card, and the line offers Stop until they are all here (3.5)', () => {
   const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
   assert.match(frame, /const coming = incoming\.get\(p\.pid\)/, 'knows how much of a photo is here');
-  assert.match(frame, /coming\.got \/ coming\.size/, 'the bar fills with what has arrived');
+  assert.match(frame, /coming\.n \? coming\.got \/ coming\.n : 0/, 'the bar fills with the pieces that have arrived (Qodo on #162: not pieces over bytes)');
   assert.match(html, /function stopLanding\(/);
-  assert.match(html, /\$\('snackact'\)\.textContent = k < n \? 'Stop' : 'Undo'/);
+  assert.match(html, /\$\('snackact'\)\.textContent = st\.done \? 'Undo' : 'Stop'/);   // Stop while any are still on the way
 });

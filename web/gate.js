@@ -22,3 +22,15 @@ export function isIn(k, { leader, admits, peers }) {
   return !!peers[k] && admits.names.includes(nameKey(peers[k].name));
 }
 export const waitingFor = (ctx) => Object.keys(ctx.peers).filter((k) => !isIn(k, ctx) && !ctx.admits.no.includes(k));
+
+// first come, first in (1.9): is this device after the first `limit` to join? Same moment: the smaller id is first
+export function overLimit(me, peers, limit) {
+  const order = Object.entries(peers).sort(([a, p], [b, q]) => (p.joinedAt - q.joinedAt) || (a < b ? -1 : 1)).map(([k]) => k);
+  return order.indexOf(me) >= limit;
+}
+// the list stays small: ids only for devices still here (a reload is a new id), no repeats, the latest 200 names
+const uniqLast = (xs) => xs.filter((x, i) => xs.lastIndexOf(x) === i);
+export function trimAdmits(a, peers) {
+  const here = (k) => Object.hasOwn(peers, k);
+  return { open: a.open, ids: uniqLast(a.ids.filter(here)), names: uniqLast(a.names).slice(-200), no: uniqLast(a.no.filter(here)) };
+}

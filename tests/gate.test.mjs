@@ -43,5 +43,5 @@ test('the host decides; the time keeper shares who is in', () => {
   assert.match(html, /Someone in this heap is already called \$\{/, 'name taken (1.5)');
   assert.match(html, /This heap is full/, 'full (1.9)');
   assert.match(html, /const inHeap = \(k\) =>/, 'one check of who is in');
-  assert.match(html, /const others = \(\) => Object\.keys\(net\?\.peers \|\| \{\}\)\.filter\(\(k\) => k !== id && inHeap\(k\)\)/, 'nobody waiting gets photos');
+  assert.match(html, /const others = \(\) => \(inHeap\(id\) \? Object\.keys\(net\?\.peers \|\| \{\}\)\.filter\(\(k\) => k !== id && inHeap\(k\)\) : \[\]\)/, 'nobody waiting gets photos, and a waiting device sends nothing');
 });

@@ -16,8 +16,10 @@ export function mapTiles(ids, layout, sizes, me, box, gap = 16, label = 14) {
   const W0 = Math.max(...joined.map((k) => pos(k)[0] + sizes[k].w)) - x0, H0 = Math.max(...joined.map((k) => pos(k)[1] + sizes[k].h)) - y0;
   const colW = apart.length ? Math.max(...apart.map((k) => sizes[k].w)) : 0;
   const colH = apart.reduce((a, k) => a + sizes[k].h, 0);
-  const s = Math.min((box.w - (apart.length ? gap : 0)) / (W0 + colW),
-    box.h / H0, apart.length ? (box.h - label - gap * (apart.length - 1)) / Math.max(1, colH) : Infinity);
+  // many screens not joined: the gaps between them shrink first, so every tile still fits the column
+  if (apart.length > 1) gap = Math.min(gap, Math.max(1, (box.h - label) / (apart.length * 3)));
+  const s = Math.max(1e-4, Math.min((box.w - (apart.length ? gap : 0)) / (W0 + colW),
+    box.h / H0, apart.length ? (box.h - label - gap * (apart.length - 1)) / Math.max(1, colH) : Infinity));
   const out = joined.map((k) => ({ id: k, x: (pos(k)[0] - x0) * s, y: (pos(k)[1] - y0) * s, w: sizes[k].w * s, h: sizes[k].h * s, joined: true }));
   let y = label;
   for (const k of apart) { out.push({ id: k, x: W0 * s + gap, y, w: sizes[k].w * s, h: sizes[k].h * s, joined: false }); y += sizes[k].h * s + gap; }

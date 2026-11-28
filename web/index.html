@@ -433,12 +433,12 @@
 <script src="vendor/qrcode.js"></script>
 <script type="module">
 import { joinRoom } from './net.js';
-import { heapTitle, heapSub, initials, batchLine } from './words.js';
+import { heapTitle, heapSub, initials, batchLine, landingState } from './words.js';
 import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels } from './map.js';
-import { nameKey, nameTaken, isIn, waitingFor } from './gate.js';
+import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits } from './gate.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
@@ -515,17 +515,19 @@ function bounce(why) {   // leave, and say why on the next screen
   try { sessionStorage.removeItem(ROOM_KEY); sessionStorage.setItem(BOUNCE_KEY, JSON.stringify(why)); } catch {}
   location.replace(location.pathname);
 }
+// every change to the list goes through here, so it only holds who is here, once each (Qodo on #162)
+const admit = (a) => net.setAdmits(trimAdmits(a, net.peers));
 function gate() {
   if (!net || net.status !== 'live' || !joinedAt) return;
   if (net.leader === id && !net.admits.ids.includes(id)) {   // I keep time and have no list yet: start one; open if I chose that before
     let open = false; try { open = localStorage.getItem(OPEN_KEY) === '1'; } catch {}
-    net.setAdmits({ ...net.admits, open: net.admits.open || open, ids: [...net.admits.ids, id], names: [...net.admits.names, nameKey(name)] });
-  }
+    admit({ ...net.admits, open: net.admits.open || open, ids: [...net.admits.ids, id], names: [...net.admits.names, nameKey(name)] });
+  } else if (net.leader === id && trimAdmits(net.admits, net.peers).ids.length !== net.admits.ids.length) admit(net.admits);   // someone left: off the list
   const room = net.room.replace(/^photo-/, ''), host = net.peers[net.leader]?.name || 'the host';
   if (performance.now() - joinedAt < 8000) {   // just arrived: is my name taken, or the heap full?
     const other = nameTaken(id, net.peers);
     if (other) return bounce({ k: 'name', code: room, other });
-    if (Object.keys(net.peers).length > LIMITS.devices) return bounce({ k: 'full', code: room });
+    if (overLimit(id, net.peers, LIMITS.devices)) return bounce({ k: 'full', code: room });   // only those after the first 20
   }
   if (net.admits.no.includes(id)) return bounce({ k: 'no', host });
   const waiting = !inHeap(id);
@@ -544,9 +546,9 @@ function gate() {
 $('letin').onclick = () => {
   const k = $('askbox').dataset.who, p = net.peers[k], a = net.admits, open = $('askopen').checked;
   if (open) try { localStorage.setItem(OPEN_KEY, '1'); } catch {}
-  if (p) net.setAdmits({ ...a, open: a.open || open, ids: [...a.ids, k], names: [...a.names, nameKey(p.name)] });
+  if (p) admit({ ...a, open: a.open || open, ids: [...a.ids, k], names: [...a.names, nameKey(p.name)] });
 };
-$('notnow').onclick = () => { const k = $('askbox').dataset.who, a = net.admits; net.setAdmits({ ...a, no: [...a.no, k] }); };
+$('notnow').onclick = () => { const k = $('askbox').dataset.who, a = net.admits; admit({ ...a, no: [...a.no, k] }); };
 $('waitcancel').onclick = () => { try { sessionStorage.removeItem(ROOM_KEY); } catch {} location.replace(location.pathname); };
 $('yourname').addEventListener('input', () => { $('nameerr').hidden = true; });
 {
@@ -676,7 +678,7 @@ $('pick').onchange = async (e) => {
 // who is in the heap (1.6, 1.7): the host, and whoever the host let in. Nobody else is sent anything or answered
 const gateOf = () => ({ leader: net.leader, admits: net.admits, peers: net.peers });
 const inHeap = (k) => !net || isIn(k, gateOf());
-const others = () => Object.keys(net?.peers || {}).filter((k) => k !== id && inHeap(k));
+const others = () => (inHeap(id) ? Object.keys(net?.peers || {}).filter((k) => k !== id && inHeap(k)) : []);   // waiting to be let in: nobody yet
 const broadcast = (f) => others().forEach(f);
 const announced = new Map(); // pid -> devices we've announced it to
 const sentTo = (pid) => announced.get(pid) || announced.set(pid, new Set()).get(pid);
@@ -691,6 +693,8 @@ function announce(peer, p) {
 // ---------- messages between devices ----------
 // holding (2A.5): photos someone is moving right now, so a screen they're nearing can show it coming
 const moving = new Map();   // pid -> { from, t }
+const cutShort = new Set();   // photos removed by their owner while here or arriving, in case Undo brings them back
+const stops = new Set();      // 'device|pid': that device tapped Stop, so what I'm sending it stops
 function holdNote(from, pids, final) { for (const pid of pids) final ? moving.delete(pid) : moving.set(pid, { from, t: performance.now() }); }
 // who is holding photos near my screen's edges, and where to show each
 function holdingNear() {
@@ -720,6 +724,7 @@ function onMessage(from, m, bytes) {
     const { t, thumbSize, ...meta } = m;
     prints.set(m.pid, { ...meta, img: null, thumb: null });
     if (thumbSize) expect('thumb:' + m.pid, from, thumbSize);
+    if (cutShort.delete(m.pid)) dropped(prints.get(m.pid));   // back after its owner's Undo: here or arriving before, so ask again
   } else if (m.t === 'move') {
     if (!validMove(m)) return;
     holdNote(from, [m.pid], m.final);
@@ -732,7 +737,8 @@ function onMessage(from, m, bytes) {
     const file = validPidMsg(m) && files.get(m.pid);
     // counted only for devices in the room (S7), then given back for what never left (S1.5)
     const tok = file && inRoom(net.peers, from) && inHeap(from) && asks.allow(from, m.pid, askBytes(m, file.size), file.size, false);
-    if (tok) peers.sendFile(from, m.pid, file).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
+    if (tok) stops.delete(from + '|' + m.pid);   // asked again: a Stop before is over
+    if (tok) peers.sendFile(from, m.pid, file, null, null, () => stops.has(from + '|' + m.pid)).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
   } else if (m.t === 'have') {           // someone now holds the bytes
     const p = validPidMsg(m) && prints.get(m.pid);
     if (p) confirmSent(from, m.pid);   // something I sent has arrived
@@ -748,6 +754,8 @@ function onMessage(from, m, bytes) {
     const bytes = src && askBytes(m, src.size);
     const tok = typeof bytes === 'number' && inRoom(net.peers, from) && inHeap(from) && asks.allow(from, m.fid, bytes, src.size, m.missing !== null);
     if (tok) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); if (m.fid === pid) gaveUp(from, pid, e); });
+  } else if (m.t === 'stop') {           // the receiver tapped Stop: what I'm sending it stops between pieces
+    if (validPidMsg(m) && stops.size < 1000) stops.add(from + '|' + m.pid);
   } else if (m.t === 'chunk') {
     const inc = incoming.get(m.fid);
     if (!inc || inc.from !== from || !validChunk(m, bytes, inc)) return;
@@ -868,7 +876,7 @@ addEventListener('pointermove', (e) => {
 // the browser took the pointer away (a call, a system gesture): the photo is put down where it is
 addEventListener('pointercancel', (e) => {
   if (!drag || e.pointerId !== drag.pointer) return;
-  const { ps, p, ox, oy, moved } = drag; drag = null;
+  const { ps, p, ox, oy, moved } = drag; drag = null; showDropMap(false);
   if (!moved) return;
   const [x, y] = world(p); land(ps, p, { x: ox, y: oy }, [{ x, y }]);
 });
@@ -959,10 +967,14 @@ function start(room) {
   const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
   peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
   peers.on((from, m, bytes) => {
+    if (from !== id && !inHeap(from)) return;   // not let in yet: nothing it sends is taken (Qodo on #162)
     if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
     if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
       const p = validPidMsg(m) && prints.get(m.pid);
-      if (p && p.owner === from) { prints.delete(p.pid); files.delete(p.pid); incoming.delete(p.pid); picked.delete(p.pid); moving.delete(p.pid); showPicks(); }
+      if (p && p.owner === from) {
+        if ((incoming.has(p.pid) || files.has(p.pid)) && cutShort.size < 500) cutShort.add(p.pid);   // if Undo brings it back, ask for it again
+        prints.delete(p.pid); files.delete(p.pid); incoming.delete(p.pid); picked.delete(p.pid); moving.delete(p.pid); showPicks();
+      }
       return;
     }
     if (m.t === 'give') {   // sent to me with Send to…: only from someone who has it
@@ -978,6 +990,7 @@ function start(room) {
   // a device that closes can take a while to drop out of the room, and whenever a device's
   // key arrives, because a print to it may have been dropped while we waited (S1.3).
   const catchUp = () => {
+    tellRemoved();
     for (const p of prints.values()) {
       if (!(p.owner === id || (!net.peers[p.owner] && files.has(p.pid)))) continue;
       for (const k of others()) if (!sentTo(p.pid).has(k)) announce(k, p);
@@ -1177,12 +1190,24 @@ $('reviewpick').onclick = () => closeSheet('deckbox', openReview);
 $('getpick').onclick = $('getall').onclick = () => getPicked();
 $('removepick').onclick = () => { const pids = [...picked].filter((k) => prints.get(k)?.owner === id); closeSheet('deckbox'); removeMine(pids); };
 // remove my own photos from every table; Undo puts them back. A copy someone already saved stays theirs
+// what I removed, and who has been told (pid -> screens): a screen that missed it is told when it catches up (Qodo on #162)
+const removed = new Map();
+function tellRemoved() {
+  for (const [pid, told] of removed) for (const k of others()) {
+    if (told.has(k)) continue;
+    told.add(k);
+    peers.send(k, { t: 'unshare', pid }).then((ok) => { if (!ok) told.delete(k); }, () => told.delete(k));   // not delivered: next catch-up
+  }
+}
 function removeMine(pids) {
   const gone = pids.map((k) => [prints.get(k), files.get(k)]).filter(([p]) => p && p.owner === id);
-  for (const [p] of gone) { prints.delete(p.pid); picked.delete(p.pid); announced.delete(p.pid); broadcast((k) => peers.send(k, { t: 'unshare', pid: p.pid })); }
+  for (const [p] of gone) { prints.delete(p.pid); picked.delete(p.pid); announced.delete(p.pid); removed.set(p.pid, new Set()); }
+  while (removed.size > 500) removed.delete(removed.keys().next().value);
+  tellRemoved();
   const n = gone.length;
   snackSay(`Removed ${n} photo${n === 1 ? '' : 's'}. Copies already saved stay with whoever saved them`, () => {
-    for (const [p, f] of gone) { prints.set(p.pid, p); if (f) files.set(p.pid, f); broadcast((k) => announce(k, p)); }
+    // back on the table, with only me holding it: everyone else was told to let it go
+    for (const [p, f] of gone) { removed.delete(p.pid); p.holders = [id]; prints.set(p.pid, p); if (f) files.set(p.pid, f); broadcast((k) => announce(k, p)); }
   }, 6000);
   setTimeout(() => { for (const [p] of gone) if (!prints.has(p.pid)) files.delete(p.pid); }, 6500);   // no Undo: let the bytes go
   showPicks();
@@ -1193,48 +1218,55 @@ $('deckbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('de
 $('allphotos').onclick = () => openDeck([...prints.keys()], true);
 // landed (2A.4): photos that came onto this screen from someone, counted together for a moment, with Undo.
 // Undo puts them back on the sender's screen (on their deck if they're the owner)
-let landed = null, snackTimer = 0;
+let landings = [];   // each drop still arriving, newest last (Qodo on #162)
+let landed = null, snackTimer = 0;   // the drop the line shows
 let snackUndo = null;   // what Undo on the line above the bar does now
 function noteLanding(from, p, drop) {
   // one drop (a deck lands as many photos at once) counts together; a later drop, even a moment after, starts again
   drop = typeof drop === 'string' ? drop.slice(0, 32) : '';
-  if (!landed || landed.from !== from || landed.drop !== drop || performance.now() - landed.t > 1000) landed = { from, drop, pids: [] };
-  landed.t = performance.now();
-  if (!landed.pids.includes(p.pid)) landed.pids.push(p.pid);
+  let b = landings.at(-1);
+  if (!b || b.from !== from || b.drop !== drop || performance.now() - b.t > 1000) { b = { from, drop, pids: [] }; landings.push(b); }
+  b.t = performance.now();
+  if (!b.pids.includes(p.pid)) b.pids.push(p.pid);
+  // a drop still arriving stays, so its Stop isn't lost to a later one (Qodo on #162); finished ones go
+  landings = landings.filter((x) => x === b || !landingState([x], hasFile, onTheWay).done).slice(-20);
   updateLanding();
 }
-// the line for what's landing: how many of how many while they arrive, Stop until they're all here, then Undo
+const hasFile = (pid) => files.has(pid), onTheWay = (pid) => incoming.has(pid);
+// the line for what's landing: how many of how many while they arrive, Stop until they're all here, then Undo.
+// One that gave up, or that there wasn't room to ask for, counts as didn't come, so the line ends
 let landedSaid = '';
 function updateLanding() {
-  if (!landed) return;
-  const n = landed.pids.length, k = landed.pids.filter((pid) => files.has(pid)).length;
-  const relay = /relay/.test(peers.path(landed.from) || ''), who = net.peers[landed.from]?.name || 'someone';
-  const text = batchLine({ n, k, who, relay }), state = text + (k < n);
+  if (!$('dropmap').hidden) return;   // the map has the line's place while dragging
+  if (!landings.length) return;
+  const st = landingState(landings, hasFile, onTheWay), b = landed = st.b, n = b.pids.length;
+  const relay = /relay/.test(peers.path(b.from) || ''), who = net.peers[b.from]?.name || 'someone';
+  const text = batchLine({ n, k: st.k, lost: st.lost, who, relay }), state = text + st.done + b.from + b.drop;
   if (state === landedSaid && !$('snack').hidden) return;
   landedSaid = state;
   $('snacktext').textContent = text;
-  $('snackact').textContent = k < n ? 'Stop' : 'Undo';
-  snackUndo = k < n ? stopLanding : undoLanding; $('snackact').hidden = false; $('snack').hidden = false;
+  $('snackact').textContent = st.done ? 'Undo' : 'Stop';
+  snackUndo = st.done ? () => undoLanding(b) : () => stopLanding(b); $('snackact').hidden = false; $('snack').hidden = false;
   clearTimeout(snackTimer);
-  if (k >= n) snackTimer = setTimeout(() => { $('snack').hidden = true; landed = null; snackUndo = null; landedSaid = ''; }, 6000);
+  if (st.done) snackTimer = setTimeout(() => { $('snack').hidden = true; landings = []; landed = null; snackUndo = null; landedSaid = ''; }, 6000);
 }
-// Stop: whatever hasn't arrived yet stops, and goes back to the sender's screen
-function stopLanding() {
-  const l = landed; landed = null; landedSaid = '';
-  if (!l) return;
-  const left = l.pids.filter((pid) => !files.has(pid));
-  for (const pid of left) incoming.delete(pid);
-  undoLanding({ ...l, pids: left });
+// Stop: whatever hasn't arrived yet stops (the sender is told, so it stops sending), and goes back to the sender's screen
+function stopLanding(b) {
+  landedSaid = '';
+  const left = b.pids.filter((pid) => !files.has(pid));
+  for (const pid of left) { const inc = incoming.get(pid); if (inc) peers.send(inc.from, { t: 'stop', pid }); incoming.delete(pid); }
+  undoLanding({ ...b, pids: left });
+  landings = landings.filter((x) => x !== b);
   toast(`Stopped. ${left.length} didn’t come`);
 }
 $('snackact').onclick = () => { const f = snackUndo; snackUndo = null; $('snack').hidden = true; clearTimeout(snackTimer); f?.(); $('snackact').textContent = 'Undo'; };
-function undoLanding(only) {
-  const l = only?.pids ? only : landed; landed = null; landedSaid = '';
-  if (!l || !sizes[l.from]) return;
-  const spot = deckSpot(prints, l.from, sizes[l.from]);
-  for (const pid of l.pids) {
+function undoLanding(b) {
+  landings = landings.filter((x) => x !== b); landed = null; landedSaid = '';
+  if (!b || !sizes[b.from]) return;
+  const spot = deckSpot(prints, b.from, sizes[b.from]);
+  for (const pid of b.pids) {
     const p = prints.get(pid); if (!p) continue;
-    p.anchor = l.from; p.x = spot.x; p.y = spot.y;
+    p.anchor = b.from; p.x = spot.x; p.y = spot.y;
     broadcast((k) => peers.send(k, { t: 'move', pid, anchor: p.anchor, x: p.x, y: p.y, final: true }));
   }
 };
@@ -1286,8 +1318,7 @@ function showDropMap(on, cx, cy) {
 }
 // send photos to one screen without dragging them there (2C.4, 3.11)
 function giveTo(ps, to) {
-  for (const p of ps) peers.send(to, { t: 'give', pid: p.pid });
-  toast(`Sent to ${nameOf(to)} ✓`);
+  return sendGives([to], ps);
 }
 // join screens (4.2–4.6): tap the edge that faces the other screen; both taps within 2 seconds pair up
 let joinTick = 0;
@@ -1323,7 +1354,7 @@ function joinResult(kind, text, other) {
 }
 // a line just above the bar, without an action
 function snackSay(text, undo = null, ms = 6000) {
-  landed = null; snackUndo = undo; $('snacktext').textContent = text; $('snackact').hidden = !undo; $('snack').hidden = false;
+  landings = []; landed = null; snackUndo = undo; $('snacktext').textContent = text; $('snackact').hidden = !undo; $('snack').hidden = false;
   clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; snackUndo = null; }, ms);
 }
 // Send to… (2A.8): let go where no screen is joined: choose who gets it instead
@@ -1336,17 +1367,21 @@ function openSendTo(ps) {
   if (!people.length) $('sendlist').replaceChildren(Object.assign(document.createElement('p'), { className: 'deckhint', textContent: 'Nobody else is in this heap yet. Invite someone from the menu.' }));
   openSheet('sendbox');
 }
-$('sendlist').onclick = async (e) => {
-  const to = e.target.closest('button')?.dataset.to; if (!to) return;
-  const list = to === '*' ? others() : [to];
-  // only photos this device has can be sent; someone else's that hasn't come here yet can't
-  const sendable = sending.filter((p) => p.owner === id || files.has(p.pid)), notHere = sending.length - sendable.length;
-  if (!sendable.length) return toast(`You don’t have ${sending.length === 1 ? 'this photo' : 'these photos'} yet. Get ${sending.length === 1 ? 'it' : 'them'} first, then send`);
+// give photos to screens (Send to…, and a drop on the map): only what this device has goes; ✓ once each has arrived
+async function sendGives(list, ps) {
+  const sendable = ps.filter((p) => p.owner === id || files.has(p.pid)), notHere = ps.length - sendable.length;
+  if (!sendable.length) { toast(`You don’t have ${ps.length === 1 ? 'this photo' : 'these photos'} yet. Get ${ps.length === 1 ? 'it' : 'them'} first, then send`); return false; }
   const drop = pidOf();
   const results = await Promise.all(list.flatMap((k) => sendable.map((p) => peers.send(k, { t: 'give', pid: p.pid, drop }).then((ok) => [k, ok], () => [k, false]))));
   const failed = [...new Set(results.filter(([, ok]) => !ok).map(([k]) => k))];
-  if (failed.length) return toast(`Couldn’t send to ${failed.map((k) => net.peers[k]?.name || 'a device').join(', ')}. Try again`);   // Send to stays open to try again
+  if (failed.length) { toast(`Couldn’t send to ${failed.map((k) => net.peers[k]?.name || 'a device').join(', ')}. Try again`); return false; }
   for (const k of list) waitSent(k, sendable, notHere);
+  return true;
+}
+$('sendlist').onclick = async (e) => {
+  const to = e.target.closest('button')?.dataset.to; if (!to) return;
+  const list = to === '*' ? others() : [to];
+  if (!(await sendGives(list, sending))) return;   // Send to stays open to try again
   sending = []; closeSheet('sendbox');
 };
 // Sent ✓ only once the receiver says it has them (it sends 'have'); until then, Sending…
@@ -1500,7 +1535,7 @@ function frame() {
     const coming = incoming.get(p.pid);
     if (coming && !files.has(p.pid) && coming.size) {
       ctx.fillStyle = T.paper; ctx.fillRect(-p.w / 2 + 8, p.h / 2 - 16, p.w - 16, 8);
-      ctx.fillStyle = T.ink; ctx.fillRect(-p.w / 2 + 8, p.h / 2 - 16, (p.w - 16) * Math.min(1, coming.got / coming.size), 8);
+      ctx.fillStyle = T.ink; ctx.fillRect(-p.w / 2 + 8, p.h / 2 - 16, (p.w - 16) * Math.min(1, coming.n ? coming.got / coming.n : 0), 8);
       ctx.lineWidth = 1.5; ctx.strokeStyle = T.ink; ctx.strokeRect(-p.w / 2 + 8, p.h / 2 - 16, p.w - 16, 8);
     }
     const mine = p.owner === id, have = files.has(p.pid), who = mine ? 'You' : net.peers[p.owner]?.name || '?';

@@ -273,7 +273,8 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
   // it resolves with { sent, of }, and a failure carries the same as `e.sent` (when the error can
   // hold it), so a caller can give back exactly what never left (Qodo on #87, blind review 7).
   // A relay frame that is dropped (a bad key, a full outbox) resolves false and isn't counted.
-  async function sendFile(peer, fid, file, only = null, cs = null) {
+  // `stop()`, checked before each piece, ends the send early: the receiver said Stop (3.6)
+  async function sendFile(peer, fid, file, only = null, cs = null, stop = null) {
     const L = link(peer);
     cs = cs || (L.open ? DIRECT_CHUNK : RELAY_CHUNK);
     const n = Math.ceil(file.size / cs) || 1;
@@ -281,6 +282,7 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
     let sent = 0;
     try {
       for (const i of list) {
+        if (stop?.()) return { sent, of: list.length, stopped: true };
         const bytes = new Uint8Array(await file.slice(i * cs, (i + 1) * cs).arrayBuffer());
         if (await sendFrame(peer, frame({ t: 'chunk', fid, i, n, cs }, bytes))) sent++;
       }
