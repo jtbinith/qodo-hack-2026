@@ -198,6 +198,21 @@
   #dropmap small { font-size: 12px; color: var(--text-mid); }
   #dropcv { width: 100%; height: 120px; }
   @media (prefers-reduced-motion: no-preference) { #dropmap:not([hidden]) { animation: sheet-up .28s cubic-bezier(.2, .9, .3, 1); } }
+  /* waiting to be let in (1.6), and the host's question (1.7) */
+  #s-wait { text-align: center; align-content: center; min-height: 70vh; }
+  #s-wait .waitdot { justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px dashed var(--ink); margin-bottom: 18px; }
+  @media (prefers-reduced-motion: no-preference) { #s-wait .waitdot { animation: spin 4s linear infinite; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #waitcancel { margin-top: 28px; font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #askbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 6; }
+  #askbox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 12px; }
+  #askbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #asktitle { margin: 4px 0 0; font: 700 18px var(--ui); text-align: center; }
+  .asksub { margin: 0; font-size: 14px; color: var(--text-mid); line-height: 1.5; }
+  .askopen { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .askopen input { width: 20px; height: 20px; accent-color: var(--ink); }
+  @media (prefers-reduced-motion: no-preference) { #askbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); } }
   /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
@@ -310,6 +325,13 @@
   <button type="button" id="mapclose">Close</button>
 </div></div><!-- /mapbox -->
 <div id="dropmap" hidden><small>Or drop on the map</small><canvas id="dropcv"></canvas></div>
+<div id="askbox" hidden><div class="sheet" role="dialog" aria-labelledby="asktitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="asktitle"></h2>
+  <p class="asksub">New device · first time in this heap<br>Only let in people who are here with you.</p>
+  <div class="pills"><button type="button" id="notnow">Not now</button><button type="button" id="letin" class="pri">Let in</button></div>
+  <label class="askopen"><input id="askopen" type="checkbox"> Let everyone in without asking</label>
+</div></div><!-- /askbox -->
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -361,6 +383,7 @@
     <button type="button" class="back" data-to="home">‹ Back</button>
     <h2>Heap code</h2>
     <p class="sub">10 letters, on the host's screen under Invite.</p>
+    <p id="fullerr" class="err" role="alert" hidden><b>This heap is full.</b> 20 screens is the most a heap holds. Ask someone to leave, or start a new heap.</p>
     <p id="codeerr" class="err" role="alert" hidden><b>No open heap with that code. It may have ended or the code has a typo.</b>
       Check with the host, or ask them for the QR code.</p>
     <form id="f">
@@ -382,10 +405,17 @@
     <form id="nf">
       <label for="yourname">Your name</label>
       <input id="yourname" maxlength="80" autocomplete="nickname" autocapitalize="words" spellcheck="false" required>
+      <p id="nameerr" class="err" role="alert" hidden></p>
       <p class="hint">Shown to everyone in this heap. Remembered on this device.</p>
       <button id="go">Start heap</button>
     </form>
   </div><!-- /s-name -->
+  <div class="step" id="s-wait" hidden>
+    <div class="waitdot" aria-hidden="true"></div>
+    <h2 id="waittitle"></h2>
+    <p class="sub" id="waitsub"></p>
+    <button type="button" id="waitcancel">Cancel</button>
+  </div><!-- /s-wait -->
 </div><!-- /lobby -->
 <div id="invitebox" hidden><div class="sheet" role="dialog" aria-labelledby="invtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -408,6 +438,7 @@ import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels } from './map.js';
+import { nameKey, nameTaken, isIn, waitingFor } from './gate.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
@@ -451,7 +482,7 @@ $('leave').onclick = () => {
 // The lobby is one step at a time: home, then the heap code (to join), then your name (wireframes 1.1–1.4)
 const pending = { mode: 'start', code: '' };
 function screen(k) {
-  for (const n of ['home', 'code', 'name']) $('s-' + n).hidden = n !== k;
+  for (const n of ['home', 'code', 'name', 'wait']) $('s-' + n).hidden = n !== k;
   if (k === 'code') { $('code').focus(); showCells(); }
   if (k === 'name') { $('yourname').value = $('yourname').value || name; $('yourname').focus(); }
 }
@@ -477,6 +508,55 @@ $('nf').onsubmit = (e) => {
 };
 // timings for joining: how long a typed code waits for someone to be there (twice), and the window for two taps to pair
 const NOT_FOUND_AFTER = 4000, NOT_FOUND_TRIES = 2, JOIN_WINDOW_S = 2;
+// who is in, for this device (1.5–1.7, 1.9): checked whenever the room changes
+const OPEN_KEY = 'heap-open', BOUNCE_KEY = 'heap-bounce';
+let joinedAt = 0;
+function bounce(why) {   // leave, and say why on the next screen
+  try { sessionStorage.removeItem(ROOM_KEY); sessionStorage.setItem(BOUNCE_KEY, JSON.stringify(why)); } catch {}
+  location.replace(location.pathname);
+}
+function gate() {
+  if (!net || net.status !== 'live' || !joinedAt) return;
+  if (net.leader === id && !net.admits.ids.includes(id)) {   // I keep time and have no list yet: start one; open if I chose that before
+    let open = false; try { open = localStorage.getItem(OPEN_KEY) === '1'; } catch {}
+    net.setAdmits({ ...net.admits, open: net.admits.open || open, ids: [...net.admits.ids, id], names: [...net.admits.names, nameKey(name)] });
+  }
+  const room = net.room.replace(/^photo-/, ''), host = net.peers[net.leader]?.name || 'the host';
+  if (performance.now() - joinedAt < 8000) {   // just arrived: is my name taken, or the heap full?
+    const other = nameTaken(id, net.peers);
+    if (other) return bounce({ k: 'name', code: room, other });
+    if (Object.keys(net.peers).length > LIMITS.devices) return bounce({ k: 'full', code: room });
+  }
+  if (net.admits.no.includes(id)) return bounce({ k: 'no', host });
+  const waiting = !inHeap(id);
+  if (waiting) {
+    $('waittitle').textContent = `Waiting for ${host} to let you in`;
+    $('waitsub').textContent = `${host} is the host. They’ll see “${name}’s ${deviceKind({ w: W, h: H })} wants to join”.`;
+    $('lobby').hidden = false; screen('wait');
+  } else if (!$('s-wait').hidden) { $('s-wait').hidden = true; $('lobby').hidden = true; }
+  // the host answers one new device at a time
+  const ask = net.leader === id && !net.admits.open ? waitingFor(gateOf())[0] : null;
+  if (ask) {
+    const p = net.peers[ask];
+    $('asktitle').textContent = `${p.name}’s ${deviceKind(p)} wants to join`; $('askbox').dataset.who = ask; $('askbox').hidden = false;
+  } else $('askbox').hidden = true;
+}
+$('letin').onclick = () => {
+  const k = $('askbox').dataset.who, p = net.peers[k], a = net.admits, open = $('askopen').checked;
+  if (open) try { localStorage.setItem(OPEN_KEY, '1'); } catch {}
+  if (p) net.setAdmits({ ...a, open: a.open || open, ids: [...a.ids, k], names: [...a.names, nameKey(p.name)] });
+};
+$('notnow').onclick = () => { const k = $('askbox').dataset.who, a = net.admits; net.setAdmits({ ...a, no: [...a.no, k] }); };
+$('waitcancel').onclick = () => { try { sessionStorage.removeItem(ROOM_KEY); } catch {} location.replace(location.pathname); };
+$('yourname').addEventListener('input', () => { $('nameerr').hidden = true; });
+{
+  let why = null; try { why = JSON.parse(sessionStorage.getItem(BOUNCE_KEY) || 'null'); sessionStorage.removeItem(BOUNCE_KEY); } catch {}
+  if (why?.k === 'name' && isRoomCode(why.code)) {
+    $('code').value = why.code; askName('join', why.code);
+    $('nameerr').textContent = `Someone in this heap is already called ${why.other}. Pick a different name.`; $('nameerr').hidden = false;
+  } else if (why?.k === 'full' && isRoomCode(why.code)) { $('code').value = why.code; screen('code'); $('fullerr').hidden = false; }
+  else if (why?.k === 'no') setTimeout(() => toast(`${why.host} didn’t let you in this time`), 300);
+}
 // code not found (1.3): leave, and come back to the code screen with the code and why
 const NOT_FOUND_KEY = 'heap-notfound';
 function notFound(code) {
@@ -497,7 +577,7 @@ function showCells() {
 }
 for (const ev of ['input', 'focus', 'blur', 'keyup']) $('code').addEventListener(ev, showCells);
 $('yourname').value = name;
-if ($('code').value) screen('code');
+if ($('code').value && $('s-name').hidden) screen('code');   // a filled-in code shows its screen, unless the name is being asked
 showCells();
 
 let net = null, peers = null, W = innerWidth, H = innerHeight;
@@ -593,7 +673,10 @@ $('pick').onchange = async (e) => {
   if (added) toast(`${added} on the table` + (kept.length ? `. Details not removed from ${kept.join(', ')}` : ''));
 };
 
-const others = () => Object.keys(net?.peers || {}).filter((k) => k !== id);
+// who is in the heap (1.6, 1.7): the host, and whoever the host let in. Nobody else is sent anything or answered
+const gateOf = () => ({ leader: net.leader, admits: net.admits, peers: net.peers });
+const inHeap = (k) => !net || isIn(k, gateOf());
+const others = () => Object.keys(net?.peers || {}).filter((k) => k !== id && inHeap(k));
 const broadcast = (f) => others().forEach(f);
 const announced = new Map(); // pid -> devices we've announced it to
 const sentTo = (pid) => announced.get(pid) || announced.set(pid, new Set()).get(pid);
@@ -648,7 +731,7 @@ function onMessage(from, m, bytes) {
   } else if (m.t === 'want') {           // someone wants the full photo
     const file = validPidMsg(m) && files.get(m.pid);
     // counted only for devices in the room (S7), then given back for what never left (S1.5)
-    const tok = file && inRoom(net.peers, from) && asks.allow(from, m.pid, askBytes(m, file.size), file.size, false);
+    const tok = file && inRoom(net.peers, from) && inHeap(from) && asks.allow(from, m.pid, askBytes(m, file.size), file.size, false);
     if (tok) peers.sendFile(from, m.pid, file).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
   } else if (m.t === 'have') {           // someone now holds the bytes
     const p = validPidMsg(m) && prints.get(m.pid);
@@ -663,7 +746,7 @@ function onMessage(from, m, bytes) {
     // only files we hold, then only lists a receiver could send, from devices in the room, are
     // counted (S1.5); what never left is given back, so a link that recovers isn't refused (Qodo on #87)
     const bytes = src && askBytes(m, src.size);
-    const tok = typeof bytes === 'number' && inRoom(net.peers, from) && asks.allow(from, m.fid, bytes, src.size, m.missing !== null);
+    const tok = typeof bytes === 'number' && inRoom(net.peers, from) && inHeap(from) && asks.allow(from, m.fid, bytes, src.size, m.missing !== null);
     if (tok) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); if (m.fid === pid) gaveUp(from, pid, e); });
   } else if (m.t === 'chunk') {
     const inc = incoming.get(m.fid);
@@ -874,7 +957,7 @@ function getPicked() {
 function start(room) {
   $('lobby').hidden = true;
   const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
-  peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) });
+  peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
   peers.on((from, m, bytes) => {
     if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
     if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
@@ -901,12 +984,17 @@ function start(room) {
     }
   };
   peers.onReady(catchUp);
+  const roomChanged = () => {
+    showWho(); showHeader(); gate();
+    for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
+    catchUp();
+  };
   net.on((ev) => {
     if (ev !== 'peers') return;
     showWho(); showHeader();
-    for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
-    catchUp();
+    roomChanged();
   });
+  net.on((ev) => { if (ev === 'admits' || ev === 'leader') roomChanged(); });
   // Join results go to the whole room: each one is shown only on the devices it names.
   // For results that answer this device's latest push (d.latest), until it pushes again,
   // "Joined" always wins and "Try again" stays on screen and isn't replaced by "No match".
@@ -939,6 +1027,7 @@ function start(room) {
       stored.set(room);
       invite.room = room; $('top').hidden = false; showHeader();
       if (pending.fresh) { pending.fresh = false; $('invite').click(); }
+      joinedAt = performance.now(); gate();
       if (pending.mustExist) {   // heaps exist only while someone is in them: alone after a moment means no such heap
         pending.mustExist = false;
         let tries = 0;

@@ -39,6 +39,7 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     leader: null,
     offset: 0, rtt: null, samples: [],
     joins: [],
+    admits: { open: false, ids: [], names: [], no: [] },   // who the host has let in (1.6, 1.7); shared by the time keeper
     listeners: new Set(),
     now: () => wall() + s.offset,   // shared clock (ms)
   };
@@ -54,7 +55,10 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     s.leader = all.length ? all[0][0] : id;
     if (s.leader === id) { s.offset = 0; s.rtt = 0; }
     if (prev !== s.leader) {
-      s.samples = []; emit('leader', s.leader);
+      s.samples = [];
+      // someone else keeps time: a list this device made while it thought it was alone doesn't count; ask for theirs
+      if (s.leader !== id) { s.admits = { open: false, ids: [], names: [], no: [] }; send('admitsask', { from: id, to: s.leader }); }
+      emit('leader', s.leader);
       stopAsking();   // an ask to the old time keeper is over
       // a layout the new time keeper sent before this device heard it took over (#61). It is
       // checked again against who is here now, and used only if it still passes
@@ -92,7 +96,7 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     s.joins = s.joins.filter((j) => s.peers[j.a] && s.peers[j.b]);
     for (const k of earlyLayouts.keys()) if (!s.peers[k]) earlyLayouts.delete(k);   // nothing kept from devices that have left
     electLeader();
-    if (s.leader === id) sendLayout();
+    if (s.leader === id) { sendLayout(); sendAdmits(); }
     emit('peers', s.peers);
     // setup held from a device that has now arrived is passed on, in the order it came (S1.6)
     for (const [from, held] of earlySigs) {
@@ -234,6 +238,22 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     if (s.leader === id) { s.joins = removeJoin(s.joins, id, other); sendLayout(); }
     else send('unjoin', p);
   };
+  // who is in (1.6, 1.7): only the time keeper's list counts; it's sent again whenever the room changes,
+  // so a device that just arrived, or a new time keeper's room, hears it
+  const strs = (a, n) => Array.isArray(a) && a.length <= n && a.every((x) => typeof x === 'string' && x.length <= 80);
+  const validAdmits = (a) => !!a && typeof a.open === 'boolean' && strs(a.ids, 200) && strs(a.names, 200) && strs(a.no, 200);
+  function sendAdmits() { if (s.leader === id) send('admits', { from: id, ...s.admits }); }
+  ch.on('broadcast', { event: 'admits' }, ({ payload }) => {
+    if (payload?.from === s.leader && payload.from !== id && validAdmits(payload)) {
+      s.admits = { open: payload.open, ids: payload.ids, names: payload.names, no: payload.no }; emit('admits', s.admits);
+    }
+  });
+  let admitsAnsweredAt = 0;
+  ch.on('broadcast', { event: 'admitsask' }, ({ payload }) => {
+    if (s.leader !== id || payload?.to !== id || !Object.hasOwn(s.peers, payload.from) || performance.now() - admitsAnsweredAt < 300) return;
+    admitsAnsweredAt = performance.now(); sendAdmits();
+  });
+  s.setAdmits = (a) => { if (s.leader !== id || !validAdmits(a)) return; s.admits = a; sendAdmits(); emit('admits', a); };
   s.push = (edge, along) => {
     const p = { dev: id, edge, along, t: s.now() };
     latest = p.t;

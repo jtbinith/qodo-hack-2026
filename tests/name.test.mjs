@@ -42,7 +42,7 @@ test('no random names any more', () => {
 
 test('the device check gives each window a name of its own, so invite links still join in one tap', () => {
   const gc = readFileSync(new URL('../scripts/group-check.mjs', import.meta.url), 'utf8');
-  assert.match(gc, /addInitScript\(\(n\) => \{ try \{ if \(!localStorage\.getItem\('heap-name'\)\) localStorage\.setItem\('heap-name', n\); \} catch \{\} \}, `Device \$\{i\}`\)/);
+  assert.match(gc, /addInitScript\(\(n\) => \{ try \{ if \(!localStorage\.getItem\('heap-name'\)\) localStorage\.setItem\('heap-name', n\); localStorage\.setItem\('heap-open', '1'\); \} catch \{\} \}, `Device \$\{i\}`\)/);
 });
 
 test('the heap code is typed into 10 boxes in two groups of 5 (wireframe 1.2)', () => {

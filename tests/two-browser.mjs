@@ -951,7 +951,7 @@ try {
   await D2.fill('#yourname', 'Dee'); await D2.click('#go');
   await until(S, () => !document.getElementById('askbox').hidden && document.getElementById('asktitle').textContent.startsWith('Dee'), null, 20000);
   await S.click('#notnow');
-  const turned = await until(D2, () => document.getElementById('s-home')?.hidden === false, null, 15000).then(() => D2.evaluate(() => document.getElementById('toast').textContent), () => '');
+  const turned = await until(D2, () => document.getElementById('s-home')?.hidden === false && document.getElementById('toast').textContent, null, 15000).then(() => D2.evaluate(() => document.getElementById('toast').textContent), () => '');
   check(turned === 'Host didn’t let you in this time', `Not now sends Dee back to the home screen ("${turned}")`);
   await D2.context().close();
   await G.context().close();
