@@ -75,7 +75,7 @@ test('the table is drawn in the tokens, not the old dark wood', () => {
 
 test('the live table has the header at the top and the photo actions at the bottom', () => {
   assert.match(html, /<header id="top"[\s\S]*id="menu"[\s\S]*<\/header>/);
-  assert.match(html, /<div id="bar">[\s\S]*id="pick"[\s\S]*id="pickedbtn"[\s\S]*?<\/div>/);
+  assert.match(html, /<div id="bar">[\s\S]*id="share"[\s\S]*id="pickedbtn"[\s\S]*?<\/div>/);
 });
 
 test('the status box is hidden behind Connection details in the menu', () => {

@@ -982,6 +982,14 @@ try {
   await new Promise((r) => setTimeout(r, 3000));
   const sawAfter = await S.evaluate(() => [...window.__t.prints.values()].some((p) => p.name === 'after.jpg'));
   check(hiddenNow && !sawAfter, `after S blocks G, G's photos are gone from S (${hiddenNow}) and a new one doesn't arrive (${!sawAfter})`);
+  // 3.1, 3.4: S writes a note from the share sheet: G gets it as plain text. A program is refused (3.9)
+  await sheetsDown(S); await S.click('#share'); await until(S, () => !document.getElementById('sharebox').hidden, null, 5000);
+  await S.click('#sharenote'); await until(S, () => !document.getElementById('textbox').hidden, null, 5000);
+  await S.fill('#textfield', 'Meet at the gate at 8'); await S.click('#textshare');
+  const noteAt = await until(G, () => [...window.__t.prints.values()].some((p) => p.text === 'Meet at the gate at 8' && p.type === 'text/plain'), null, 10000).then(() => true, () => false);
+  await S.setInputFiles('#pickfile', [{ name: 'setup.exe', mimeType: 'application/x-msdownload', buffer: Buffer.from('MZ') }]);
+  const refusedSaid = await until(S, () => document.getElementById('toast').textContent.startsWith('setup.exe'), null, 5000).then(() => toastOf(S), () => toastOf(S));
+  check(noteAt && refusedSaid === 'setup.exe was refused. Programs and scripts can’t be shared here', `a note reaches G as text (${noteAt}); a program is refused ("${refusedSaid}")`);
   // 1.5: someone else called Guest is sent back to pick another name; 1.7: Not now turns a device away
   const D2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
   await D2.addInitScript(() => { try { localStorage.setItem('heap-name', 'guest'); } catch {} });
