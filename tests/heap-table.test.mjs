@@ -95,7 +95,7 @@ test('the review sheet (2B.6): what is picked, tap to unpick, Get all', () => {
   assert.match(box, /<h2 id="reviewtitle"><\/h2>\s*<p id="reviewline"><\/p>\s*<div id="reviewtiles" role="list"><\/div>\s*<p class="deckhint">Tap a photo to unpick it<\/p>/);
   assert.match(box, /<button type="button" id="getall" class="pri"><\/button>/);
   assert.match(html, /\$\('pickedbtn'\)\.onclick = \(\) => openReview\(\)/);
-  assert.match(html, /function getPicked\(\) \{[\s\S]*?for \(const p of toFetch\(prints, picked, files, incoming, id\)\)[\s\S]*?pickSave\.tap\(\)/, 'asks for what is missing, then saves what is here in the same tap');
+  assert.match(html, /function getPicked\(only = null\) \{[\s\S]*?for \(const p of toFetch\(prints, only \|\| picked, files, incoming, id\)\)[\s\S]*?pickSave\.tap\(only\)/, 'asks for what is missing, then saves what is here in the same tap (just one deck for its Get all, 6.3)');
   assert.match(css, /#reviewbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/);
 });
 
