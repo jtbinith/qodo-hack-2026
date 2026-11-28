@@ -201,7 +201,7 @@
   @media (prefers-reduced-motion: no-preference) { #dropmap:not([hidden]) { animation: sheet-up .28s cubic-bezier(.2, .9, .3, 1); } }
   /* waiting to be let in (1.6), and the host's question (1.7) */
   #s-wait { text-align: center; align-content: center; min-height: 70vh; }
-  #s-wait .waitdot { justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px dashed var(--ink); margin-bottom: 18px; }
+  #s-wait .waitdot { margin: 0 auto 18px; justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px dashed var(--ink); margin-bottom: 18px; }
   @media (prefers-reduced-motion: no-preference) { #s-wait .waitdot { animation: spin 4s linear infinite; } }
   @keyframes spin { to { transform: rotate(360deg); } }
   #waitcancel { margin-top: 28px; font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
@@ -244,7 +244,7 @@
   #leaveunsaved[hidden] { display: none; } #leaveunsaved b, #leaveunsaved small { display: block; } #leaveunsaved small { font-size: 12px; color: var(--text-mid); }
   #leavesave { background: none; border: 0; font: 500 15px var(--ui); color: var(--ink); text-decoration: underline; }
   #s-cleared { text-align: center; align-content: center; min-height: 70vh; gap: 10px; }
-  #s-cleared .waitdot.done { justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px solid var(--ink); font: 700 24px/52px var(--ui); }
+  #s-cleared .waitdot.done { margin: 0 auto 8px; justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px solid var(--ink); font: 700 24px/52px var(--ui); }
   #peoplebox:not([hidden]) .sheet, #personbox:not([hidden]) .sheet, #checkbox:not([hidden]) .sheet, #leavebox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
   #peoplebox.out .sheet, #personbox.out .sheet, #checkbox.out .sheet, #leavebox.out .sheet { animation: sheet-down .24s ease-in forwards; }
   @media (prefers-reduced-motion: reduce) { #peoplebox .sheet, #personbox .sheet, #checkbox .sheet, #leavebox .sheet { animation: none !important; } }
