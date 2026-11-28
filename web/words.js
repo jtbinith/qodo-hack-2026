@@ -19,3 +19,6 @@ export function landingState(batches, has, coming) {
   const all = batches.map(of);
   return all.filter((x) => !x.done).at(-1) || all.at(-1) || null;
 }
+// ending a heap (2D.11, 2D.12): everyone gets this long to save, shown as m:ss
+export const END_GRACE = 5 * 60000;
+export const countdown = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };

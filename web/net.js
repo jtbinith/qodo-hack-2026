@@ -252,12 +252,13 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   // who is in (1.6, 1.7): only the time keeper's list counts; it's sent again whenever the room changes,
   // so a device that just arrived, or a new time keeper's room, hears it
   const strs = (a, n) => Array.isArray(a) && a.length <= n && a.every((x) => typeof x === 'string' && x.length <= 80);
-  const validAdmits = (a) => !!a && typeof a.open === 'boolean' && strs(a.ids, 200) && strs(a.names, 200) && strs(a.no, 200);
+  const validAdmits = (a) => !!a && typeof a.open === 'boolean' && strs(a.ids, 200) && strs(a.names, 200) && strs(a.no, 200) &&
+    (a.ended === undefined || (Number.isFinite(a.ended) && a.ended > 0));   // the host ended the heap: when it closes (2D.11)
   function sendAdmits() { if (s.leader === id) send('admits', { from: id, ...s.admits }); }
   ch.on('broadcast', { event: 'admits' }, ({ payload }) => {
     if (payload?.from === s.leader && payload.from !== id && validAdmits(payload)) {
       stopAskingAdmits();
-      s.admits = { open: payload.open, ids: payload.ids, names: payload.names, no: payload.no }; emit('admits', s.admits);
+      s.admits = { open: payload.open, ids: payload.ids, names: payload.names, no: payload.no, ...(payload.ended ? { ended: payload.ended } : {}) }; emit('admits', s.admits);
     }
   });
   let admitsAnsweredAt = 0;

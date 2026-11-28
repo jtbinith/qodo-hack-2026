@@ -584,6 +584,9 @@ try {
   await until(C, (a) => !(a in window.__t.net.peers), a.id, 45000);                     // and C's: hearing it late is the #61 step below
   await Promise.all([B.evaluate(() => window.__t.net.push('R', 300)), C.evaluate(() => window.__t.net.push('L', 300))]);
   await until(C, () => window.__t.net.joins.length === 1, null, 30000);
+  // A (the host) left, so B is the host now (2D.10): B says Got it first
+  await until(B, () => !document.getElementById('hostbox').hidden, null, 10000).then(() => B.click('#hostok'), () => {});
+  await until(B, () => document.getElementById('hostbox').hidden, null, 5000);
   await drag(B, 'photo-0.jpg', 390 + 150);                                          // B drags its copy onto C
   await until(C, () => window.__t.files.size === 1, null, 60000);
   const [cname, cbytes] = await C.evaluate(async () => { const f = [...window.__t.files.values()][0]; return [f.name, [...new Uint8Array(await f.arrayBuffer())]]; });
