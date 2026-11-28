@@ -27,7 +27,7 @@ export function inviteLink(href, code) {
 // The address bar once joined: this page without room and auto, keeping any other settings
 export function cleanUrl(href) {
   const u = new URL(href);
-  u.searchParams.delete('room'); u.searchParams.delete('auto');
+  for (const k of ['room', 'auto', 'pair', 'by', 'as']) u.searchParams.delete(k);   // nothing about the heap or a pairing stays in the address bar
   const q = u.searchParams.toString().replace(/=(?=&|$)/g, '');   // ?relay, not ?relay=
   return u.pathname + (q ? '?' + q : '');
 }

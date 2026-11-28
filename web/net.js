@@ -282,6 +282,9 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   ch.on('broadcast', { event: 'moveask' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.by) && payload.j && okSides(payload.j)) emit('moveask', payload); });
   ch.on('broadcast', { event: 'moveno' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.from)) emit('moveno', payload); });
   ch.on('broadcast', { event: 'moved' }, ({ payload }) => { if (payload?.from === s.leader && payload.j && okSides(payload.j)) emit('moved', payload); });
+  // your own other device (4.9): it says hello with the token from the screen that showed the QR
+  ch.on('broadcast', { event: 'pair' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.from) && typeof payload.token === 'string' && payload.token.length <= 64) emit('pair', payload); });
+  s.pairHello = (token, to) => send('pair', { from: id, token, to });
   s.askMove = (j, to) => send('moveask', { by: id, to, j });
   s.answerMove = (ask, yes) => {
     if (!yes) return send('moveno', { from: id, to: ask.by, j: ask.j });
