@@ -13,8 +13,8 @@ export const JOIN_TIMEOUT = 30000;
 export function pickRoom(search, stored) {
   const params = new URLSearchParams(search);
   const link = (params.get('room') || '').trim().toUpperCase();
-  if (link) return { fill: link, join: params.has('auto') ? link : null };
-  if (isRoomCode(stored)) return { fill: stored, join: stored };
+  if (link) return { fill: link, join: params.has('auto') ? link : null, from: 'link' };   // from: a link asks for the name first
+  if (isRoomCode(stored)) return { fill: stored, join: stored, from: 'stored' };           // this tab's heap: back in at once
   return { fill: '', join: null };
 }
 

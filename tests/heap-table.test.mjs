@@ -46,7 +46,7 @@ test('the menu sheet (4.1): Join a screen, People, Invite, Keep photo details, L
 
 test('the bottom bar: a wide + Share and Picked, no checkbox', () => {
   const bar = (html.match(/<div id="bar">([\s\S]*?)<\/div>/) || [, ''])[1];
-  assert.match(bar, /<label id="share">\+ Share<input id="pick" type="file"[^>]*><\/label>\s*<button id="pickedbtn" type="button">Picked · 0<\/button>/);
+  assert.match(bar, /<label id="share">\+ Add photos &amp; videos<input id="pick" type="file"[^>]*><\/label>\s*<button id="pickedbtn" type="button">Picked · 0<\/button>/);
   assert.doesNotMatch(bar, /id="keep"/, 'Keep photo details lives in the menu now');
   assert.match(css, /#bar #share \{[^}]*flex: 1/, '+ Share takes the width');
 });
@@ -153,7 +153,7 @@ test('code not found (1.3): a typed code with nobody in that heap goes back to t
 });
 
 test('empty table (2D.1): says so and how to start', () => {
-  assert.match(html, /<div id="empty" aria-hidden="true" hidden><i><\/i><b>The table is empty<\/b><span>Tap \+ Share to put your photos down\. Others take only what they want\.<\/span><small id="emptytip"><\/small><\/div>/);
+  assert.match(html, /<div id="empty" aria-hidden="true" hidden><i><\/i><b>The table is empty<\/b><span>Tap \+ Add photos &amp; videos to put yours down\. Others take only what they want\.<\/span><small id="emptytip"><\/small><\/div>/);
   assert.match(html, /\$\('empty'\)\.hidden = !!prints\.size/);
 });
 

@@ -27,6 +27,7 @@
   #top .title b { font: 700 18px/1.2 var(--ui); }
   #top .title small { font-size: 13px; color: var(--text-mid); }
   #top button { background: none; border: 0; color: var(--ink); padding: 0; }
+  #top #joinbtn { font: 500 14px var(--ui); padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--ink); }
   #people { display: flex; padding: 4px; }
   #people i { font: normal 700 11px/30px var(--ui); width: 30px; height: 30px; border-radius: 50%; text-align: center; background: var(--ink); color: var(--paper);
     border: 2px solid var(--paper); margin-left: -10px; }
@@ -218,10 +219,13 @@
   #invitebox h2 { margin: 2px 0 0; font: 400 34px/1 var(--display); text-transform: uppercase; }
   .tiles { display: flex; gap: 4px; align-items: center; }
   .tiles i { font-style: normal; color: var(--text-mid); padding: 0 2px; }
+  .copyrow .tiles { container-type: inline-size; gap: 3px; }
+  .copyrow .tiles i { padding: 0; }
+  .copyrow .tiles span { min-width: 0; font-size: min(7cqw, 26px); }
   .tiles span { flex: 1; max-width: 44px; aspect-ratio: 3 / 4; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: var(--paper); font: 400 clamp(18px, 6vw, 28px)/1 var(--display); }
   .copyrow { display: flex; gap: 8px; align-items: center; }
   .copyrow .tiles, .copyrow #link { flex: 1; min-width: 0; }
-  .copyrow button { flex: none; font: 500 15px var(--ui); padding: 9px 14px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  .copyrow button { flex: none; font: 500 14px var(--ui); padding: 8px 11px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
   #invitebox .warn { color: var(--text-mid); font-size: 13px; margin-top: -6px; }
   #invitebox .who { margin: 4px 0 -6px; font: 700 13px var(--ui); letter-spacing: .08em; text-transform: uppercase; }
   #inroom { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -253,12 +257,13 @@
 <header id="top" hidden>
   <div class="title"><b id="heapname"></b>
     <small id="heapsub"></small></div>
+  <button id="joinbtn" type="button" aria-label="Join a screen">Join</button>
   <button id="people" type="button" aria-label="People in this heap"></button>
   <button id="menu" type="button" aria-label="Menu" aria-controls="menubox" aria-expanded="false"><span aria-hidden="true">≡</span></button>
 </header>
-<div id="bar"><label id="share">+ Share<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="pickedbtn" type="button">Picked · 0</button></div>
+<div id="bar"><label id="share">+ Add photos &amp; videos<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="pickedbtn" type="button">Picked · 0</button></div>
 <button type="button" id="allphotos" hidden></button>
-<div id="empty" aria-hidden="true" hidden><i></i><b>The table is empty</b><span>Tap + Share to put your photos down. Others take only what they want.</span><small id="emptytip"></small></div>
+<div id="empty" aria-hidden="true" hidden><i></i><b>The table is empty</b><span>Tap + Add photos &amp; videos to put yours down. Others take only what they want.</span><small id="emptytip"></small></div>
 <div id="joinmode" hidden>
   <button type="button" class="strip" data-edge="T" aria-label="Tap here: the other screen is above">Tap here</button>
   <button type="button" class="strip" data-edge="B" aria-label="Tap here: the other screen is below">Tap here</button>
@@ -952,6 +957,7 @@ const closeMenu = (then) => { menuOpen(false); closeSheet('menubox', then); };
 $('closemenu').onclick = () => closeMenu();
 $('menubox').onclick = (e) => { if (e.target === e.currentTarget) closeMenu(); };
 $('joinhow').onclick = () => closeMenu(openJoin);
+$('joinbtn').onclick = openJoin;
 $('peoplebtn').onclick = $('people').onclick = () => closeMenu(() => $('invite').click());
 // the deck sheet (2B.1, 2B.2): a deck's photos newest first, or everyone's. A tap saves one; dragging one out
 // puts it on the table under the finger and keeps it moving, so it can be dropped on another screen (2A.7)
@@ -1200,7 +1206,14 @@ $('f').onsubmit = (e) => {
   if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
   askName('join', code); pending.typed = true;
 };
-if (opening.join) tryStart(opening.join);
+// an invite link asks for your name (filled in if this device knows it); this tab's own heap rejoins at once
+function openLink(code) {
+  code = code.trim().toUpperCase();
+  if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
+  $('code').value = code; $('lobby').hidden = false;
+  askName('join', code);
+}
+if (opening.join) opening.from === 'link' ? openLink(opening.join) : tryStart(opening.join);
 
 // ---------- drawing ----------
 // the table's colours are heap's tokens, read once from the page (rebrand, issue 158)
