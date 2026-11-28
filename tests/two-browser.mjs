@@ -1156,11 +1156,11 @@ try {
   await until(M1, () => window.__t?.net.status === 'live' && !document.getElementById('invitebox').hidden, null, 20000);
   const mc = await M1.evaluate(() => [...document.querySelectorAll('#invcode span')].map((x) => x.textContent).join(''));
   await M1.click('#closeinvite');
-  const M2 = await mPage('Nell'); await M2.goto(`${BASE}?room=${mc}&auto&memcap=1000`); await enter(M2);
+  const M2 = await mPage('Nell'); await M2.goto(`${BASE}?room=${mc}&auto&memcap=1`); await enter(M2);
   await until(M2, () => window.__t?.net.status === 'live' && document.getElementById('lobby').hidden && Object.keys(window.__t.net.peers).length === 2, null, 20000);
   await M1.setInputFiles('#pick', [{ name: 'big.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
   await until(M2, () => window.__t.prints.size === 1, null, 15000);
-  await M2.evaluate(() => { const t = window.__t, p = [...t.prints.values()][0]; t.dropped(p, true); const me = t.layout.pos[t.id] || [0, 0]; t.setWorld(p, me[0] + 60, me[1] + 200); t.dropped(p, true); });
+  await M2.evaluate(() => { const t = window.__t, p = [...t.prints.values()][0]; p.anchor = t.id; p.x = 60; p.y = 200; t.dropped(p, true); });   // on my screen, then asked for
   const mem = await until(M2, () => !document.getElementById('membox').hidden, null, 5000).then(() => M2.evaluate(() => [document.getElementById('memtitle').textContent, document.getElementById('memsub').textContent]), () => ['', '']);
   check(/^This tab is nearly full\./.test(mem[0]) && /^Paused at 0 of 1/.test(mem[1]), `2D.13: a nearly full tab pauses: "${mem[0]}" "${mem[1]}"`);
   // M2's own photo sits on M1's screen; M1 leaves; it comes back to M2

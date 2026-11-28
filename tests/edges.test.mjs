@@ -20,7 +20,7 @@ test('2D.4: the sender can stop a photo on its way to the wrong screen; the othe
 test('2D.5: my photos on a screen that left come back to mine', () => {
   const prints = new Map([['a', { pid: 'a', owner: 'me', anchor: 'gone' }], ['b', { pid: 'b', owner: 'x', anchor: 'gone' }], ['c', { pid: 'c', owner: 'me', anchor: 'me' }]]);
   assert.deepEqual(edges.comeBack(prints, 'gone', 'me'), ['a'], 'only mine, only from the screen that left');
-  assert.match(html, /function bringBack\(k, was\)/);
+  assert.match(html, /function bringBack\(k, was, mineThere = \[\]\)/);
   assert.match(html, /snackSay\(`\$\{was\} left`\)/);
 });
 

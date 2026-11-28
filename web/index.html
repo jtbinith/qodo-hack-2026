@@ -378,7 +378,11 @@
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
   #snack[hidden] { display: none; }
-  #snack { pointer-events: none; } #snackact { pointer-events: auto; }   /* a status line: presses go through to the table, except on its button */
+  #snack { pointer-events: none; } #snackact { pointer-events: auto; }
+  /* a tab that is nearly full (2D.13): new photos wait until some are saved */
+  #membox { position: fixed; left: 12px; right: 12px; bottom: calc(150px + env(safe-area-inset-bottom)); z-index: 3; display: grid; gap: 4px; padding: 12px 14px; border-radius: 16px; background: var(--ink); color: var(--paper); font: 14px/1.4 var(--ui); }
+  #membox[hidden] { display: none; } #membox small { font-size: 13px; opacity: .85; }
+  #memsave { justify-self: start; margin-top: 6px; font: 500 15px var(--ui); padding: 8px 16px; border-radius: 999px; border: 0; background: var(--paper); color: var(--ink); }   /* a status line: presses go through to the table, except on its button */
   #snacktext { flex: 1; }
   #snackact { font: 500 15px var(--ui); padding: 8px 14px; border-radius: 10px; border: 0; background: var(--paper); color: var(--ink); }
   @media (prefers-reduced-motion: no-preference) { #snack:not([hidden]) { animation: sheet-up .3s cubic-bezier(.2, .9, .3, 1); } }
@@ -677,6 +681,7 @@
   <button type="button" id="unsavedleave">Leave without saving</button>
 </div></div><!-- /unsavedbox -->
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
+<div id="membox" role="status" hidden><b id="memtitle"></b><small id="memsub"></small><small id="memnote"></small><button type="button" id="memsave">Save</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
   <h2 id="sendtitle">Nothing joined on that side. Send to…</h2>
@@ -805,6 +810,7 @@ import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels, proposeJoin, sideWords, dropSide } from './map.js';
+import { sendingLine, tookBack, comeBack, fits, memLine } from './edges.js';
 import { deckLabel, deckRow, say, progressStep, SHORTCUTS, keyAction, nextByRect } from './a11y.js';
 import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen, forgetOpen } from './gate.js';
 import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
@@ -1184,8 +1190,13 @@ function holdingNear() {
 }
 // Transfers we've asked for (or been told to expect): fid -> { from, size, parts, got, n, cs, last, asks }.
 // Pieces for anything else are dropped, so a stranger can't make us store data.
+// 2D.13: what this tab holds of other people's photos (here, and on the way). Past the cap, new ones wait
+const MEM_CAP = Math.min(1.2e9, Number(params.get('memcap')) || Infinity);   // memcap: a smaller cap, for the device check
+const memWait = new Set();   // photos waiting for room
+const heldBytes = () => [...files].reduce((a, [k, f]) => a + (prints.get(k)?.owner !== id ? f.size : 0), 0) + [...incoming.values()].reduce((a, x) => a + (x.size || 0), 0);
 function expect(fid, from, size) {
   if (incoming.has(fid) || incoming.size >= LIMITS.incoming) return false;   // full: the caller says so, and doesn't ask
+  if (!fid.startsWith('thumb:') && !fits(heldBytes(), size, MEM_CAP)) { memWait.add(fid); showMem(); return false; }
   incoming.set(fid, { from, size, parts: null, got: 0, n: 0, cs: 0, last: performance.now(), asks: 0 });
   return true;
 }
@@ -1226,6 +1237,9 @@ function onMessage(from, m, bytes) {
     const bytes = src && askBytes(m, src.size);
     const tok = typeof bytes === 'number' && inRoom(net.peers, from) && inHeap(from) && asks.allow(from, m.fid, bytes, src.size, m.missing !== null);
     if (tok) peers.sendFile(from, m.fid, src, m.missing, m.missing ? cs : null).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); if (m.fid === pid) gaveUp(from, pid, e); });
+  } else if (m.t === 'gone') {           // they let their copy go to make room (2D.13): don't ask them for it
+    const p = validPidMsg(m) && prints.get(m.pid);
+    if (p) p.holders = p.holders.filter((k) => k !== from);
   } else if (m.t === 'stop') {           // the receiver tapped Stop: what I'm sending it stops between pieces
     if (validPidMsg(m) && stops.size < 1000) stops.add(from + '|' + m.pid);
   } else if (m.t === 'chunk') {
@@ -1302,7 +1316,7 @@ function sourceOf(p) {
 function askFor(p) {
   const src = sourceOf(p);
   if (!src) return toast(`Nobody here has ${p.name} now`);
-  if (!expect(p.pid, src, p.size)) return toast('Too many photos arriving. Try again in a moment');
+  if (!expect(p.pid, src, p.size)) return memWait.has(p.pid) ? undefined : toast('Too many photos arriving. Try again in a moment');   // waiting for room: the nearly-full line says so
   p.lastSource = src;
   peers.send(src, { t: 'want', pid: p.pid });
   toast('Receiving…');
@@ -1451,7 +1465,7 @@ function getPicked(only = null) {
   let full = false;
   for (const p of toFetch(prints, only || picked, files, incoming, id)) {
     const src = sourceOf(p); if (!src) continue;   // nobody here has it: the problems row says so
-    if (!expect(p.pid, src, p.size)) { full = true; break; }
+    if (!expect(p.pid, src, p.size)) { if (memWait.has(p.pid)) continue; full = true; break; }
     p.lastSource = src; peers.send(src, { t: 'want', pid: p.pid });
   }
   pickSave.tap(only);
@@ -1467,6 +1481,15 @@ function start(room) {
     if (from !== id && !inHeap(from)) return;   // not let in yet: nothing it sends is taken (Qodo on #162)
     if (blocked.has(from)) return;   // blocked: nothing from them counts (5.6)
     if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
+    if (m.t === 'takeback') {   // the sender took it back before it arrived (2D.4)
+      const p = validPidMsg(m) && prints.get(m.pid);
+      if (p && (p.owner === from || (p.holders || []).includes(from))) {
+        if (!files.has(p.pid)) incoming.delete(p.pid);
+        for (const b of landings) b.pids = b.pids.filter((k) => k !== p.pid);
+        toast(tookBack(nameOf(from), 1));
+      }
+      return;
+    }
     if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
       const p = validPidMsg(m) && prints.get(m.pid);
       if (p && p.owner === from) {
@@ -1497,7 +1520,7 @@ function start(room) {
   peers.onReady(catchUp);
   const roomChanged = () => {
     showWho(); showHeader(); gate(); hostChanged();
-    for (const k of Object.keys(seen)) if (!net.peers[k]) { const was = seen[k]; delete seen[k]; setTimeout(() => { if (!net.peers[k]) speak(say.left(was)); }, LEFT_AFTER); }   // spoken (6.4), unless it was only a blip
+    for (const k of Object.keys(seen)) if (!net.peers[k]) { const was = seen[k]; delete seen[k]; setTimeout(() => { if (!net.peers[k]) speak(say.left(was)); }, LEFT_AFTER); const mineThere = comeBack(prints, k, id); setTimeout(() => { if (!net.peers[k]) bringBack(k, was, mineThere); }, LEFT_AFTER); }   // spoken (6.4), unless it was only a blip
     for (const k of Object.keys(net.peers)) if (k !== id) seen[k] = deviceName(k);
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
@@ -2099,10 +2122,47 @@ function joinResult(kind, text, other) {
   joinCard('More than two screens tapped at once', 'Join one pair at a time. You can add the next screen after.', { retry: true });
 }
 // a line just above the bar, without an action
-function snackSay(text, undo = null, ms = 6000) {
-  landings = []; landed = null; snackUndo = undo; $('snacktext').textContent = text; $('snackact').hidden = !undo; $('snack').hidden = false;
+function snackSay(text, undo = null, ms = 6000, label = 'Undo') {
+  landings = []; landed = null; snackUndo = undo; $('snacktext').textContent = text; $('snackact').textContent = label; $('snackact').hidden = !undo; $('snack').hidden = false;
   clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; snackUndo = null; }, ms);
 }
+// 2D.5: a screen left: my photos that were on it, or on their way to it, come back to mine
+// mineThere: what was on it when it went (the table may already have moved them back by now)
+function bringBack(k, was, mineThere = []) {
+  for (const s of [...sendsOut]) if (s.to === k) sendsOut.splice(sendsOut.indexOf(s), 1);
+  const pids = [...new Set([...mineThere, ...comeBack(prints, k, id)])].filter((pid) => prints.has(pid)); if (!pids.length) return;
+  const spot = deckSpot(prints, id, { w: W, h: H });
+  for (const pid of pids) {
+    const p = prints.get(pid); p.anchor = id; p.x = spot.x; p.y = spot.y;
+    broadcast((o) => peers.send(o, { t: 'move', pid, anchor: id, x: p.x, y: p.y, final: true }));
+  }
+  snackSay(`${was} left`);
+  toast(pids.length === 1 ? 'Your photo came back' : `${pids.length} of your photos came back`);
+}
+// 2D.13: nearly full. Saving frees room: a saved copy of someone else's photo is let go (others are told), then the rest carry on
+const unsavedOthers = () => [...files.keys()].filter((k) => prints.get(k) && prints.get(k).owner !== id && !pickSave.handed.has(k));
+function showMem() {
+  const m = memLine({ here: unsavedOthers().length, waiting: memWait.size, bytes: heldBytes() });
+  $('memtitle').textContent = m.title; $('memsub').textContent = m.sub; $('memnote').textContent = m.note;
+  const n = unsavedOthers().length; $('memsave').textContent = n ? `Save ${n}` : 'Save'; $('memsave').hidden = !n;
+  $('membox').hidden = false;
+}
+$('memsave').onclick = () => { const only = new Set(unsavedOthers()); for (const k of only) picked.add(k); showPicks(); getPicked(only); };   // inside the tap
+setInterval(() => {
+  if (!memWait.size) return;
+  for (const [k] of files) {   // saved already, and not mine: let it go to make room
+    const p = prints.get(k); if (!p || p.owner === id || !pickSave.handed.has(k) || pickSave.holds(k)) continue;
+    files.delete(k); p.holders = p.holders.filter((x) => x !== id);
+    broadcast((o) => peers.send(o, { t: 'gone', pid: k }));
+  }
+  for (const fid of [...memWait]) {
+    const p = prints.get(fid);
+    if (!p || files.has(fid)) { memWait.delete(fid); continue; }
+    if (!fits(heldBytes(), p.size, MEM_CAP)) break;
+    memWait.delete(fid); askFor(p);
+  }
+  if (memWait.size) showMem(); else $('membox').hidden = true;
+}, 1000);
 // ---------- accessibility (6.1–6.7) ----------
 // spoken updates (6.4): one polite line, emptied first so the same words can be said again
 let sayT = 0;
@@ -2381,18 +2441,36 @@ $('sendlist').onclick = async (e) => {
   sending = []; closeSheet('sendbox');
 };
 // Sent ✓ only once the receiver says it has them (it sends 'have'); until then, Sending…
+let takeLine = null;   // the send the line's Stop would take back
+// 2D.4: take back what hasn't arrived yet: it comes back to my deck, the sending stops, and they're told
+function takeBack(s) {
+  const i = sendsOut.indexOf(s); if (i >= 0) sendsOut.splice(i, 1);
+  if (takeLine === s) takeLine = null;
+  const spot = deckSpot(prints, id, { w: W, h: H }); let n = 0;
+  for (const pid of s.left) {
+    const p = prints.get(pid); if (!p) continue;
+    n++; p.anchor = id; p.x = spot.x; p.y = spot.y;
+    broadcast((k) => peers.send(k, { t: 'move', pid, anchor: id, x: p.x, y: p.y, final: true }));
+    if (stops.size < 1000) stops.add(s.to + '|' + pid);
+    peers.send(s.to, { t: 'takeback', pid });
+  }
+  toast(n ? `Took ${n === 1 ? 'it' : 'them'} back` : 'It had already arrived');
+}
 const sendsOut = [];   // { to, left: Set of pids, n, notHere, t }
 function waitSent(to, ps, notHere = 0) {
   const left = new Set(ps.filter((p) => !(p.holders || []).includes(to)).map((p) => p.pid)), who = net.peers[to]?.name || 'a device';
   const extra = notHere ? `. ${notHere} not sent: you don’t have ${notHere === 1 ? 'it' : 'them'} yet` : '';
   if (!left.size) return toast(`Sent to ${who} ✓${extra}`);
-  sendsOut.push({ to, left, n: ps.length, notHere, t: performance.now() });
+  const s = { to, left, n: ps.length, notHere, t: performance.now() };
+  sendsOut.push(s); takeLine = s;
+  snackSay(sendingLine(deviceName(to)), () => takeBack(s), 15000, 'Stop');   // the wrong screen? Stop takes it back (2D.4)
   toast(`Sending to ${who}…${extra}`);
 }
 function confirmSent(from, pid) {
   for (const s of [...sendsOut]) {
     if (s.to !== from || !s.left.delete(pid) || s.left.size) continue;
     sendsOut.splice(sendsOut.indexOf(s), 1);
+    if (takeLine === s) { takeLine = null; $('snack').hidden = true; snackUndo = null; }   // it's there: nothing left to stop
     toast(`Sent to ${net.peers[from]?.name || 'a device'} ✓`);
   }
 }
