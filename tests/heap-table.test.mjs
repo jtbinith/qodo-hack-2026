@@ -101,7 +101,7 @@ test('the review sheet (2B.6): what is picked, tap to unpick, Get all', () => {
 
 test('landing (2A.4): the receiver is told who it came from with Undo, the sender where it went', () => {
   assert.match(html, /<div id="snack" role="status" hidden><span id="snacktext"><\/span><button type="button" id="snackact">Undo<\/button><\/div>/);
-  assert.match(html, /`\$\{n\} photo\$\{n === 1 \? '' : 's'\} from \$\{who\}`/, 'how many and from whom');
+  assert.match(html, /batchLine\(\{ n, k, who, relay \}\)/, 'how many and from whom (words.js)');
   assert.match(html, /toast\(`Sent to \$\{/, 'the sender sees where it went');
 });
 

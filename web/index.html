@@ -403,7 +403,7 @@
 <script src="vendor/qrcode.js"></script>
 <script type="module">
 import { joinRoom } from './net.js';
-import { heapTitle, heapSub, initials } from './words.js';
+import { heapTitle, heapSub, initials, batchLine } from './words.js';
 import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
@@ -1112,14 +1112,35 @@ function noteLanding(from, p, drop) {
   if (!landed || landed.from !== from || landed.drop !== drop || performance.now() - landed.t > 1000) landed = { from, drop, pids: [] };
   landed.t = performance.now();
   if (!landed.pids.includes(p.pid)) landed.pids.push(p.pid);
-  const n = landed.pids.length, who = net.peers[from]?.name || 'someone';
-  $('snacktext').textContent = `${n} photo${n === 1 ? '' : 's'} from ${who}`;
-  snackUndo = undoLanding; $('snackact').hidden = false; $('snack').hidden = false;
-  clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; landed = null; snackUndo = null; }, 6000);
+  updateLanding();
 }
-$('snackact').onclick = () => { const f = snackUndo; snackUndo = null; $('snack').hidden = true; clearTimeout(snackTimer); f?.(); };
-function undoLanding() {
-  const l = landed; landed = null;
+// the line for what's landing: how many of how many while they arrive, Stop until they're all here, then Undo
+let landedSaid = '';
+function updateLanding() {
+  if (!landed) return;
+  const n = landed.pids.length, k = landed.pids.filter((pid) => files.has(pid)).length;
+  const relay = /relay/.test(peers.path(landed.from) || ''), who = net.peers[landed.from]?.name || 'someone';
+  const text = batchLine({ n, k, who, relay }), state = text + (k < n);
+  if (state === landedSaid && !$('snack').hidden) return;
+  landedSaid = state;
+  $('snacktext').textContent = text;
+  $('snackact').textContent = k < n ? 'Stop' : 'Undo';
+  snackUndo = k < n ? stopLanding : undoLanding; $('snackact').hidden = false; $('snack').hidden = false;
+  clearTimeout(snackTimer);
+  if (k >= n) snackTimer = setTimeout(() => { $('snack').hidden = true; landed = null; snackUndo = null; landedSaid = ''; }, 6000);
+}
+// Stop: whatever hasn't arrived yet stops, and goes back to the sender's screen
+function stopLanding() {
+  const l = landed; landed = null; landedSaid = '';
+  if (!l) return;
+  const left = l.pids.filter((pid) => !files.has(pid));
+  for (const pid of left) incoming.delete(pid);
+  undoLanding({ ...l, pids: left });
+  toast(`Stopped. ${left.length} didn’t come`);
+}
+$('snackact').onclick = () => { const f = snackUndo; snackUndo = null; $('snack').hidden = true; clearTimeout(snackTimer); f?.(); $('snackact').textContent = 'Undo'; };
+function undoLanding(only) {
+  const l = only?.pids ? only : landed; landed = null; landedSaid = '';
   if (!l || !sizes[l.from]) return;
   const spot = deckSpot(prints, l.from, sizes[l.from]);
   for (const pid of l.pids) {
@@ -1386,6 +1407,13 @@ function frame() {
       ctx.drawImage(p.img, (p.img.width - sw) / 2, (p.img.height - sh) / 2, sw, sh, -iw / 2, -ih / 2, iw, ih);
       ctx.lineWidth = 1.5; ctx.strokeRect(-iw / 2, -ih / 2, iw, ih);
     } else { ctx.fillStyle = T.ink; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.fillStyle = T.paper; ctx.font = `14px ${T.ui}`; ctx.textAlign = 'center'; ctx.fillText(p.type.startsWith('video') ? '▶ video' : p.name, 0, 4); }
+    // still arriving (3.5): a bar along the bottom of the photo fills as it comes
+    const coming = incoming.get(p.pid);
+    if (coming && !files.has(p.pid) && coming.size) {
+      ctx.fillStyle = T.paper; ctx.fillRect(-p.w / 2 + 8, p.h / 2 - 16, p.w - 16, 8);
+      ctx.fillStyle = T.ink; ctx.fillRect(-p.w / 2 + 8, p.h / 2 - 16, (p.w - 16) * Math.min(1, coming.got / coming.size), 8);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = T.ink; ctx.strokeRect(-p.w / 2 + 8, p.h / 2 - 16, p.w - 16, 8);
+    }
     const mine = p.owner === id, have = files.has(p.pid), who = mine ? 'You' : net.peers[p.owner]?.name || '?';
     const label = deck.pids.length > 1 ? `${who} ${deck.pids.length}` : mine ? 'You' : have ? '✓ yours, tap to save' : (net.peers[p.owner]?.name || '?');
     pill(label, 0, p.h / 2 + 26, have && !mine);
@@ -1408,7 +1436,7 @@ function frame() {
     const y = l.side === 'T' ? 84 : l.side === 'B' ? H - 96 : Math.min(Math.max(l.along, 90), H - 100);
     pill(text, x, y, true);
   }
-  showHeader();
+  showHeader(); updateLanding();
   const n = Object.keys(net.peers).length;
   $('hud').textContent = `table ${net.room.slice(6)} · ${name}${net.leader === id ? ' (time keeper)' : ''} · ${net.status}\n` +
     `devices ${n} · joins ${net.joins.length} · prints ${prints.size} · held here ${files.size}\n` +

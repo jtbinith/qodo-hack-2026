@@ -5,3 +5,9 @@ export const initials = (name) => {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
   return parts.length ? parts.map((w) => [...w][0].toLocaleUpperCase()).join('') : '?';
 };
+// a drop landing on this screen (2A.4, 2A.6, 3.6): how many from whom, how far along, and whether it's going the slow way
+export function batchLine({ n, k, who, relay }) {
+  const what = `${n} photo${n === 1 ? '' : 's'} from ${who}`;
+  if (k >= n) return n === 1 ? what : `${what} ✓`;
+  return [what, ...(n > 1 ? [`${k} of ${n}`] : []), ...(relay ? ['through relay'] : [])].join(' · ');
+}
