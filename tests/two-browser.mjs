@@ -735,6 +735,29 @@ try {
   check(hostAlone.length === 2 && hostAlone[0] === 'Host (you)' && /Just you so far/.test(hostAlone[1]) && guestShown && withGuest.length === 2 && withGuest[0] === 'Host (you)',
     `the invite sheet lists who's in the heap: first ${JSON.stringify(hostAlone)}, then the guest appears (${guestShown}): ${JSON.stringify(withGuest)}`);
   await G.context().close();
+  // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
+  const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();
+  await SP.addInitScript(() => { try { localStorage.setItem('heap-name', 'Short'); } catch {} });
+  await SP.goto(BASE); await SP.click('#new'); await SP.click('#go');
+  await until(SP, () => !document.getElementById('invitebox').hidden && window.__t?.net.status === 'live', null, 20000);
+  await new Promise((r) => setTimeout(r, 600));
+  const fits = await SP.evaluate(() => { const r = document.querySelector('#invitebox .sheet').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 1; });
+  await SP.evaluate(() => document.getElementById('closeinvite').scrollIntoView());
+  await SP.click('#closeinvite');
+  const closed = await until(SP, () => document.getElementById('invitebox').hidden, null, 3000).then(() => true, () => false);
+  await SP.click('#invite'); await until(SP, () => !document.getElementById('invitebox').hidden, null, 3000);
+  await SP.evaluate(() => document.getElementById('copycode').scrollIntoView()); await SP.click('#copycode');   // says Code copied (or couldn't)
+  await new Promise((r) => setTimeout(r, 3500));
+  const toastGone = await SP.evaluate(() => getComputedStyle(document.getElementById('toast')).opacity === '0');
+  check(fits && closed && toastGone, `on a short phone the invite sheet fits (${fits}) and Close can be reached (${closed}); a toast goes after its time (${toastGone})`);
+  await SP.context().close();
+  const GL = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await GL.goto(`${BASE}?room=ABCDEFGHJK&auto`);
+  await until(GL, () => document.getElementById('s-name')?.hidden === false, null, 10000);
+  await GL.click('#s-name .back');
+  const sharp = await until(GL, () => document.getElementById('heap-a').width > 40, null, 5000).then(() => true, () => false);
+  check(sharp, `after an invite link and Back, the wordmark's a is drawn at its size (${sharp})`);
+  await GL.context().close();
   await S.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);

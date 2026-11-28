@@ -31,7 +31,7 @@ test('one step at a time: home, then the heap code, then your name (wireframes 1
   assert.ok(part('s-home'), 'a home screen');
   assert.doesNotMatch(part('s-home'), /yourname|id="code"/, 'home has only Start and Join');
   assert.match(part('s-code'), /<button type="button" class="back"[^>]*>‹ Back<\/button>[\s\S]*<h2>Heap code<\/h2>[\s\S]*<form id="f"[\s\S]*<input id="code"/, 'a code screen with Back');
-  assert.match(part('s-name'), /<button type="button" class="back"[^>]*>‹ Back<\/button>[\s\S]*<h2>What should others call you\?<\/h2>[\s\S]*<label for="yourname">Your name<\/label>\s*<input id="yourname" maxlength="20" autocomplete="nickname"[\s\S]*<button id="go">/, 'a name screen with Back');
+  assert.match(part('s-name'), /<button type="button" class="back"[^>]*>‹ Back<\/button>[\s\S]*<h2>What should others call you\?<\/h2>[\s\S]*<label for="yourname">Your name<\/label>\s*<input id="yourname" maxlength="80" autocomplete="nickname"[\s\S]*<button id="go">/, 'a name screen with Back');
   assert.match(lobby, /id="s-code"[^>]*hidden/); assert.match(lobby, /id="s-name"[^>]*hidden/);
 });
 test('no random names any more', () => {
