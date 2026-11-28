@@ -825,6 +825,23 @@ try {
   check(hostAlone.length === 2 && hostAlone[0] === 'Host (you)' && /Just you so far/.test(hostAlone[1]) && guestShown && withGuest.length === 2 && withGuest[0] === 'Host (you)',
     `the invite sheet lists who's in the heap: first ${JSON.stringify(hostAlone)}, then the guest appears (${guestShown}): ${JSON.stringify(withGuest)}`);
   check(head.name === 'Host’s heap' && head.sub === '2 here · 0 shared' && head.faces.join() === 'H,G', `the header names the heap ("${head.name}"), says "${head.sub}" and shows ${head.faces.join(', ')}`);
+  // 4.2–4.5: Join a screen from the menu, tap the facing edges on both: they join. Tapping alone: no match
+  const joinMode = (page) => page.click('#menu').then(() => page.click('#joinhow')).then(() => until(page, () => !document.getElementById('joinmode').hidden && document.getElementById('menubox').hidden, null, 5000));
+  await joinMode(S); await joinMode(G);
+  const jm = await S.evaluate(() => ({ strips: document.querySelectorAll('#joinmode .strip').length, title: document.getElementById('jointitle').textContent }));
+  await S.click('#joinmode .strip[data-edge="R"]');
+  const counting = await S.evaluate(() => document.getElementById('jointitle').textContent);
+  await G.click('#joinmode .strip[data-edge="L"]');
+  const stripJoined = await until(S, () => window.__t.net.joins.length === 1 && document.getElementById('joinmode').hidden, null, 15000).then(() => true, () => false);
+  const joinSnack = await S.evaluate(() => document.getElementById('snack').hidden ? '' : document.getElementById('snacktext').textContent);
+  check(jm.strips === 4 && jm.title === 'Which side is the other screen?' && /^2$|^1$/.test(counting) && stripJoined && joinSnack === 'Joined with Guest, on your right',
+    `join mode shows ${jm.strips} strips ("${jm.title}"), counts down ("${counting}"), the facing taps join (${stripJoined}) and S says "${joinSnack}"`);
+  await joinMode(S);
+  await S.click('#joinmode .strip[data-edge="T"]');
+  const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
+  await S.click('#joincancel');
+  const cancelled = await until(S, () => document.getElementById('joinmode').hidden, null, 3000).then(() => true, () => false);
+  check(noMatch && cancelled, `a tap with no other screen says "No match" with Try again (${noMatch}), and Cancel closes join mode (${cancelled})`);
   await G.context().close();
   // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
   const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();

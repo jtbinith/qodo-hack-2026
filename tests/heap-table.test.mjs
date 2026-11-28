@@ -119,3 +119,28 @@ test('holding (2A.5): a photo held near my edge shows as an outline with who is 
   assert.match(frame, /is holding \$\{/, 'says who is holding it');
   assert.match(frame, /setLineDash/, 'drawn as an outline');
 });
+
+test('joining screens (4.2): tap the facing edge on four strips, no orb', () => {
+  const box = (html.match(/<div id="joinmode"[^>]*>([\s\S]*?)<\/div><!-- \/joinmode -->/) || [, ''])[1];
+  for (const e of 'TBLR') assert.match(box, new RegExp(`<button type="button" class="strip" data-edge="${e}"[^>]*>`), `a strip on edge ${e}`);
+  assert.match(box, /<b id="jointitle">Which side is the other screen\?<\/b>/);
+  assert.match(box, /Each person taps the edge that faces the other one\./);
+  assert.match(box, /<button type="button" id="joincancel">Cancel<\/button>/);
+  assert.match(html, /<small>Tap the edges that face each other<\/small>/, 'the menu says how');
+  assert.match(html, /net\.push\(edge, along\)/, 'a tap on a strip is a push on that edge');
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.doesNotMatch(frame, /orbDrag|glow\(/, 'the orb is gone');
+  assert.doesNotMatch(html, /Drag the dot/, 'nothing tells people to drag a dot');
+});
+
+test('joining screens (4.3–4.6): a 2-second countdown, then joined, no match or too many at once', () => {
+  assert.match(html, /Now tap the facing edge on the other screen/);
+  assert.match(html, /Both taps must land within 2 seconds/);
+  assert.match(html, /joinResult\('nomatch'/);
+  assert.match(html, /The other screen didn’t tap in time, or tapped the wrong edge\./);
+  assert.match(html, /joinResult\('retry'/);
+  assert.match(html, /More than two screens tapped at once/);
+  assert.match(html, /Join one pair at a time\./);
+  assert.match(html, /joinResult\('joined'/);
+  assert.match(html, /<button type="button" id="jointry" hidden>Try again<\/button>/);
+});
