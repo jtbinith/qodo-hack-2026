@@ -815,8 +815,12 @@ try {
   const L = await device(390, 700, { at: code() });
   await until(L, () => window.__t && window.__t.net.status === 'live', null, 20000);
   const leaveShown = await until(L, () => document.getElementById('top')?.hidden === false, null, 10000).then(() => true, () => false);
-  L.once('dialog', (d) => d.accept());
   await L.click('#menu', { timeout: 3000 }).catch(() => {}); await L.click('#leave', { timeout: 3000 }).catch(() => {});
+  const leaveSheet = await until(L, () => !document.getElementById('leavebox').hidden, null, 5000).then(() => true, () => false);
+  await L.click('#leaveclear', { timeout: 3000 }).catch(() => {});
+  const cleared = await until(L, () => document.getElementById('s-cleared')?.hidden === false, null, 10000).then(() => L.evaluate(() => document.getElementById('clearedsub').textContent), () => '');
+  check(leaveSheet && /^Nothing from “.+’s heap” is left on this device\.$/.test(cleared), `Leave opens "Leave and clear?" (${leaveSheet}), then "All cleared" says "${cleared}"`);
+  await L.click('#clearedhome', { timeout: 3000 }).catch(() => {});
   const leftHome = await until(L, () => document.getElementById("lobby")?.hidden === false, null, 10000).then(() => true, () => false);
   const l1 = await L.evaluate(() => ({ room: sessionStorage.getItem('room'), url: location.href, cards: document.getElementById('choose')?.hidden === false }));
   check(leaveShown && leftHome && l1.room === null && !l1.url.includes('room=') && l1.cards,
@@ -864,6 +868,27 @@ try {
   const letIn = await until(G, () => document.getElementById('lobby').hidden && document.getElementById('s-wait').hidden, null, 10000).then(() => true, () => false);
   check(waitSays === 'Waiting for Host to let you in' && askSays === 'Guest’s phone wants to join' && guestSeesNothing && letIn,
     `the guest waits ("${waitSays}", sees nothing: ${guestSeesNothing}); the host is asked ("${askSays}") and Let in lets them in (${letIn})`);
+  // 5.1–5.4: People lists everyone; checking a device shows the same four words on both screens
+  const openPerson = async (page, who) => { await page.click('#menu'); await page.click('#peoplebtn'); await until(page, () => !document.getElementById('peoplebox').hidden, null, 5000);
+    await page.click(`#peoplelist button[data-who="${who}"]`); await until(page, () => !document.getElementById('personbox').hidden, null, 5000); };
+  const [sId, gId] = [await S.evaluate(() => window.__t.id), await G.evaluate(() => window.__t.id)];
+  await S.click('#menu'); await S.click('#peoplebtn'); await until(S, () => !document.getElementById('peoplebox').hidden, null, 5000);
+  const plist = await S.evaluate(() => [document.getElementById('peopletitle').textContent, ...[...document.querySelectorAll('#peoplelist button, #peoplelist .me')].map((r) => r.querySelector('b').textContent)]);
+  await S.click('#peopleback');
+  await openPerson(S, gId); await S.click('#pcheck'); await openPerson(G, sId); await G.click('#pcheck');
+  await until(S, () => document.querySelectorAll('#checkwords span').length === 4, null, 10000); await until(G, () => document.querySelectorAll('#checkwords span').length === 4, null, 10000);
+  const words = await Promise.all([S, G].map((p) => p.evaluate(() => [...document.querySelectorAll('#checkwords span')].map((x) => x.textContent).join(' '))));
+  await S.click('#checkyes'); const privateSaid = await toastOf(S); await G.click('#checkcancel');
+  const badge = await S.evaluate((g) => { document.getElementById('menu').click(); document.getElementById('peoplebtn').click(); return null; }, gId).then(() => until(S, (g) => document.querySelector(`#peoplelist button[data-who="${g}"] .badge`)?.textContent === '✓ Checked', gId, 5000)).then(() => true, () => false);
+  await S.click('#peopleback');
+  check(plist[0] === 'People (2)' && plist.length === 3 && words[0].split(' ').length === 4 && words[0] === words[1] && privateSaid === 'Your connection to Guest’s phone is private ✓' && badge,
+    `People lists ${JSON.stringify(plist)}; both screens show "${words[0]}" / "${words[1]}"; Yes says "${privateSaid}" and the badge stays (${badge})`);
+  // 5.9: a dropped connection says it's reconnecting, and the line goes once it's back
+  await S.evaluate(() => { const n = window.__t.net; n.status = 'closed'; for (const f of n.listeners) f('status', 'closed'); });
+  const recon = await until(S, () => !document.getElementById('netbanner').hidden, null, 5000).then(() => true, () => false);
+  await S.evaluate(() => { const n = window.__t.net; n.status = 'live'; for (const f of n.listeners) f('status', 'live'); });
+  const reconGone = await until(S, () => document.getElementById('netbanner').hidden, null, 5000).then(() => true, () => false);
+  check(recon && reconGone, `a dropped connection shows "Reconnecting…" (${recon}), gone once it's back (${reconGone})`);
   check(linkAsk.step && linkAsk.name === 'Guest', `an invite link asks for the name first, filled in with the saved one (${JSON.stringify(linkAsk)})`);
   const guestShown = await until(S, () => [...document.querySelectorAll('#inroom li')].some((li) => li.textContent === 'Guest'), null, 20000).then(() => true, () => false);
   const withGuest = await inHeap();
@@ -946,6 +971,15 @@ try {
   const nf1 = await NF.evaluate(() => ({ code: document.getElementById('code').value, room: sessionStorage.getItem('room'), url: location.href }));
   check(nf && nf1.code === 'ZZZZZ22222' && nf1.room === null && !nf1.url.includes('ZZZZZ'), `a typed code for an empty heap comes back to the code screen with the error (${nf}), keeps the code (${nf1.code}) and stores nothing (${nf1.room})`);
   await NF.context().close();
+  // 5.6: S blocks G: G's photos go from S's table and nothing new from G arrives
+  await G.setInputFiles('#pick', [{ name: 'before.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
+  await until(S, () => [...window.__t.prints.values()].some((p) => p.name === 'before.jpg'), null, 10000);
+  await openPerson(S, gId); await S.click('#pblock'); await until(S, () => !document.getElementById('blockbox').hidden, null, 5000); await S.click('#blockyes');
+  const hiddenNow = await until(S, (g) => !window.__t.decks().some((d) => d.owner === g), gId, 5000).then(() => true, () => false);
+  await G.setInputFiles('#pick', [{ name: 'after.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
+  await new Promise((r) => setTimeout(r, 3000));
+  const sawAfter = await S.evaluate(() => [...window.__t.prints.values()].some((p) => p.name === 'after.jpg'));
+  check(hiddenNow && !sawAfter, `after S blocks G, G's photos are gone from S (${hiddenNow}) and a new one doesn't arrive (${!sawAfter})`);
   // 1.5: someone else called Guest is sent back to pick another name; 1.7: Not now turns a device away
   const D2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
   await D2.addInitScript(() => { try { localStorage.setItem('heap-name', 'guest'); } catch {} });
