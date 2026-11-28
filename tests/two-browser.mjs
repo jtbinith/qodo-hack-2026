@@ -1000,6 +1000,19 @@ try {
   await new Promise((r) => setTimeout(r, 3000));
   const sawAfter = await S.evaluate(() => [...window.__t.prints.values()].some((p) => p.name === 'after.jpg'));
   check(hiddenNow && !sawAfter, `after S blocks G, G's photos are gone from S (${hiddenNow}) and a new one doesn't arrive (${!sawAfter})`);
+  // 4.7, 4.11, 4.12: the host puts G's screen below its own; G is mvAsked, says Move it, and can undo
+  await sheetsDown(S); await sheetsDown(G);
+  await S.click('#mapbtn'); await until(S, () => !document.getElementById('mapbox').hidden, null, 5000);
+  await S.click('#maparrange'); await until(S, () => !document.getElementById('arrangebox').hidden, null, 5000);
+  await S.click(`#arrangelist button[data-k="${gId}"]`); await S.click(`#arrangelist button[data-k="${sId}"]`); await S.click('#arrangelist button[data-k="below"]');
+  const mvAsked = await until(G, () => !document.getElementById('movebox').hidden, null, 10000).then(() => G.evaluate(() => [document.getElementById('movetitle').textContent, document.getElementById('moveyes').textContent]), () => []);
+  await G.click('#moveyes');
+  const mvMoved = await until(S, ([g, me]) => window.__t.net.joins.some((j) => [j.a, j.b].includes(g) && [j.a, j.b].includes(me)), [gId, sId], 10000).then(() => true, () => false);
+  const mvMovedSaid = await until(G, () => /^Moved below /.test(document.getElementById('snacktext').textContent) && !document.getElementById('snack').hidden, null, 5000).then(() => G.evaluate(() => document.getElementById('snacktext').textContent), () => '');
+  await G.click('#snackact');
+  const mvUnmoved = await until(S, () => window.__t.net.joins.length === 0, null, 10000).then(() => true, () => false);
+  check(mvAsked[0] === 'The host wants to move your screen' && mvAsked[1] === 'Move it' && mvMoved && mvMovedSaid === 'Moved below Host’s phone' && mvUnmoved,
+    `G is mvAsked ("${mvAsked[0]}", "${mvAsked[1]}"), the move joins them (${mvMoved}), G says "${mvMovedSaid}" and Undo takes it back (${mvUnmoved})`);
   // 1.5: someone else called Guest is sent back to pick another name; 1.7: Not now turns a device away
   const D2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
   await D2.addInitScript(() => { try { localStorage.setItem('heap-name', 'guest'); } catch {} });
