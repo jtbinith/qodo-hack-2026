@@ -1467,7 +1467,7 @@ function start(room) {
     if (ev === 'status') netState();
     if (ev === 'pair' && pairToken && d.token === pairToken) {   // my other device: let it in and line it up on my right
       pairToken = null; const p = net.peers[d.from];
-      if (net.leader === id && p) { const a = net.admits; net.setAdmits({ ...a, ids: [...a.ids, d.from], names: [...a.names, nameKey(p.name)] }); }
+      if (net.leader === id && p) { const a = net.admits; admit({ ...a, ids: [...a.ids, d.from], names: [...a.names, nameKey(p.name)] }); }
       const all = Object.fromEntries([id, d.from].map((x) => [x, sizeOf(x) || { w: p?.w || 390, h: p?.h || 844 }]));
       net.askMove(proposeJoin(d.from, id, 'right', all), d.from);
     }
