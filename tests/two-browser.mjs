@@ -1108,6 +1108,22 @@ try {
   const hostNow = await until(Y, () => !document.getElementById('hostbox').hidden, null, 45000).then(() => Y.evaluate(() => [document.getElementById('hostsub').textContent, window.__t.toasts.some((t) => t === 'Xena left. Yuri is now the host.')]), () => ['', false]);
   check(hostNow[0] === 'Xena left, so you look after the heap.' && hostNow[1], `when the host leaves, the other device is told (${hostNow[1]}) and sees "You’re the host now": "${hostNow[0]}"`);
   await Y.context().close();
+  // L1, L2: on a laptop the actions sit in the top bar, and a deck opens full width with Picked on the right
+  const W1 = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await W1.addInitScript(() => { try { localStorage.setItem('heap-name', 'Wide'); } catch {} });
+  await W1.goto(BASE); await W1.click('#new'); await W1.click('#go');
+  await until(W1, () => window.__t?.net.status === 'live' && !document.getElementById('invitebox').hidden, null, 20000);
+  await W1.click('#closeinvite'); await until(W1, () => document.getElementById('invitebox').hidden, null, 3000);
+  const top = await W1.evaluate(() => ({ share: !!document.querySelector('#top #share'), picked: !!document.querySelector('#top #pickedbtn'), bar: getComputedStyle(document.getElementById('bar')).display }));
+  await W1.setInputFiles('#pick', ['w1.jpg', 'w2.jpg', 'w3.jpg'].map((n) => ({ name: n, mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) })));
+  await until(W1, () => window.__t.prints.size === 3, null, 10000);
+  const wd = await W1.evaluate(() => { const t = window.__t, d = t.decks()[0], [wx, wy] = t.world(d.top), me = t.layout.pos[t.id]; return { x: wx - me[0] + 75, y: wy - me[1] + 75 }; });
+  await W1.mouse.click(wd.x, wd.y); await until(W1, () => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length, null, 5000);
+  await W1.click('#decktiles button[data-pid]');
+  const panel = await W1.evaluate(() => { const r = document.querySelector('#deckbox .sheet').getBoundingClientRect(), p = document.getElementById('pickpanel'); return { w: Math.round(r.width), shown: getComputedStyle(p).display !== 'none', title: document.getElementById('pptitle').textContent, tiles: document.querySelectorAll('#pptiles img, #pptiles span').length }; });
+  check(top.share && top.picked && top.bar === 'none' && panel.w === 1280 && panel.shown && panel.title === 'Picked · 1' && panel.tiles === 1,
+    `on a laptop the actions are in the top bar (${top.share}, ${top.picked}, bar ${top.bar}); a deck opens ${panel.w} px wide with Picked on the right ("${panel.title}", ${panel.tiles} tile)`);
+  await W1.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {
