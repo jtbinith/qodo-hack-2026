@@ -277,6 +277,30 @@
   #previewinfo { margin: 0; font-size: 15px; } #previewinfo small { display: block; color: var(--line); font-size: 13px; }
   #previewbox .pills button { font: 500 15px var(--ui); padding: 12px 8px; border-radius: 12px; border: 0; background: var(--text-mid); color: var(--paper); }
   #previewbox .pills .pri { background: var(--paper); color: var(--ink); }
+  /* moments and the Show filter (2B.1, 2B.4, 2B.5) */
+  #decktiles { display: block; }
+  #decktiles .moment { margin-bottom: 12px; }
+  #decktiles .mhead { display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; }
+  #decktiles .mhead b { flex: 1; font: 700 15px var(--ui); }
+  #decktiles .mhead i { width: 22px; height: 22px; border-radius: 50%; background: var(--line); }
+  #decktiles .mpick { background: none; border: 0; color: var(--text-mid); font: 500 14px var(--ui); }
+  #decktiles .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+  #decktiles .msub { margin: -4px 0 8px; font-size: 13px; color: var(--text-mid); }
+  #kindrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: var(--line); font-size: 13px; }
+  #kindrow[hidden] { display: none; }
+  #kindrow #kindbtn { font: 500 14px var(--ui); padding: 6px 12px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #kindrow.on #kindbtn { background: var(--ink); color: var(--paper); }
+  #kindnote { flex: 1; color: var(--text-mid); }
+  #kindall { background: none; border: 0; font: 500 14px var(--ui); color: var(--ink); } #kindrow:not(.on) #kindall, #kindrow:not(.on) #kindnote { visibility: hidden; }
+  #kindbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 6; }
+  #kindbox .sheet { width: min(100%, 480px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+  #kindbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #kindbox h2 { margin: 4px 0; font: 700 18px var(--ui); text-align: center; }
+  #kindlist button { display: flex; justify-content: space-between; width: 100%; padding: 14px 12px; border-radius: 12px; border: 0; background: none; color: var(--ink); font: 500 17px var(--ui); }
+  #kindlist button[aria-checked="true"] { background: var(--line); }
+  #kindlist button::before { content: '○'; margin-right: 12px; } #kindlist button[aria-checked="true"]::before { content: '●'; }
+  #kindlist button span { margin-left: auto; color: var(--text-mid); }
   /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
@@ -474,6 +498,12 @@
   <p id="previewinfo"></p>
   <div class="pills"><button type="button" id="previewget" class="pri">Get</button><button type="button" id="previewpick">Pick</button><button type="button" id="previewsend">Send to…</button></div>
 </div></div><!-- /previewbox -->
+<div id="kindbox" hidden><div class="sheet" role="dialog" aria-labelledby="kindtitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2>Show</h2>
+  <div id="kindlist" role="radiogroup"></div>
+  <p class="deckhint">Only kinds in this heap are listed</p>
+</div></div><!-- /kindbox -->
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -487,6 +517,7 @@
   <h2 id="decktitle"></h2>
   <button type="button" id="pickall">Pick all</button></div>
   <p class="deckhint">Tap photos to pick them. Hold one to look closer. Drag one out to put it on the table or send it.</p>
+  <div id="kindrow" hidden><button type="button" id="kindbtn"></button><span id="kindnote"></span><button type="button" id="kindall">Show all</button></div>
   <div id="deckproblems" role="status"></div>
   <div id="decktiles" role="list"></div>
   <div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"></button><button type="button" id="getpick" class="pri"></button><button type="button" id="removepick" hidden></button></div>
@@ -589,6 +620,7 @@ import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels } from './map.js';
 import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen } from './gate.js';
+import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
@@ -833,7 +865,7 @@ async function addFiles(list, keep, text = null) {
     const pid = pidOf(), thumb = await thumbOf(file), sha = await sha256Hex(file); // receivers check the file against this
     const w = 150, h = thumb || text ? 150 : 110;
     const p = { pid, owner: id, name: file.name.slice(0, 200) || 'file', type: file.type.slice(0, 100), size: file.size, sha,
-      anchor: id, x: spot.x, y: spot.y, ...(text ? { text } : {}),
+      anchor: id, x: spot.x, y: spot.y, at: Math.round(net?.now() ?? Date.now()), ...(text ? { text } : {}),
       w, h, rot: (Math.random() - 0.5) * 0.12, img: await imgFrom(thumb), thumb, holders: [id] };
     prints.set(pid, p); files.set(pid, file); added++;
     broadcast((peer) => announce(peer, p));
@@ -1308,18 +1340,27 @@ $('peoplebtn').onclick = $('people').onclick = () => closeMenu(openPeople);
 // the deck sheet (2B.1, 2B.2): a deck's photos newest first, or everyone's. A tap saves one; dragging one out
 // puts it on the table under the finger and keeps it moving, so it can be dropped on another screen (2A.7)
 let deckUrls = [];
-function openDeck(pids, all = false) {
-  const list = pids.map((k) => prints.get(k)).filter(Boolean).reverse();   // newest first
-  if (!list.length) return;
-  const owner = list[0].owner, who = owner === id ? 'You' : net.peers[owner]?.name || 'Someone';
-  $('decktitle').textContent = all ? `All photos · ${list.length}` : `${who} · ${list.length} photo${list.length === 1 ? '' : 's'}`;
+const KIND_WORD = { photos: ['photo', 'photos'], videos: ['video', 'videos'], files: ['file', 'files'], text: ['link or note', 'links and notes'] };
+const KIND_NAME = { all: 'All', photos: 'Photos', videos: 'Videos', files: 'Files', text: 'Links and text' };
+let deckOpen = { pids: [], all: false }, deckKind = 'all';
+function openDeck(pids, all = false, kind = 'all') {
+  deckOpen = { pids, all }; deckKind = all ? kind : 'all';
+  const every = pids.map((k) => prints.get(k)).filter(Boolean);
+  if (!every.length) return;
+  const list = every.filter((p) => deckKind === 'all' || itemKind(p) === deckKind).reverse();   // newest first
+  const owner = every[0].owner, who = owner === id ? 'You' : net.peers[owner]?.name || 'Someone';
+  $('decktitle').textContent = all ? `All photos · ${every.length}` : `${who} · ${every.length} photo${every.length === 1 ? '' : 's'}`;
+  // All photos: a Show button, and a strip saying what's hidden (2B.4, 2B.5)
+  $('kindrow').hidden = !all; $('kindrow').classList.toggle('on', deckKind !== 'all');
+  $('kindbtn').textContent = `${KIND_NAME[deckKind]} ▾`;
+  if (deckKind !== 'all') { const n = list.length; $('kindnote').textContent = `Showing ${n} ${KIND_WORD[kind][n === 1 ? 0 : 1]} of ${every.length} items`; }
   deckUrls.forEach((u) => URL.revokeObjectURL(u)); deckUrls = [];
-  $('decktiles').replaceChildren(...list.map((p) => {
+  const tile = (p) => {
     const b = Object.assign(document.createElement('button'), { type: 'button' });
     b.setAttribute('role', 'listitem'); b.dataset.pid = p.pid;
     b.setAttribute('aria-label', `${p.name}, from ${p.owner === id ? 'you' : net.peers[p.owner]?.name || 'someone'}`);
     if (p.thumb) { const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); deckUrls.push(u); b.append(Object.assign(document.createElement('img'), { src: u, alt: '' })); }
-    else b.append(p.type.startsWith('video') ? '▶ video' : p.name);
+    else b.append(p.text ? p.text.slice(0, 60) : p.type.startsWith('video') ? '▶ video' : p.name);
     if (all) b.append(Object.assign(document.createElement('span'), { className: 'who', textContent: initials(p.owner === id ? name : net.peers[p.owner]?.name) }));
     if (files.has(p.pid) && p.owner !== id) b.append(Object.assign(document.createElement('span'), { className: 'save', textContent: 'Here' }));
     b.onpointerdown = (e) => {
@@ -1344,6 +1385,18 @@ function openDeck(pids, all = false) {
       b.onpointerup = () => { b.onpointermove = b.onpointerup = null; if (!held) togglePick(p.pid); };
     };
     return b;
+  };
+  // moments (2B.1): newest first, each with its own Pick all
+  $('decktiles').replaceChildren(...moments(list).map((m) => {
+    const sec = Object.assign(document.createElement('div'), { className: 'moment' }), head = Object.assign(document.createElement('div'), { className: 'mhead' });
+    const pick = Object.assign(document.createElement('button'), { type: 'button', className: 'mpick', textContent: 'Pick all' });
+    pick.onclick = () => { const ks = m.items.map((p) => p.pid), on = ks.every((k) => picked.has(k)); for (const k of ks) on ? picked.delete(k) : picked.add(k); showPicks(); };
+    head.append(Object.assign(document.createElement('i'), {}), Object.assign(document.createElement('b'), { textContent: momentLabel(m) }), pick);
+    sec.append(head);
+    if (all) { const whoAll = [...new Set(m.items.map((p) => (p.owner === id ? 'you' : nameOf(p.owner))))]; sec.append(Object.assign(document.createElement('p'), { className: 'msub', textContent: `${m.items.length} item${m.items.length === 1 ? '' : 's'} · from ${whoAll.length < 2 ? whoAll.join('') : whoAll.slice(0, -1).join(', ') + ' and ' + whoAll.at(-1)}` })); }
+    const grid = Object.assign(document.createElement('div'), { className: 'mgrid' });
+    grid.append(...m.items.map(tile)); sec.append(grid);
+    return sec;
   }));
   $('decktiles').scrollTop = 0;
   showProblems(list);
@@ -1351,6 +1404,16 @@ function openDeck(pids, all = false) {
   openSheet('deckbox');
 }
 $('deckback').onclick = () => closeSheet('deckbox');
+$('kindbtn').onclick = () => {
+  const counts = kindCounts(deckOpen.pids.map((k) => prints.get(k)).filter(Boolean)), total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const row = (k, n) => { const b = Object.assign(document.createElement('button'), { type: 'button' }); b.dataset.kind = k; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(deckKind === k));
+    b.append(KIND_NAME[k], Object.assign(document.createElement('span'), { textContent: String(n) })); return b; };
+  $('kindlist').replaceChildren(row('all', total), ...KINDS.filter((k) => counts[k]).map((k) => row(k, counts[k])));
+  $('kindbox').hidden = false;
+};
+$('kindlist').onclick = (e) => { const k = e.target.closest('button')?.dataset.kind; if (!k) return; $('kindbox').hidden = true; openDeck(deckOpen.pids, deckOpen.all, k); };
+$('kindbox').onclick = (e) => { if (e.target === e.currentTarget) $('kindbox').hidden = true; };
+$('kindall').onclick = () => openDeck(deckOpen.pids, deckOpen.all, 'all');
 // problems (3.9): what can't arrive, and big files that wait for a tap
 function showProblems(list) {
   const gone = list.filter((p) => p.owner !== id && !files.has(p.pid) && !incoming.has(p.pid) && ![p.owner, ...(p.holders || [])].some((k) => k !== id && net.peers[k] && inHeap(k)));
@@ -1407,15 +1470,16 @@ function showPicks() {
   $('getpick').textContent = `Get ${s.n} · ${mb(s.bytes)}`;
   const allMine = s.n > 0 && [...picked].every((k) => prints.get(k)?.owner === id);
   $('removepick').hidden = !allMine; $('getpick').hidden = allMine; $('removepick').textContent = `Remove ${s.n}`;
-  const tiles = [...document.querySelectorAll('#decktiles button')];
+  const tiles = [...document.querySelectorAll('#decktiles button[data-pid]')];
   for (const t of tiles) { const on = picked.has(t.dataset.pid); t.classList.toggle('on', on); t.setAttribute('aria-pressed', String(on)); }
   $('pickall').textContent = tiles.length && tiles.every((t) => picked.has(t.dataset.pid)) ? 'Unpick all' : 'Pick all';
+  for (const sec of document.querySelectorAll('#decktiles .moment')) { const ks = [...sec.querySelectorAll('button[data-pid]')].map((t) => t.dataset.pid); sec.querySelector('.mpick').textContent = ks.length && ks.every((k) => picked.has(k)) ? 'Unpick all' : 'Pick all'; }
   $('reviewtitle').textContent = `Picked · ${s.n}`;
   $('reviewline').textContent = s.n ? pickLine(s) : 'Nothing picked yet. Open a deck and tap photos to pick them.';
   $('getall').textContent = `Get all ${s.n} · ${mb(s.bytes)}`; $('getall').disabled = !s.n;
 }
 $('pickall').onclick = () => {
-  const pids = [...document.querySelectorAll('#decktiles button')].map((t) => t.dataset.pid), all = pids.every((k) => picked.has(k));
+  const pids = [...document.querySelectorAll('#decktiles button[data-pid]')].map((t) => t.dataset.pid), all = pids.every((k) => picked.has(k));
   for (const k of pids) all ? picked.delete(k) : picked.add(k);
   showPicks();
 };

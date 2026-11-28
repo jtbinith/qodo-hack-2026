@@ -34,7 +34,8 @@ export function validPrint(m) {
     isNum(m.x) && isNum(m.y) && isNum(m.w, 400) && m.w >= 40 && isNum(m.h, 400) && m.h >= 40 &&
     isNum(m.rot, Math.PI) &&
     Array.isArray(m.holders) && m.holders.length <= 50 && m.holders.every(isDevId) &&
-    (m.text === undefined || isStr(m.text, 500));   // a link or note carries its plain text (3.4)
+    (m.text === undefined || isStr(m.text, 500)) &&   // a link or note carries its plain text (3.4)
+    (m.at === undefined || isNum(m.at, 1e15));        // when it was shared, for moments (2B.1)
 }
 
 export const validMove = (m) => !!m && isPid(m.pid) && isDevId(m.anchor) && isNum(m.x) && isNum(m.y);
