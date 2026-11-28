@@ -14,7 +14,7 @@ test('1: a member who isn’t the host can still let their own other device in: 
 test('2: Undo after a move puts back the joins the move replaced', () => {
   assert.match(net, /lastMoves\.set\(j\.a, \{ j, before, after: JSON\.stringify\(s\.joins\) \}\)/);   // both screens since round 2
   assert.match(net, /s\.unmove = \(\) =>/);
-  assert.match(html, /net\.unmove\(\); toast\('Moved back'\)/);
+  assert.match(html, /net\.unmove\(\); toast\('Moving back…'\)/);   // the result is said when it comes (round 3)
 });
 
 test('3: nothing new goes on the table once the heap has ended', () => {
@@ -54,7 +54,7 @@ test('round 2: a vouch comes over the encrypted link from a member, not as a roo
 test('round 2: Undo after a move restores both screens’ joins, and only if nothing has moved since', () => {
   assert.match(net, /const before = s\.joins\.filter\(\(x\) => \[x\.a, x\.b\]\.some\(\(k\) => k === j\.a \|\| k === j\.b\)\)/);
   assert.match(net, /after: JSON\.stringify\(s\.joins\)/);
-  assert.match(net, /if \(JSON\.stringify\(s\.joins\) !== m\.after\) return;/);
+  assert.match(net, /const ok = !!m && JSON\.stringify\(s\.joins\) === m\.after;/);   // and says so either way (round 3)
 });
 
 // the third look at #164

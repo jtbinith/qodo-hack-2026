@@ -292,12 +292,17 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   s.pairHello = (token, to) => send('pair', { from: id, token, to });
   // Undo after a move (4.12): the moved screen goes back to the joins it had before
   function undoMove(a) {
-    const m = lastMoves.get(a); if (s.leader !== id || !m) return;
-    lastMoves.delete(a);
-    if (JSON.stringify(s.joins) !== m.after) return;   // something moved since: Undo would undo that too, so it does nothing
-    const here = [...Object.keys(s.peers), id], back = m.before.filter((x) => isValidJoins([x], here));
-    s.joins = addJoins(removeJoin(s.joins, m.j.a, m.j.b), back, sizesNow()); sendLayout();
+    if (s.leader !== id) return;
+    const m = lastMoves.get(a); lastMoves.delete(a);
+    // something moved since: Undo would undo that too, so it does nothing. Either way the screen is told (Qodo on #164)
+    const ok = !!m && JSON.stringify(s.joins) === m.after;
+    if (ok) {
+      const here = [...Object.keys(s.peers), id], back = m.before.filter((x) => isValidJoins([x], here));
+      s.joins = addJoins(removeJoin(s.joins, m.j.a, m.j.b), back, sizesNow()); sendLayout();
+    }
+    announce('unmoved', { a, ok, from: id });
   }
+  ch.on('broadcast', { event: 'unmoved' }, ({ payload }) => { if (payload?.from === s.leader && typeof payload.a === 'string' && typeof payload.ok === 'boolean') emit('unmoved', payload); });
   ch.on('broadcast', { event: 'unmove' }, ({ payload }) => { if (Object.hasOwn(s.peers, payload?.from)) undoMove(payload.from); });
   s.unmove = () => { if (s.leader === id) undoMove(id); else send('unmove', { from: id }); };
   s.askMove = (j, to) => send('moveask', { by: id, to, j });

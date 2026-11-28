@@ -1479,6 +1479,7 @@ function start(room) {
     if (ev === 'moveask') moveAsked(d);
     if (ev === 'moveno') toast(`${nameOf(d.from)} kept their screen where it is`);
     if (ev === 'moved') movedNote(d);
+    if (ev === 'unmoved' && d.a === id) toast(d.ok ? 'Moved back' : 'Couldn’t move back: the screens changed since');
   });
   // Join results go to the whole room: each one is shown only on the devices it names.
   // For results that answer this device's latest push (d.latest), until it pushes again,
@@ -1965,7 +1966,7 @@ $('moveno').onclick = () => { const a = moveAsk; moveAsk = null; clearTimeout(mo
 // moved (4.12): the screen that moved can undo it straight after
 function movedNote(d) {
   const j = d.j; if (j.a !== id && j.b !== id) return;
-  if (j.a === id) snackSay(`Moved ${sideWords(sideOf(j))} ${deviceName(j.b)}`, () => { net.unmove(); toast('Moved back'); }, 10000);   // back to the joins it had
+  if (j.a === id) snackSay(`Moved ${sideWords(sideOf(j))} ${deviceName(j.b)}`, () => { net.unmove(); toast('Moving back…'); }, 10000);   // said once the time keeper has done it   // back to the joins it had
   else toast(`${deviceName(j.a)} joined ${sideWords(sideOf(j))} you`);
 }
 $('mapjoin').onclick = () => closeSheet('mapbox', openJoin);
