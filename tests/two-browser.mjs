@@ -217,9 +217,7 @@ try {
     const at = await page.evaluate((name) => {
       const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name), d = t.decks().find((d) => d.pids.includes(p.pid)); for (const k of d.pids) { const q = t.prints.get(k); t.prints.delete(k); t.prints.set(k, q); }   // on top, so the press picks this deck
       const [wx, wy] = t.world(d.top), me = t.layout.pos[t.id];
-      // press the part of the card furthest from the orb (W / 2, H - 150), which takes presses near it
-      const x = wx - me[0] + d.top.w / 2, ys = [0.15, 0.5, 0.85].map((f) => wy - me[1] + d.top.h * f), y = ys.sort((a, b) => Math.abs(b - (innerHeight - 150)) - Math.abs(a - (innerHeight - 150)))[0];
-      return { pid: p.pid, n: d.pids.length, x, y };
+      return { pid: p.pid, n: d.pids.length, x: wx - me[0] + d.top.w / 2, y: wy - me[1] + d.top.h / 2 };
     }, name);
     drags.push({ name, at });   // for the dump if the transfer below times out (#100)
     if (at.n > 1) {   // in a deck: tap it open, then drag the photo out of it (2A.7)
@@ -826,8 +824,9 @@ try {
     `the invite sheet lists who's in the heap: first ${JSON.stringify(hostAlone)}, then the guest appears (${guestShown}): ${JSON.stringify(withGuest)}`);
   check(head.name === 'Host’s heap' && head.sub === '2 here · 0 shared' && head.faces.join() === 'H,G', `the header names the heap ("${head.name}"), says "${head.sub}" and shows ${head.faces.join(', ')}`);
   // 4.2–4.5: Join a screen from the menu, tap the facing edges on both: they join. Tapping alone: no match
-  const joinMode = (page) => page.click('#menu').then(() => page.click('#joinhow')).then(() => until(page, () => !document.getElementById('joinmode').hidden && document.getElementById('menubox').hidden, null, 5000));
-  await joinMode(S); await joinMode(G);
+  const joinMode = async (page) => { if (await page.evaluate(() => !document.getElementById('invitebox').hidden)) { await page.click('#closeinvite'); await until(page, () => document.getElementById('invitebox').hidden, null, 3000); } }
+  const joinModeOpen = (page) => page.click('#menu').then(() => page.click('#joinhow')).then(() => until(page, () => !document.getElementById('joinmode').hidden && document.getElementById('menubox').hidden, null, 5000));
+  await joinMode(S); await joinMode(G); await joinModeOpen(S); await joinModeOpen(G);
   const jm = await S.evaluate(() => ({ strips: document.querySelectorAll('#joinmode .strip').length, title: document.getElementById('jointitle').textContent }));
   await S.click('#joinmode .strip[data-edge="R"]');
   const counting = await S.evaluate(() => document.getElementById('jointitle').textContent);
@@ -836,7 +835,7 @@ try {
   const joinSnack = await S.evaluate(() => document.getElementById('snack').hidden ? '' : document.getElementById('snacktext').textContent);
   check(jm.strips === 4 && jm.title === 'Which side is the other screen?' && /^2$|^1$/.test(counting) && stripJoined && joinSnack === 'Joined with Guest, on your right',
     `join mode shows ${jm.strips} strips ("${jm.title}"), counts down ("${counting}"), the facing taps join (${stripJoined}) and S says "${joinSnack}"`);
-  await joinMode(S);
+  await joinModeOpen(S);
   await S.click('#joinmode .strip[data-edge="T"]');
   const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
   await S.click('#joincancel');

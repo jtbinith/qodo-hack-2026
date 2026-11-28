@@ -147,6 +147,24 @@
   #deckbox.out { animation: scrim-out .24s ease-in forwards; }
   #deckbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
   @media (prefers-reduced-motion: reduce) { #deckbox, #deckbox .sheet, #deckbox.out, #deckbox.out .sheet { animation: none; } }
+  /* join screens (4.2–4.6): tap the edge that faces the other screen. The strips sit in from the very edge,
+     away from the phone's own swipes */
+  #joinmode { position: fixed; inset: 0; z-index: 4; background: var(--scrim); }
+  #joinmode .strip { position: absolute; border: 2.5px dashed var(--paper); background: rgba(0, 0, 0, 0); color: var(--paper); font: 700 12px var(--ui); letter-spacing: .08em; text-transform: uppercase;
+    border-radius: 999px; }
+  #joinmode .strip.on { background: var(--paper); color: var(--ink); border-style: solid; }
+  #joinmode .strip[data-edge="T"] { left: 16%; right: 16%; top: calc(18px + env(safe-area-inset-top)); height: 44px; }
+  #joinmode .strip[data-edge="B"] { left: 16%; right: 16%; bottom: calc(18px + env(safe-area-inset-bottom)); height: 44px; }
+  #joinmode .strip[data-edge="L"], #joinmode .strip[data-edge="R"] { top: 30%; bottom: 30%; width: 44px; writing-mode: vertical-rl; }
+  #joinmode .strip[data-edge="L"] { left: 12px; }
+  #joinmode .strip[data-edge="R"] { right: 12px; }
+  #joinmode .joincard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(280px, calc(100vw - 140px)); box-sizing: border-box; padding: 18px 16px;
+    border-radius: 18px; background: var(--paper); color: var(--ink); text-align: center; display: grid; gap: 8px; }
+  #jointitle { font: 700 17px/1.25 var(--ui); }
+  #jointitle.count { font: 400 56px/1 var(--display); }
+  #joinsub { margin: 0; font-size: 13px; color: var(--text-mid); }
+  #jointry, #joincancel { font: 500 15px var(--ui); padding: 10px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #joincancel { background: none; color: var(--ink); border-color: transparent; }
   /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
@@ -232,6 +250,18 @@
 </header>
 <div id="bar"><label id="share">+ Share<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="pickedbtn" type="button">Picked · 0</button></div>
 <button type="button" id="allphotos" hidden></button>
+<div id="joinmode" hidden>
+  <button type="button" class="strip" data-edge="T" aria-label="Tap here: the other screen is above">Tap here</button>
+  <button type="button" class="strip" data-edge="B" aria-label="Tap here: the other screen is below">Tap here</button>
+  <button type="button" class="strip" data-edge="L" aria-label="Tap here: the other screen is on the left">Tap</button>
+  <button type="button" class="strip" data-edge="R" aria-label="Tap here: the other screen is on the right">Tap</button>
+  <div class="joincard" role="status" aria-live="polite">
+    <b id="jointitle">Which side is the other screen?</b>
+    <p id="joinsub">Put the screens side by side. Each person taps the edge that faces the other one.</p>
+    <button type="button" id="jointry" hidden>Try again</button>
+    <button type="button" id="joincancel">Cancel</button>
+  </div>
+</div><!-- /joinmode -->
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -260,7 +290,7 @@
 <div id="menubox" hidden><div class="sheet" role="dialog" aria-labelledby="menutitle">
   <span class="handle" aria-hidden="true"></span>
   <h2 id="menutitle">This heap</h2>
-  <button type="button" class="item" id="joinhow"><span><b>Join a screen</b><small>Drag the dot to the edge that faces the other screen</small></span></button>
+  <button type="button" class="item" id="joinhow"><span><b>Join a screen</b><small>Tap the edges that face each other</small></span></button>
   <button type="button" class="item" id="peoplebtn"><span><b>People</b><small>Who is in this heap</small></span></button>
   <button type="button" class="item" id="invite"><span><b>Invite</b><small>QR code and link, also for your own other device</small></span></button>
   <label class="item"><span><b>Keep photo details</b><small>Off: place and camera are removed before sharing</small></span><input id="keep" type="checkbox"></label>
@@ -644,10 +674,8 @@ function dropped(p) {
   }
 }
 
-// ---------- input: orb (join screens), prints (drag / tap to save) ----------
-const ORB = 26;
-const home = () => [W / 2, H - 150];   // above the bottom bar
-let drag = null, orbDrag = null, ghosts = [], fly = null;
+// ---------- input: decks and photos (drag, flick, tap to open or save) ----------
+let drag = null, fly = null;
 const held = (p) => !!(drag?.ps.includes(p) || fly?.ps.includes(p));   // moved by this device right now: others' moves wait
 const PILL_BELOW = 40;   // the name pill under a photo is part of it: a tap there saves it too
 // the deck under a point on my screen, top-most first
@@ -663,9 +691,7 @@ function startDrag(ps, cx, cy, moved = false) {
   drag = { ps, p, sx: cx, sy: cy, ox, oy, moved, samples: [{ x: cx, y: cy, t: performance.now() }] };
 }
 cv.addEventListener('pointerdown', (e) => {
-  const [hx, hy] = home();
   cv.setPointerCapture(e.pointerId);
-  if (Math.hypot(e.clientX - hx, e.clientY - hy) < ORB * 2) { orbDrag = { x: e.clientX, y: e.clientY }; return; }
   const d = hit(e.clientX, e.clientY);
   if (d) startDrag(d.pids.map((k) => prints.get(k)), e.clientX, e.clientY);
 });
@@ -677,7 +703,6 @@ const sendMove = (final, { ps, p } = drag) => {
 };
 // moves and the let-go are heard on the window, so a photo pulled out of the deck sheet keeps following the finger
 addEventListener('pointermove', (e) => {
-  if (orbDrag) { orbDrag.x = e.clientX; orbDrag.y = e.clientY; return; }
   if (!drag) return;
   const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
   if (Math.hypot(dx, dy) > 8) drag.moved = true;
@@ -687,7 +712,6 @@ addEventListener('pointermove', (e) => {
   if (performance.now() - lastSend > 40) { lastSend = performance.now(); sendMove(false); }
 });
 addEventListener('pointerup', (e) => {
-  if (orbDrag) { pushOrb(orbDrag.x, orbDrag.y); orbDrag = null; return; }
   if (!drag) return;
   const { ps, p, moved, ox, oy, samples } = drag;
   if (!moved) { drag = null; return ps.length === 1 ? save(p) : openDeck(ps.map((q) => q.pid)); }   // a tap: save it, or open the deck
@@ -758,16 +782,6 @@ function getPicked() {
   pickSave.tap();
   if (full) toast('Too many photos arriving. Tap Get again in a moment');
 }
-function pushOrb(x, y) {
-  const [hx, hy] = home(), dx = x - hx, dy = y - hy;
-  if (Math.hypot(dx, dy) < Math.min(W, H) * 0.15) return;
-  let edge, along;
-  if (Math.abs(dx) / W > Math.abs(dy) / H) { edge = dx > 0 ? 'R' : 'L'; along = Math.max(0, Math.min(H, hy + dy * (((dx > 0 ? W : 0) - hx) / dx))); }
-  else { edge = dy > 0 ? 'B' : 'T'; along = Math.max(0, Math.min(W, hx + dx * (((dy > 0 ? H : 0) - hy) / dy))); }
-  const g = edge === 'R' ? [W, along] : edge === 'L' ? [0, along] : edge === 'B' ? [along, H] : [along, 0];
-  ghosts.push({ x: g[0], y: g[1], t: performance.now() });
-  net.push(edge, along);
-}
 
 // ---------- start ----------
 function start(room) {
@@ -815,10 +829,12 @@ function start(room) {
       const mine = d.a === id, other = net.peers[mine ? d.b : d.a]?.name || 'a device';
       if (d.latest) { said = 'joined'; unstick(); }
       toast(`Joined with ${other}, ${SIDE[mine ? d.edgeA : d.edgeB]}`);
+      if (d.latest) joinResult('joined', `Joined with ${other}, ${SIDE[mine ? d.edgeA : d.edgeB]}`);
     } else if (ev === 'retry' && d.latest && said !== 'joined') {
       said = 'retry';
       toast('Couldn’t tell who to join. Try again', true);
-    } else if (ev === 'nomatch' && d.latest && !said) toast('No match. Tap again together');
+      joinResult('retry');
+    } else if (ev === 'nomatch' && d.latest && !said) { toast('No match. Tap again together'); joinResult('nomatch'); }
   });
   // Joined means the channel reports live (S16). Only then does the code leave the address bar
   // (the current history entry is replaced, so Back has no page with it) and go into this tab's
@@ -884,7 +900,7 @@ $('menu').onclick = () => { menuOpen(true); openSheet('menubox'); };
 const closeMenu = (then) => { menuOpen(false); closeSheet('menubox', then); };
 $('closemenu').onclick = () => closeMenu();
 $('menubox').onclick = (e) => { if (e.target === e.currentTarget) closeMenu(); };
-$('joinhow').onclick = () => closeMenu(() => toast('Drag the dot to the edge that faces the other screen'));
+$('joinhow').onclick = () => closeMenu(openJoin);
 $('peoplebtn').onclick = $('people').onclick = () => closeMenu(() => $('invite').click());
 // the deck sheet (2B.1, 2B.2): a deck's photos newest first, or everyone's. A tap saves one; dragging one out
 // puts it on the table under the finger and keeps it moving, so it can be dropped on another screen (2A.7)
@@ -977,7 +993,7 @@ function noteLanding(from, p) {
   if (!landed.pids.includes(p.pid)) landed.pids.push(p.pid);
   const n = landed.pids.length, who = net.peers[from]?.name || 'someone';
   $('snacktext').textContent = `${n} photo${n === 1 ? '' : 's'} from ${who}`;
-  $('snack').hidden = false;
+  $('snackact').hidden = false; $('snack').hidden = false;
   clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; landed = null; }, 6000);
 }
 $('snackact').onclick = () => {
@@ -990,6 +1006,43 @@ $('snackact').onclick = () => {
     broadcast((k) => peers.send(k, { t: 'move', pid, anchor: p.anchor, x: p.x, y: p.y, final: true }));
   }
 };
+// join screens (4.2–4.6): tap the edge that faces the other screen; both taps within 2 seconds pair up
+let joinTick = 0;
+const joinCard = (title, sub, { count = false, retry = false } = {}) => {
+  $('jointitle').textContent = title; $('jointitle').classList.toggle('count', count);
+  $('joinsub').textContent = sub; $('jointry').hidden = !retry;
+};
+function openJoin() {
+  clearInterval(joinTick);
+  for (const st of document.querySelectorAll('#joinmode .strip')) st.classList.remove('on');
+  joinCard('Which side is the other screen?', 'Put the screens side by side. Each person taps the edge that faces the other one.');
+  $('joinmode').hidden = false;
+}
+const closeJoin = () => { clearInterval(joinTick); $('joinmode').hidden = true; };
+for (const st of document.querySelectorAll('#joinmode .strip')) st.onclick = (e) => {
+  const edge = st.dataset.edge, along = edge === 'L' || edge === 'R' ? e.clientY : e.clientX;
+  for (const o of document.querySelectorAll('#joinmode .strip')) o.classList.toggle('on', o === st);
+  net.push(edge, along);
+  let left = 2;
+  joinCard(String(left), 'Now tap the facing edge on the other screen. Both taps must land within 2 seconds', { count: true });
+  clearInterval(joinTick);
+  joinTick = setInterval(() => { left--; if (left > 0) $('jointitle').textContent = String(left); else { clearInterval(joinTick); joinCard('Waiting for a match…', 'Checking with the other screen'); } }, 1000);
+};
+$('joincancel').onclick = closeJoin;
+$('jointry').onclick = openJoin;
+// what came of the latest tap
+function joinResult(kind, text) {
+  if ($('joinmode').hidden) return;
+  clearInterval(joinTick);
+  if (kind === 'joined') { closeJoin(); return snackSay(text); }
+  if (kind === 'nomatch') return joinCard('No match', 'The other screen didn’t tap in time, or tapped the wrong edge.', { retry: true });
+  joinCard('More than two screens tapped at once', 'Join one pair at a time. You can add the next screen after.', { retry: true });
+}
+// a line just above the bar, without an action
+function snackSay(text) {
+  landed = null; $('snacktext').textContent = text; $('snackact').hidden = true; $('snack').hidden = false;
+  clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; $('snackact').hidden = false; }, 6000);
+}
 // Send to… (2A.8): let go where no screen is joined: choose who gets it instead
 let sending = [];
 function openSendTo(ps) {
@@ -1007,7 +1060,7 @@ $('sendlist').onclick = (e) => {
   toast(`Sent to ${to === '*' ? 'everyone' : net.peers[to]?.name || 'a device'} ✓`);
   sending = []; closeSheet('sendbox');
 };
-$('sendjoin').onclick = () => closeSheet('sendbox', () => toast('Drag the dot to the edge that faces the other screen'));
+$('sendjoin').onclick = () => closeSheet('sendbox', openJoin);
 $('sendbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('sendbox'); };
 // given to me (3.3, 3.11): it comes onto my screen and arrives by itself
 function given(from, p) {
@@ -1139,20 +1192,12 @@ function frame() {
     pill(`${net.peers[g.from]?.name || 'Someone'} is holding ${g.n} photo${g.n === 1 ? '' : 's'}`, g.x + g.w / 2, g.y + g.h + 22, true);
     ctx.restore();
   }
-  // orb
-  const now = performance.now();
-  // the orb: a charcoal dot with a soft halo (alpha on the ink token)
-  const glow = (x, y, r, a = 1) => { ctx.globalAlpha = 0.14 * a; ctx.fillStyle = T.ink; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-    ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(x, y, r * 0.42, 0, 7); ctx.fill(); ctx.globalAlpha = 1; };
-  ghosts = ghosts.filter((g) => now - g.t < 2500 && (glow(g.x, g.y, ORB * 2, 1 - (now - g.t) / 2500), true));
-  const [ox, oy] = orbDrag ? [orbDrag.x, orbDrag.y] : home();
-  glow(ox, oy, ORB * 2);
   showHeader();
   const n = Object.keys(net.peers).length;
   $('hud').textContent = `table ${net.room.slice(6)} · ${name}${net.leader === id ? ' (time keeper)' : ''} · ${net.status}\n` +
     `devices ${n} · joins ${net.joins.length} · prints ${prints.size} · held here ${files.size}\n` +
     others().map((k) => `${net.peers[k].name}: ${peers.path(k)} (direct ${peers.state(k)})`).join('\n') +
-    `\ndrag the orb to an edge to join screens`;
+    `\njoin screens from the menu: Join a screen`;
 }
 frame();
 </script>
