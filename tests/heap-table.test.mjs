@@ -83,7 +83,7 @@ test('the deck sheet (2B.1, 2B.2): ‹ Table, whose deck and how many, the photo
 test('picking in the deck sheet (2B.3): tap picks, Pick all, then Review and Get with how many and how big', () => {
   const box = (html.match(/<div id="deckbox"[^>]*>([\s\S]*?)<\/div><!-- \/deckbox -->/) || [, ''])[1];
   assert.match(box, /<button type="button" id="pickall">Pick all<\/button>/);
-  assert.match(box, /<div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"><\/button><button type="button" id="getpick" class="pri"><\/button><\/div>/);
+  assert.match(box, /<div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"><\/button><button type="button" id="getpick" class="pri"><\/button><button type="button" id="removepick" hidden><\/button><\/div>/);
   assert.match(html, /function togglePick\(/, 'a tap picks or unpicks');
   assert.match(html, /b\.onpointerup = \(\) => \{ b\.onpointermove = b\.onpointerup = null; togglePick\(p\.pid\)/, 'tapping a photo in the sheet picks it');
   assert.match(html, /`Get \$\{s\.n\} · \$\{mb\(s\.bytes\)\}`/, 'Get says how many and how big');

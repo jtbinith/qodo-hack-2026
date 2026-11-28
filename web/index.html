@@ -324,7 +324,7 @@
   <button type="button" id="pickall">Pick all</button></div>
   <p class="deckhint">Tap photos to pick them. Drag one out to put it on the table or send it.</p>
   <div id="decktiles" role="list"></div>
-  <div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"></button><button type="button" id="getpick" class="pri"></button></div>
+  <div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"></button><button type="button" id="getpick" class="pri"></button><button type="button" id="removepick" hidden></button></div>
 </div></div><!-- /deckbox -->
 <div id="reviewbox" hidden><div class="sheet" role="dialog" aria-labelledby="reviewtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -877,6 +877,11 @@ function start(room) {
   peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) });
   peers.on((from, m, bytes) => {
     if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
+    if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
+      const p = validPidMsg(m) && prints.get(m.pid);
+      if (p && p.owner === from) { prints.delete(p.pid); files.delete(p.pid); incoming.delete(p.pid); picked.delete(p.pid); moving.delete(p.pid); showPicks(); }
+      return;
+    }
     if (m.t === 'give') {   // sent to me with Send to…: only from someone who has it
       const p = validPidMsg(m) && prints.get(m.pid);
       if (p && (p.owner === from || (p.holders || []).includes(from))) given(from, p, m.drop);   // already here: it still lands on my screen
@@ -1057,6 +1062,8 @@ function showPicks() {
   $('pickfoot').hidden = !s.n;
   $('reviewpick').textContent = `Review ${s.n}`;
   $('getpick').textContent = `Get ${s.n} · ${mb(s.bytes)}`;
+  const allMine = s.n > 0 && [...picked].every((k) => prints.get(k)?.owner === id);
+  $('removepick').hidden = !allMine; $('getpick').hidden = allMine; $('removepick').textContent = `Remove ${s.n}`;
   const tiles = [...document.querySelectorAll('#decktiles button')];
   for (const t of tiles) { const on = picked.has(t.dataset.pid); t.classList.toggle('on', on); t.setAttribute('aria-pressed', String(on)); }
   $('pickall').textContent = tiles.length && tiles.every((t) => picked.has(t.dataset.pid)) ? 'Unpick all' : 'Pick all';
@@ -1079,6 +1086,18 @@ function openReview() {
 $('pickedbtn').onclick = () => openReview();
 $('reviewpick').onclick = () => closeSheet('deckbox', openReview);
 $('getpick').onclick = $('getall').onclick = () => getPicked();
+$('removepick').onclick = () => { const pids = [...picked].filter((k) => prints.get(k)?.owner === id); closeSheet('deckbox'); removeMine(pids); };
+// remove my own photos from every table; Undo puts them back. A copy someone already saved stays theirs
+function removeMine(pids) {
+  const gone = pids.map((k) => [prints.get(k), files.get(k)]).filter(([p]) => p && p.owner === id);
+  for (const [p] of gone) { prints.delete(p.pid); picked.delete(p.pid); announced.delete(p.pid); broadcast((k) => peers.send(k, { t: 'unshare', pid: p.pid })); }
+  const n = gone.length;
+  snackSay(`Removed ${n} photo${n === 1 ? '' : 's'}. Copies already saved stay with whoever saved them`, () => {
+    for (const [p, f] of gone) { prints.set(p.pid, p); if (f) files.set(p.pid, f); broadcast((k) => announce(k, p)); }
+  }, 6000);
+  setTimeout(() => { for (const [p] of gone) if (!prints.has(p.pid)) files.delete(p.pid); }, 6500);   // no Undo: let the bytes go
+  showPicks();
+}
 $('closereview').onclick = () => closeSheet('reviewbox');
 $('reviewbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('reviewbox'); };
 $('deckbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('deckbox'); };
