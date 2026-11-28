@@ -123,3 +123,23 @@ test('19: the list keeps only who is here, without repeats, and stays under 200'
   assert.doesNotMatch(html, /net\.setAdmits\(\{/, 'every change goes through trimAdmits');
   assert.match(html, /const admit = \(a\) => net\.setAdmits\(trimAdmits\(a, net\.peers\)\);/);
 });
+
+// the re-review of #162
+test('re-review 1: the host keeps its own place on the list even before the room lists it, so the list settles', () => {
+  const a = gate.trimAdmits({ open: false, ids: ['me', 'gone'], names: [], no: [] }, {}, 'me');
+  assert.deepEqual(a.ids, ['me']);
+  assert.match(html, /const admit = \(a\) => net\.setAdmits\(trimAdmits\(a, net\.peers, id\)\);/);
+  assert.match(html, /trimAdmits\(net\.admits, net\.peers, id\)\.ids\.length !== net\.admits\.ids\.length/);
+});
+
+test('re-review 2: Let everyone in is remembered for that heap only', () => {
+  assert.equal(gate.openFor(gate.rememberOpen(null, 'AAAAA11111'), 'AAAAA11111'), true);
+  assert.equal(gate.openFor(gate.rememberOpen(null, 'AAAAA11111'), 'BBBBB22222'), false, 'a later heap asks again');
+  const two = gate.rememberOpen(gate.rememberOpen(null, 'AAAAA11111'), 'BBBBB22222');
+  assert.equal(gate.openFor(two, 'AAAAA11111') && gate.openFor(two, 'BBBBB22222'), true);
+  let many = null; for (let i = 0; i < 30; i++) many = gate.rememberOpen(many, 'C' + String(i).padStart(9, '0'));
+  assert.equal(many.split(',').length, 20, 'the latest 20 heaps');
+  assert.equal(gate.openFor('1', 'ANYCODE123'), true, 'the device check opens every heap it hosts');
+  assert.match(html, /openFor\(localStorage\.getItem\(OPEN_KEY\), room\)/);
+  assert.match(html, /localStorage\.setItem\(OPEN_KEY, rememberOpen\(localStorage\.getItem\(OPEN_KEY\), net\.room\.replace\(\/\^photo-\/, ''\)\)\)/);
+});
