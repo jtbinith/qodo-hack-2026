@@ -11,7 +11,7 @@ test('1, 11, 13: Sent ✓ only once it has arrived; only photos this device has 
   assert.match(html, /function confirmSent\(/, 'waits for the receiver to say it has it');
   assert.match(html, /m\.t === 'have'[\s\S]{0,120}confirmSent\(from, m\.pid\)/);
   assert.doesNotMatch(html, /toast\(`Sent to \$\{to === '\*'/, 'no Sent ✓ straight after asking');
-  assert.match(html, /const sendable = sending\.filter\(\(p\) => p\.owner === id \|\| files\.has\(p\.pid\)\)/);
+  assert.match(html, /const sendable = ps\.filter\(\(p\) => p\.owner === id \|\| files\.has\(p\.pid\)\)/);   // in sendGives since #162
   assert.match(html, /You don’t have \$\{/);
   assert.match(html, /Couldn’t send to \$\{/, 'a send that fails says so and can be tried again');
   assert.doesNotMatch(html, /if \(p && !files\.has\(p\.pid\) && \(p\.owner === from/, 'a give for a photo already here still lands');
@@ -50,7 +50,7 @@ test('6, 7: a drag belongs to the finger that started it, and an interrupted one
 test('8, 10: a photo already here still says who it came from; each drop has its own Undo', () => {
   assert.match(html, /if \(onMyScreen\(p\) && from !== id\) noteLanding\(from, p, m\.drop\)/);
   assert.match(html, /t: 'dropcheck', pid: q\.pid, drop/);
-  assert.match(html, /landed\.drop !== drop/);
+  assert.match(html, /b\.drop !== drop/);   // per drop since #162
 });
 
 test('9 and its re-review: a tap waits only for photos Get is handing over, and says how to recover a stuck share', () => {

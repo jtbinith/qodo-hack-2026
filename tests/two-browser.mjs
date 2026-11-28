@@ -30,13 +30,19 @@ let failed = false;
 const check = (ok, what) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${what}`); if (!ok) failed = true; };
 
 const browser = await chromium.launch();
+// an invite link opens the name screen with the saved name filled in (the link joins once it's confirmed)
+async function enter(page) {
+  const named = await page.waitForFunction(() => document.getElementById('s-name')?.hidden === false && document.getElementById('yourname').value, null, { timeout: 10000 }).then(() => true, () => false);
+  if (named) await page.click('#go');
+}
 async function device(w, h, { at = room, init, relay = RELAY } = {}) {
   const page = await (await browser.newContext({ viewport: { width: w, height: h } })).newPage();
   page.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
   // every test device has a name of its own, as a person would after their first visit (#156)
-  await page.addInitScript((n) => { try { if (!localStorage.getItem('heap-name')) localStorage.setItem('heap-name', n); } catch {} }, 'T' + Math.random().toString(36).slice(2, 8));
+  await page.addInitScript((n) => { try { if (!localStorage.getItem('heap-name')) localStorage.setItem('heap-name', n); localStorage.setItem('heap-open', '1'); } catch {} }, 'T' + Math.random().toString(36).slice(2, 8));
   if (init) await page.addInitScript(init);
   await page.goto(`${BASE}?room=${at}&auto${relay ? '&relay' : ''}`);
+  await enter(page);
   return page;
 }
 // A wait that times out says which one it was: its line in this file and that line's code.
@@ -381,8 +387,9 @@ try {
   await B.evaluate(() => document.getElementById('reviewbox').hidden = true);
   await B.click('#allphotos'); await sheetUp(B, 'deckbox');
   await tapTile(B, 'deckbox', away);
+  await B.evaluate(() => { window.__said = []; new MutationObserver(() => window.__said.push(document.getElementById('toast').textContent)).observe(document.getElementById('toast'), { childList: true, characterData: true, subtree: true }); });   // every toast, so one arriving at the same moment can't hide it
   await B.click('#getpick');
-  const arrivingSaid = await toastOf(B);
+  const arrivingSaid = await B.evaluate(() => window.__said.find((t) => /still arriving/.test(t)) || document.getElementById('toast').textContent);
   const fetched = await until(B, (pid) => window.__t.files.has(pid), away, 60000).then(() => true, () => false);
   await B.click('#getpick');
   const gotAway = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= NB + 1 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length === NB + 1); } }, 100); });
@@ -544,14 +551,20 @@ try {
   check(ownSaid === 'Already yours', `tapping your own print says "${ownSaid}"`);
 
   // dragging a whole deck across the seam sends every photo in it (2A.6)
-  const rest = await A.evaluate((o) => window.__t.decks().find((d) => d.owner === o && d.pids.length > 1)?.pids || [], ids.a);
+  // two new photos, so the deck is on A's screen and B doesn't have them yet
+  await A.setInputFiles('#pick', ['deck-1.jpg', 'deck-2.jpg'].map((n) => ({ name: n, mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) })));
+  await until(B, () => ['deck-1.jpg', 'deck-2.jpg'].every((n) => [...window.__t.prints.values()].some((p) => p.name === n)), null, 15000).catch(() => {});
+  const rest = await A.evaluate((o) => window.__t.decks().find((d) => d.owner === o && d.anchor === o && d.pids.length > 1 && d.pids.some((pid) => window.__t.prints.get(pid).name === 'deck-1.jpg'))?.pids || [], ids.a);
   const deckAt = await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid), [wx, wy] = t.world(p), me = t.layout.pos[t.id]; return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 }; }, rest[rest.length - 1]);
   await A.mouse.move(deckAt.x, deckAt.y); await A.mouse.down();
   for (let k = 1; k <= 12; k++) await A.mouse.move(deckAt.x + ((900 + 150 - deckAt.x) * k) / 12, deckAt.y);
   await new Promise((r) => setTimeout(r, 150)); await A.mouse.move(900 + 151, deckAt.y);
   await A.mouse.up();
   const deckCame = await until(B, (pids) => pids.every((p) => window.__t.files.has(p)), rest, 60000).then(() => true, () => false);
-  check(rest.length > 1 && deckCame, `dragging A's deck of ${rest.length} onto B sends them all (${deckCame})`);
+  await until(B, () => /^\d+ photos from .+ ✓$/.test(document.getElementById('snacktext').textContent), null, 10000).catch(() => {});
+  const deckLine = await B.evaluate(() => [document.getElementById('snacktext').textContent, document.getElementById('snackact').textContent]);
+  check(rest.length > 1 && deckCame && deckLine[0] === `${rest.length} photos from ${await A.evaluate(() => localStorage.getItem('heap-name'))} ✓` && deckLine[1] === 'Undo',
+    `dragging A's deck of ${rest.length} onto B sends them all (${deckCame}); B says "${deckLine.join('" [')}]"`);
 
   // a late guest still gets photos B holds after A (the owner) leaves
   await A.context().close();
@@ -645,12 +658,14 @@ try {
   check(off127.length === 0, `the QR code is made on the device: no request outside 127.0.0.1 and the room server (${off127.length ? off127.join(', ') : 'none'})`);
   // scanning the QR code opens the link: that page joins the same room without typing the code
   const I2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
-  await I2.addInitScript(() => { try { localStorage.setItem('heap-name', 'Returning'); } catch {} });   // been here before: a link joins in one tap (#156)
+  await I2.addInitScript(() => { try { localStorage.setItem('heap-name', 'Returning'); } catch {} });   // been here before: a link asks for the name, filled in, then joins
   I2.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
   await I2.goto(box.link);
+  const askedName = await I2.evaluate(() => document.getElementById('s-name')?.hidden === false).catch(() => false);
+  await enter(I2);
   const scanned = await until(I2, () => window.__t && Object.keys(window.__t.net.peers).length === 2, null, 20000).then(() => true, () => false);
   const i2 = await where(I2);
-  check(scanned && i2.net === 'photo-' + inv && !i2.url.includes(inv), `the invite link joins the same room without typing (${scanned}), then leaves the address bar (${!i2.url.includes(inv)})`);
+  check(askedName && scanned && i2.net === 'photo-' + inv && !i2.url.includes(inv), `the invite link asks for the name (${askedName}), then joins the same room without typing (${scanned}), then leaves the address bar (${!i2.url.includes(inv)})`);
   // Back doesn't step to a page with the code: the joined entry was replaced, not added
   await I2.goBack().catch(() => {});
   const back = I2.url();
@@ -669,7 +684,7 @@ try {
   await tab.close();
   // a ?room=CODE&auto link wins over the room stored for this tab
   const inv2 = code();
-  await I1.goto(`${BASE}?room=${inv2}&auto`);
+  await I1.goto(`${BASE}?room=${inv2}&auto`); await enter(I1);
   const won = await until(I1, (r) => window.__t && window.__t.net.room === r && sessionStorage.getItem('room') === r.slice(6), 'photo-' + inv2, 20000).then(() => true, () => false);
   check(won, `a ?room=CODE&auto link wins over the stored room (${won})`);
   await I1.context().close();
@@ -840,6 +855,16 @@ try {
   const G = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
   await G.addInitScript(() => { try { localStorage.setItem('heap-name', 'Guest'); } catch {} });
   await G.goto(`${BASE}?room=${s1.tiles}&auto`);
+  const linkAsk = await G.evaluate(() => ({ step: document.getElementById('s-name')?.hidden === false, name: document.getElementById('yourname').value })).catch(() => ({}));
+  await G.fill('#yourname', 'Guest'); await G.click('#go');
+  const waitSays = await until(G, () => document.getElementById('s-wait')?.hidden === false, null, 15000).then(() => G.evaluate(() => document.getElementById('waittitle').textContent), () => '');
+  const askSays = await until(S, () => !document.getElementById('askbox').hidden, null, 15000).then(() => S.evaluate(() => document.getElementById('asktitle').textContent), () => '');
+  const guestSeesNothing = await G.evaluate(() => window.__t.prints.size === 0 && document.getElementById('lobby').hidden === false);
+  await S.click('#letin');
+  const letIn = await until(G, () => document.getElementById('lobby').hidden && document.getElementById('s-wait').hidden, null, 10000).then(() => true, () => false);
+  check(waitSays === 'Waiting for Host to let you in' && askSays === 'Guest’s phone wants to join' && guestSeesNothing && letIn,
+    `the guest waits ("${waitSays}", sees nothing: ${guestSeesNothing}); the host is asked ("${askSays}") and Let in lets them in (${letIn})`);
+  check(linkAsk.step && linkAsk.name === 'Guest', `an invite link asks for the name first, filled in with the saved one (${JSON.stringify(linkAsk)})`);
   const guestShown = await until(S, () => [...document.querySelectorAll('#inroom li')].some((li) => li.textContent === 'Guest'), null, 20000).then(() => true, () => false);
   const withGuest = await inHeap();
   const head = await S.evaluate(() => ({ name: document.getElementById('heapname').textContent, sub: document.getElementById('heapsub').textContent, faces: [...document.querySelectorAll('#people i')].map((x) => x.textContent) }));
@@ -858,6 +883,54 @@ try {
   const joinSnack = await S.evaluate(() => document.getElementById('snack').hidden ? '' : document.getElementById('snacktext').textContent);
   check(jm.strips === 4 && jm.title === 'Which side is the other screen?' && /^2$|^1$/.test(counting) && stripJoined && joinSnack === 'Joined with Guest, on your right',
     `join mode shows ${jm.strips} strips ("${jm.title}"), counts down ("${counting}"), the facing taps join (${stripJoined}) and S says "${joinSnack}"`);
+  // 4.4: the joined line has Undo: both screens come apart again
+  const undoShown = await S.evaluate(() => !document.getElementById('snackact').hidden);
+  await S.click('#snackact');
+  const apart = await until(G, () => window.__t.net.joins.length === 0, null, 10000).then(() => true, () => false);
+  const apartS = await S.evaluate(() => window.__t.net.joins.length === 0);
+  check(undoShown && apart && apartS, `Undo on "Joined with Guest" (${undoShown}) takes the screens apart on both (${apart}, ${apartS})`);
+  // 2C: join again, then a third screen that isn't joined. The map shows all three; the table names its neighbour;
+  // dragging with 3 screens brings the map up and a drop on the far screen's tile sends it there
+  await joinModeOpen(S); await joinModeOpen(G);
+  await S.click('#joinmode .strip[data-edge="R"]'); await G.click('#joinmode .strip[data-edge="L"]');
+  await until(S, () => window.__t.net.joins.length === 1 && document.getElementById('joinmode').hidden, null, 15000);
+  const T3 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await T3.addInitScript(() => { try { localStorage.setItem('heap-name', 'Third'); } catch {} });
+  await T3.goto(`${BASE}?room=${s1.tiles}&auto`); await enter(T3);
+  await until(S, () => !document.getElementById('askbox').hidden, null, 15000); await S.click('#letin');
+  await until(S, () => Object.keys(window.__t.net.peers).length === 3, null, 20000);
+  const labels = await S.evaluate(() => window.__t.edgeLabels());
+  await S.click('#mapbtn'); await until(S, () => !document.getElementById('mapbox').hidden, null, 5000);
+  const mapSays = await S.evaluate(() => ({ title: document.getElementById('maptitle').textContent, key: document.getElementById('mapkey').textContent, tiles: window.__t.mapTiles().map((t) => [t.id === window.__t.id ? 'me' : t.name, t.joined]) }));
+  await S.click('#mapbox .handle').catch(() => {}); await S.evaluate(() => { document.getElementById('mapbox').hidden = true; });
+  check(labels.length === 1 && labels[0].side === 'R' && mapSays.title === 'Host’s heap · 3 screens' && /Third isn’t joined yet/.test(mapSays.key) && mapSays.tiles.length === 3,
+    `S's table names its neighbour (${JSON.stringify(labels.map((l) => l.side))}); the map says "${mapSays.title}", "${mapSays.key}" with ${JSON.stringify(mapSays.tiles)}`);
+  await S.setInputFiles('#pick', [{ name: 'map.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
+  await until(S, () => [...window.__t.prints.values()].some((p) => p.name === 'map.jpg'), null, 10000);
+  const mp = await S.evaluate(() => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'map.jpg'), [wx, wy] = t.world(p), me = t.layout.pos[t.id]; return { pid: p.pid, x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 }; });
+  await S.mouse.move(mp.x, mp.y); await S.mouse.down(); await S.mouse.move(mp.x + 20, mp.y + 20);
+  const dm = await until(S, () => !document.getElementById('dropmap').hidden && !document.getElementById('dropmap').getAnimations().length, null, 3000).then(() => true, () => false);   // up, and done sliding
+  const t3At = await S.evaluate(() => { const t = window.__t.mapHitBox(window.__t.mapTiles().find((x) => x.name === 'Third').id); return t; });
+  if (t3At) { for (let k = 1; k <= 6; k++) await S.mouse.move(mp.x + 20 + (t3At.x - mp.x - 20) * k / 6, mp.y + 20 + (t3At.y - mp.y - 20) * k / 6); await new Promise((r) => setTimeout(r, 150)); await S.mouse.move(t3At.x + 1, t3At.y); }
+  await S.mouse.up();
+  const mapped = await until(T3, (pid) => window.__t.files.has(pid), mp.pid, 30000).then(() => true, () => false);
+  check(dm && !!t3At && mapped, `dragging brings the map up (${dm}) and a drop on Third's tile sends it there (${mapped})`);
+  await T3.context().close();
+  await S.evaluate(() => window.__t.net.unjoin(Object.keys(window.__t.net.peers).find((k) => k !== window.__t.id)));
+  await until(S, () => window.__t.net.joins.length === 0, null, 10000);
+  // remove your own photos: G picks its 2 in its deck and removes them; S's table loses them; Undo brings them back
+  await G.setInputFiles('#pick', ['g1.jpg', 'g2.jpg'].map((n) => ({ name: n, mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) })));
+  await until(S, () => ['g1.jpg', 'g2.jpg'].every((n) => [...window.__t.prints.values()].some((p) => p.name === n)), null, 15000);
+  const gd = await G.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length === 2), [wx, wy] = t.world(d.top), me = t.layout.pos[t.id]; return { pids: d.pids, x: wx - me[0] + 75, y: wy - me[1] + 75 }; });
+  await G.mouse.click(gd.x, gd.y); await until(G, () => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length, null, 5000);
+  await G.click('#pickall');
+  const rmSays = await G.evaluate(() => document.getElementById('removepick').hidden ? '' : document.getElementById('removepick').textContent);
+  await G.click('#removepick');
+  const rmGone = await until(S, (pids) => pids.every((p) => !window.__t.prints.has(p)), gd.pids, 10000).then(() => true, () => false);
+  const rmLine = await G.evaluate(() => document.getElementById('snacktext').textContent);
+  await G.click('#snackact');
+  const backAgain = await until(S, (pids) => pids.every((p) => window.__t.prints.has(p)), gd.pids, 10000).then(() => true, () => false);
+  check(rmSays === 'Remove 2' && rmGone && /^Removed 2 photos\./.test(rmLine) && backAgain, `"${rmSays}" takes G's photos off S's table (${rmGone}), G says "${rmLine}", and Undo puts them back (${backAgain})`);
   await joinModeOpen(S);
   await S.click('#joinmode .strip[data-edge="T"]');
   const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
@@ -873,6 +946,18 @@ try {
   const nf1 = await NF.evaluate(() => ({ code: document.getElementById('code').value, room: sessionStorage.getItem('room'), url: location.href }));
   check(nf && nf1.code === 'ZZZZZ22222' && nf1.room === null && !nf1.url.includes('ZZZZZ'), `a typed code for an empty heap comes back to the code screen with the error (${nf}), keeps the code (${nf1.code}) and stores nothing (${nf1.room})`);
   await NF.context().close();
+  // 1.5: someone else called Guest is sent back to pick another name; 1.7: Not now turns a device away
+  const D2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await D2.addInitScript(() => { try { localStorage.setItem('heap-name', 'guest'); } catch {} });
+  await D2.goto(`${BASE}?room=${s1.tiles}&auto`); await enter(D2);
+  const taken = await until(D2, () => document.getElementById('s-name')?.hidden === false && !document.getElementById('nameerr').hidden, null, 20000).then(() => D2.evaluate(() => document.getElementById('nameerr').textContent), () => '');
+  check(taken === 'Someone in this heap is already called Guest. Pick a different name.', `a second "guest" is asked for another name ("${taken}")`);
+  await D2.fill('#yourname', 'Dee'); await D2.click('#go');
+  await until(S, () => !document.getElementById('askbox').hidden && document.getElementById('asktitle').textContent.startsWith('Dee'), null, 20000);
+  await S.click('#notnow');
+  const turned = await until(D2, () => document.getElementById('s-home')?.hidden === false && document.getElementById('toast').textContent, null, 15000).then(() => D2.evaluate(() => document.getElementById('toast').textContent), () => '');
+  check(turned === 'Host didn’t let you in this time', `Not now sends Dee back to the home screen ("${turned}")`);
+  await D2.context().close();
   await G.context().close();
   // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
   const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();

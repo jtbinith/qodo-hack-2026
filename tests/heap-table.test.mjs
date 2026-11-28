@@ -46,7 +46,7 @@ test('the menu sheet (4.1): Join a screen, People, Invite, Keep photo details, L
 
 test('the bottom bar: a wide + Share and Picked, no checkbox', () => {
   const bar = (html.match(/<div id="bar">([\s\S]*?)<\/div>/) || [, ''])[1];
-  assert.match(bar, /<label id="share">\+ Share<input id="pick" type="file"[^>]*><\/label>\s*<button id="pickedbtn" type="button">Picked · 0<\/button>/);
+  assert.match(bar, /<label id="share">\+ Add photos &amp; videos<input id="pick" type="file"[^>]*><\/label>\s*<button id="pickedbtn" type="button">Picked · 0<\/button>/);
   assert.doesNotMatch(bar, /id="keep"/, 'Keep photo details lives in the menu now');
   assert.match(css, /#bar #share \{[^}]*flex: 1/, '+ Share takes the width');
 });
@@ -83,7 +83,7 @@ test('the deck sheet (2B.1, 2B.2): ‹ Table, whose deck and how many, the photo
 test('picking in the deck sheet (2B.3): tap picks, Pick all, then Review and Get with how many and how big', () => {
   const box = (html.match(/<div id="deckbox"[^>]*>([\s\S]*?)<\/div><!-- \/deckbox -->/) || [, ''])[1];
   assert.match(box, /<button type="button" id="pickall">Pick all<\/button>/);
-  assert.match(box, /<div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"><\/button><button type="button" id="getpick" class="pri"><\/button><\/div>/);
+  assert.match(box, /<div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"><\/button><button type="button" id="getpick" class="pri"><\/button><button type="button" id="removepick" hidden><\/button><\/div>/);
   assert.match(html, /function togglePick\(/, 'a tap picks or unpicks');
   assert.match(html, /b\.onpointerup = \(\) => \{ b\.onpointermove = b\.onpointerup = null; togglePick\(p\.pid\)/, 'tapping a photo in the sheet picks it');
   assert.match(html, /`Get \$\{s\.n\} · \$\{mb\(s\.bytes\)\}`/, 'Get says how many and how big');
@@ -101,7 +101,7 @@ test('the review sheet (2B.6): what is picked, tap to unpick, Get all', () => {
 
 test('landing (2A.4): the receiver is told who it came from with Undo, the sender where it went', () => {
   assert.match(html, /<div id="snack" role="status" hidden><span id="snacktext"><\/span><button type="button" id="snackact">Undo<\/button><\/div>/);
-  assert.match(html, /`\$\{n\} photo\$\{n === 1 \? '' : 's'\} from \$\{who\}`/, 'how many and from whom');
+  assert.match(html, /batchLine\(\{ n, k: st\.k, lost: st\.lost, who, relay \}\)/, 'how many and from whom (words.js)');
   assert.match(html, /toast\(`Sent to \$\{/, 'the sender sees where it went');
 });
 
@@ -153,11 +153,81 @@ test('code not found (1.3): a typed code with nobody in that heap goes back to t
 });
 
 test('empty table (2D.1): says so and how to start', () => {
-  assert.match(html, /<div id="empty" aria-hidden="true" hidden><i><\/i><b>The table is empty<\/b><span>Tap \+ Share to put your photos down\. Others take only what they want\.<\/span><small id="emptytip"><\/small><\/div>/);
+  assert.match(html, /<div id="empty" aria-hidden="true" hidden><i><\/i><b>The table is empty<\/b><span>Tap \+ Add photos &amp; videos to put yours down\. Others take only what they want\.<\/span><small id="emptytip"><\/small><\/div>/);
   assert.match(html, /\$\('empty'\)\.hidden = !!prints\.size/);
 });
 
 test('a sheet that is already closed still carries on to what comes next (the avatars open People)', () => {
   assert.match(html, /function closeSheet\(k, then\) \{\s*const b = \$\(k\);\s*if \(b\.hidden\) return then\?\.\(\);/);
   assert.match(css, /#toast \{[^}]*top: calc\(124px/, 'toasts sit below the All photos chip');
+});
+
+test('the invite code tiles fit their row, letters sized to it, with a compact Copy', () => {
+  assert.match(css, /\.copyrow \.tiles \{[^}]*container-type: inline-size/, 'the row is the size the letters follow');
+  assert.match(css, /\.copyrow \.tiles span \{[^}]*font-size: min\(7cqw, 26px\)/, 'letters scale with the row');
+  assert.match(css, /\.copyrow \.tiles span \{[^}]*min-width: 0/, 'tiles can shrink');
+});
+
+test('the add button says what it adds', () => {
+  assert.match(html, /<label id="share">\+ Add photos &amp; videos<input id="pick"/);
+  assert.doesNotMatch(html, />\+ Share</);
+});
+
+test('an invite link asks for your name (pre-filled), a reload of your heap does not', () => {
+  assert.match(html, /opening\.from === 'link' \? openLink\(opening\.join\) : tryStart\(opening\.join\)/);
+  assert.match(html, /function openLink\(code\) \{[\s\S]*?askName\('join', code\)/);
+});
+
+test('a Join button in the header, one tap to join a screen', () => {
+  const top = (html.match(/<header id="top"[^>]*>([\s\S]*?)<\/header>/) || [, ''])[1];
+  assert.match(top, /<button id="joinbtn" type="button"[^>]*>Join<\/button>\s*<button id="people"/);
+  assert.match(html, /\$\('joinbtn'\)\.onclick = openJoin/);
+});
+
+test('the map (2C.7): a Map chip in the header opens every screen in the room, with Join a screen', () => {
+  const top = (html.match(/<header id="top"[^>]*>([\s\S]*?)<\/header>/) || [, ''])[1];
+  assert.match(top, /<button id="mapbtn" type="button" aria-label="Map of the screens in this heap" aria-controls="mapbox"[^>]*>/);
+  const box = (html.match(/<div id="mapbox"[^>]*>([\s\S]*?)<\/div><!-- \/mapbox -->/) || [, ''])[1];
+  assert.match(box, /<h2 id="maptitle"><\/h2>\s*<canvas id="mapcv"[^>]*><\/canvas>\s*<p id="mapkey"><\/p>/);
+  assert.match(box, /<button type="button" id="mapjoin" class="pri">Join a screen<\/button>/);
+  assert.match(html, /function drawMap\(/);
+  assert.match(css, /#mapbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/);
+});
+
+test('drop on the map (2C.4, 2C.6): while dragging with 3 or more screens, the map comes up and a drop on a tile sends it there', () => {
+  assert.match(html, /<div id="dropmap" hidden><small>Or drop on the map<\/small><canvas id="dropcv"><\/canvas><\/div>/);
+  assert.match(html, /others\(\)\.length >= 2/);
+  assert.match(html, /function mapHit\(/);
+  assert.match(html, /giveTo\(/);
+});
+
+test('edge labels (2C.2, 2C.5): the table names each screen touching mine', () => {
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.match(frame, /edgeLabels\(/);
+  assert.match(frame, /’s \$\{deviceKind\(/, 'the neighbour, by name and kind');
+});
+
+test('remove your own photos: pick them, Remove, gone from every table, with Undo; only the owner can', () => {
+  assert.match(html, /<button type="button" id="removepick" hidden><\/button>/);
+  assert.match(html, /function removeMine\(/);
+  assert.match(html, /t: 'unshare', pid/);
+  assert.match(html, /m\.t === 'unshare'[\s\S]{0,160}validPidMsg\(m\)[\s\S]{0,120}p\.owner === from/, 'only the owner takes a photo off the table');
+  assert.match(html, /`Removed \$\{n\} photo\$\{n === 1 \? '' : 's'\}\. Copies already saved stay with whoever saved them`/);
+});
+
+test('a deck arriving (2A.6, 3.6): how many of how many, through relay while it is, then a tick', () => {
+  assert.equal(words.batchLine({ n: 1, k: 0, who: 'Ada', relay: false }), '1 photo from Ada');
+  assert.equal(words.batchLine({ n: 1, k: 1, who: 'Ada', relay: true }), '1 photo from Ada', 'arrived: no need to say how');
+  assert.equal(words.batchLine({ n: 1, k: 0, who: 'Ada', relay: true }), '1 photo from Ada · through relay');
+  assert.equal(words.batchLine({ n: 25, k: 3, who: 'Ada', relay: false }), '25 photos from Ada · 3 of 25');
+  assert.equal(words.batchLine({ n: 25, k: 3, who: 'Ada', relay: true }), '25 photos from Ada · 3 of 25 · through relay');
+  assert.equal(words.batchLine({ n: 25, k: 25, who: 'Ada', relay: true }), '25 photos from Ada ✓');
+});
+
+test('arriving photos show a progress bar on their card, and the line offers Stop until they are all here (3.5)', () => {
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.match(frame, /const coming = incoming\.get\(p\.pid\)/, 'knows how much of a photo is here');
+  assert.match(frame, /coming\.n \? coming\.got \/ coming\.n : 0/, 'the bar fills with the pieces that have arrived (Qodo on #162: not pieces over bytes)');
+  assert.match(html, /function stopLanding\(/);
+  assert.match(html, /\$\('snackact'\)\.textContent = st\.done \? 'Undo' : 'Stop'/);   // Stop while any are still on the way
 });

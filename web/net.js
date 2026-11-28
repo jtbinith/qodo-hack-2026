@@ -1,7 +1,7 @@
 // Room networking over Supabase Realtime: who is here, a shared clock, and joins.
 // The server only relays messages. One device (the earliest to arrive) is the "time
 // keeper": everyone syncs their clock to it, and it decides which orb pushes pair up.
-import { addJoins, matchPushes, isValidJoins } from './layout.js';
+import { addJoins, matchPushes, isValidJoins, removeJoin } from './layout.js';
 import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk, inRoom, cleanName } from './check.js';
 
 const SUPABASE_URL = 'https://aimoujzdcaxkejraattw.supabase.co';
@@ -39,6 +39,7 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     leader: null,
     offset: 0, rtt: null, samples: [],
     joins: [],
+    admits: { open: false, ids: [], names: [], no: [] },   // who the host has let in (1.6, 1.7); shared by the time keeper
     listeners: new Set(),
     now: () => wall() + s.offset,   // shared clock (ms)
   };
@@ -54,7 +55,12 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     s.leader = all.length ? all[0][0] : id;
     if (s.leader === id) { s.offset = 0; s.rtt = 0; }
     if (prev !== s.leader) {
-      s.samples = []; emit('leader', s.leader);
+      s.samples = [];
+      // someone else keeps time: a list this device made while it thought it was alone doesn't count. The list
+      // from the host before is kept until the new one's comes, so members aren't sent to the waiting screen. Ask for it
+      if (s.leader !== id && prev === id) s.admits = { open: false, ids: [], names: [], no: [] };
+      if (s.leader !== id) askAdmits(ASK_TRIES); else stopAskingAdmits();
+      emit('leader', s.leader);
       stopAsking();   // an ask to the old time keeper is over
       // a layout the new time keeper sent before this device heard it took over (#61). It is
       // checked again against who is here now, and used only if it still passes
@@ -71,7 +77,16 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   // The room server can drop the ask or its answer (Qodo on #95), so the ask is sent again until
   // the time keeper's layout arrives, the time keeper changes or this device leaves. It gives up
   // after ASK_TRIES: the time keeper still sends its layout on its next presence update or join
-  let askTimer = null;
+  let askTimer = null, admitsTimer = null;
+  // the same for the list of who's let in: asked again until it comes, the time keeper changes or the tries run out
+  function stopAskingAdmits() { clearTimeout(admitsTimer); admitsTimer = null; }
+  function askAdmits(tries) {
+    stopAskingAdmits();
+    send('admitsask', { from: id, to: s.leader });
+    const to = s.leader;
+    if (tries > 1) admitsTimer = setTimeout(() => { admitsTimer = null; if (s.leader === to) askAdmits(tries - 1); },
+      Math.max(LAYOUT_GAP, ASK_EVERY * (0.75 + Math.random() / 2)));   // not a secret: Math.random is fine (Rule 2)
+  }
   function stopAsking() { clearTimeout(askTimer); askTimer = null; }
   function ask(to, tries) {
     stopAsking();
@@ -92,7 +107,7 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     s.joins = s.joins.filter((j) => s.peers[j.a] && s.peers[j.b]);
     for (const k of earlyLayouts.keys()) if (!s.peers[k]) earlyLayouts.delete(k);   // nothing kept from devices that have left
     electLeader();
-    if (s.leader === id) sendLayout();
+    if (s.leader === id) { sendLayout(); sendAdmits(); }
     emit('peers', s.peers);
     // setup held from a device that has now arrived is passed on, in the order it came (S1.6)
     for (const [from, held] of earlySigs) {
@@ -222,6 +237,35 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   ch.on('broadcast', { event: 'retry' }, ({ payload }) => { if (fromLeader(payload) && validRetry(payload)) result('retry', payload); });
   ch.on('broadcast', { event: 'nomatch' }, ({ payload }) => { if (fromLeader(payload) && validNoMatch(payload)) result('nomatch', payload); });
 
+  // undo a join (4.4): either of the two screens can ask; the time keeper takes the pair apart for everyone
+  ch.on('broadcast', { event: 'unjoin' }, ({ payload }) => {
+    if (s.leader !== id || !payload || typeof payload.a !== 'string' || typeof payload.b !== 'string') return;
+    if (payload.from !== payload.a && payload.from !== payload.b) return;
+    if (!Object.hasOwn(s.peers, payload.from)) return;
+    s.joins = removeJoin(s.joins, payload.a, payload.b); sendLayout();
+  });
+  s.unjoin = (other) => {
+    const p = { a: id, b: other, from: id };
+    if (s.leader === id) { s.joins = removeJoin(s.joins, id, other); sendLayout(); }
+    else send('unjoin', p);
+  };
+  // who is in (1.6, 1.7): only the time keeper's list counts; it's sent again whenever the room changes,
+  // so a device that just arrived, or a new time keeper's room, hears it
+  const strs = (a, n) => Array.isArray(a) && a.length <= n && a.every((x) => typeof x === 'string' && x.length <= 80);
+  const validAdmits = (a) => !!a && typeof a.open === 'boolean' && strs(a.ids, 200) && strs(a.names, 200) && strs(a.no, 200);
+  function sendAdmits() { if (s.leader === id) send('admits', { from: id, ...s.admits }); }
+  ch.on('broadcast', { event: 'admits' }, ({ payload }) => {
+    if (payload?.from === s.leader && payload.from !== id && validAdmits(payload)) {
+      stopAskingAdmits();
+      s.admits = { open: payload.open, ids: payload.ids, names: payload.names, no: payload.no }; emit('admits', s.admits);
+    }
+  });
+  let admitsAnsweredAt = 0;
+  ch.on('broadcast', { event: 'admitsask' }, ({ payload }) => {
+    if (s.leader !== id || payload?.to !== id || !Object.hasOwn(s.peers, payload.from) || performance.now() - admitsAnsweredAt < 300) return;
+    admitsAnsweredAt = performance.now(); sendAdmits();
+  });
+  s.setAdmits = (a) => { if (s.leader !== id || !validAdmits(a)) return; s.admits = a; sendAdmits(); emit('admits', a); };
   s.push = (edge, along) => {
     const p = { dev: id, edge, along, t: s.now() };
     latest = p.t;
@@ -255,7 +299,7 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   }
   s.signal = (to, data) => send('sig', { from: id, to, data });
   s.on = (f) => s.listeners.add(f);
-  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer); stopAsking(); waits.forEach(clearTimeout); waits.clear();
+  s.leave = () => { clearInterval(pingTimer); clearTimeout(answerTimer); stopAsking(); stopAskingAdmits(); waits.forEach(clearTimeout); waits.clear();
     earlySigs.forEach((h) => clearTimeout(h.timer)); earlySigs.clear(); away.clear();
     client.removeChannel(ch); };
 
