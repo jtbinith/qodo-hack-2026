@@ -1150,6 +1150,26 @@ try {
   check(deckBtn === 'Your deck, 3 photos.' && mapByKey && mapClosed && keys === 9 && acts[0] === 'Pick all 3' && acts[1] && /Picked · 3/.test(pickedAll) && rows.length === 1 && /Your photos · 3/.test(rows[0]) && /On this laptop/.test(rows[0]),
     `the deck reads "${deckBtn}"; M opens the map (${mapByKey}) and Esc closes it (${mapClosed}); ? lists ${keys} shortcuts; its actions say "${acts[0]}" (no Hide for my own: ${acts[1]}) and pick them ("${pickedAll}"); the list view shows ${JSON.stringify(rows)}`);
   await W1.context().close();
+  // 2D.5 and 2D.13: two phones. M1 hosts; M2 can hold only a tiny amount (memcap), so a photo it asks for waits
+  const mPage = async (n, q = '') => { const p = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage(); await p.addInitScript((n) => { try { localStorage.setItem('heap-name', n); localStorage.setItem('heap-open', '1'); } catch {} }, n); p._q = q; return p; };
+  const M1 = await mPage('Mo'); await M1.goto(BASE); await M1.click('#new'); await M1.click('#go');
+  await until(M1, () => window.__t?.net.status === 'live' && !document.getElementById('invitebox').hidden, null, 20000);
+  const mc = await M1.evaluate(() => [...document.querySelectorAll('#invcode span')].map((x) => x.textContent).join(''));
+  await M1.click('#closeinvite');
+  const M2 = await mPage('Nell'); await M2.goto(`${BASE}?room=${mc}&auto&memcap=1000`); await enter(M2);
+  await until(M2, () => window.__t?.net.status === 'live' && document.getElementById('lobby').hidden && Object.keys(window.__t.net.peers).length === 2, null, 20000);
+  await M1.setInputFiles('#pick', [{ name: 'big.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
+  await until(M2, () => window.__t.prints.size === 1, null, 15000);
+  await M2.evaluate(() => { const t = window.__t, p = [...t.prints.values()][0]; t.dropped(p, true); const me = t.layout.pos[t.id] || [0, 0]; t.setWorld(p, me[0] + 60, me[1] + 200); t.dropped(p, true); });
+  const mem = await until(M2, () => !document.getElementById('membox').hidden, null, 5000).then(() => M2.evaluate(() => [document.getElementById('memtitle').textContent, document.getElementById('memsub').textContent]), () => ['', '']);
+  check(/^This tab is nearly full\./.test(mem[0]) && /^Paused at 0 of 1/.test(mem[1]), `2D.13: a nearly full tab pauses: "${mem[0]}" "${mem[1]}"`);
+  // M2's own photo sits on M1's screen; M1 leaves; it comes back to M2
+  await M2.setInputFiles('#pick', [{ name: 'mine.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
+  const mine = await until(M2, () => [...window.__t.prints.values()].some((p) => p.name === 'mine.jpg'), null, 10000).then(() => M2.evaluate(() => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'mine.jpg'); p.anchor = Object.keys(t.net.peers).find((k) => k !== t.id); return p.pid; }));
+  await M1.context().close();
+  const mBack = await until(M2, (pid) => window.__t.prints.get(pid)?.anchor === window.__t.id && /left$/.test(document.getElementById('snacktext').textContent), mine, 60000).then(() => M2.evaluate(() => document.getElementById('snacktext').textContent), () => '');
+  check(mBack === 'Mo’s phone left', `2D.5: my photo on a screen that left comes back to mine ("${mBack}")`);
+  await M2.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {
