@@ -927,6 +927,8 @@ try {
   await G.click('#joinmode .strip[data-edge="L"]');
   const stripJoined = await until(S, () => window.__t.net.joins.length === 1 && document.getElementById('joinmode').hidden, null, 15000).then(() => true, () => false);
   const joinSnack = await S.evaluate(() => document.getElementById('snack').hidden ? '' : document.getElementById('snacktext').textContent);
+  const spoke = await until(S, () => /Joined with Guest’s phone, on your right\./.test(document.getElementById('say').textContent), null, 3000).then(() => true, () => false);
+  check(spoke, `6.4: S says it out loud too ("${await S.evaluate(() => document.getElementById('say').textContent)}")`);
   check(jm.strips === 4 && jm.title === 'Which side is the other screen?' && /^2$|^1$/.test(counting) && stripJoined && joinSnack === 'Joined with Guest, on your right',
     `join mode shows ${jm.strips} strips ("${jm.title}"), counts down ("${counting}"), the facing taps join (${stripJoined}) and S says "${joinSnack}"`);
   // 4.4: the joined line has Undo: both screens come apart again
@@ -1129,6 +1131,24 @@ try {
   const panel = await W1.evaluate(() => { const r = document.querySelector('#deckbox .sheet').getBoundingClientRect(), p = document.getElementById('pickpanel'); return { w: Math.round(r.width), shown: getComputedStyle(p).display !== 'none', title: document.getElementById('pptitle').textContent, tiles: document.querySelectorAll('#pptiles img, #pptiles span').length }; });
   check(top.share && top.picked && top.bar === 'none' && panel.w === 1280 && panel.shown && panel.title === 'Picked · 1' && panel.tiles === 1,
     `on a laptop the actions are in the top bar (${top.share}, ${top.picked}, bar ${top.bar}); a deck opens ${panel.w} px wide with Picked on the right ("${panel.title}", ${panel.tiles} tile)`);
+  // 6.1, 6.3, 6.5, 6.7: the laptop with a keyboard and a screen reader
+  await W1.evaluate(() => { document.getElementById('deckbox').hidden = true; });
+  const deckBtn = await until(W1, () => document.querySelectorAll('#decklayer .deckbtn').length === 1, null, 5000).then(() => W1.evaluate(() => document.querySelector('#decklayer .deckbtn').getAttribute('aria-label')), () => '');
+  await W1.keyboard.press('m');
+  const mapByKey = await until(W1, () => !document.getElementById('mapbox').hidden, null, 3000).then(() => true, () => false);
+  await W1.keyboard.press('Escape');
+  const mapClosed = await until(W1, () => document.getElementById('mapbox').hidden, null, 3000).then(() => true, () => false);
+  await W1.keyboard.press('?');
+  const keys = await until(W1, () => !document.getElementById('keysbox').hidden, null, 3000).then(() => W1.evaluate(() => document.querySelectorAll('#keyslist li').length), () => 0);
+  await W1.keyboard.press('Escape');
+  await W1.evaluate(() => document.querySelector('#decklayer .deckacts').click());
+  const acts = await until(W1, () => !document.getElementById('deckacts').hidden, null, 3000).then(() => W1.evaluate(() => [document.getElementById('dapick').textContent, document.getElementById('dahide').hidden]), () => ['', false]);
+  await W1.click('#dapick');
+  const pickedAll = await W1.evaluate(() => document.getElementById('pickedbtn').textContent);
+  await W1.click('#menu'); await W1.click('#listview');
+  const rows = await until(W1, () => !document.getElementById('decklist').hidden, null, 3000).then(() => W1.evaluate(() => [...document.querySelectorAll('#decklist [role=listitem]')].map((r) => r.textContent)), () => []);
+  check(deckBtn === 'Your deck, 3 photos.' && mapByKey && mapClosed && keys === 9 && acts[0] === 'Pick all 3' && acts[1] && /Picked · 3/.test(pickedAll) && rows.length === 1 && /Your photos · 3/.test(rows[0]) && /On this laptop/.test(rows[0]),
+    `the deck reads "${deckBtn}"; M opens the map (${mapByKey}) and Esc closes it (${mapClosed}); ? lists ${keys} shortcuts; its actions say "${acts[0]}" (no Hide for my own: ${acts[1]}) and pick them ("${pickedAll}"); the list view shows ${JSON.stringify(rows)}`);
   await W1.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
