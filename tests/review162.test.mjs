@@ -121,7 +121,7 @@ test('19: the list keeps only who is here, without repeats, and stays under 200'
   assert.equal(new Set(a.names).size, 200);
   assert.ok(a.names.includes('n249') && a.names.includes('n1'), 'the latest are kept');
   assert.doesNotMatch(html, /net\.setAdmits\(\{/, 'every change goes through trimAdmits');
-  assert.match(html, /const admit = \(a\) => net\.setAdmits\(trimAdmits\(a, net\.peers\)\);/);
+  assert.match(html, /const admit = \(a\) => net\.setAdmits\(trimAdmits\(a, net\.peers, id\)\);/);   // with the host kept (re-review)
 });
 
 // the re-review of #162

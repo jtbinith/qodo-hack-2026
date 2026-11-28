@@ -438,7 +438,7 @@ import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels } from './map.js';
-import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits } from './gate.js';
+import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen } from './gate.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
@@ -516,13 +516,14 @@ function bounce(why) {   // leave, and say why on the next screen
   location.replace(location.pathname);
 }
 // every change to the list goes through here, so it only holds who is here, once each (Qodo on #162)
-const admit = (a) => net.setAdmits(trimAdmits(a, net.peers));
+const admit = (a) => net.setAdmits(trimAdmits(a, net.peers, id));
 function gate() {
   if (!net || net.status !== 'live' || !joinedAt) return;
   if (net.leader === id && !net.admits.ids.includes(id)) {   // I keep time and have no list yet: start one; open if I chose that before
-    let open = false; try { open = localStorage.getItem(OPEN_KEY) === '1'; } catch {}
+    const room = net.room.replace(/^photo-/, '');
+    let open = false; try { open = openFor(localStorage.getItem(OPEN_KEY), room); } catch {}   // only if I chose it for this heap
     admit({ ...net.admits, open: net.admits.open || open, ids: [...net.admits.ids, id], names: [...net.admits.names, nameKey(name)] });
-  } else if (net.leader === id && trimAdmits(net.admits, net.peers).ids.length !== net.admits.ids.length) admit(net.admits);   // someone left: off the list
+  } else if (net.leader === id && trimAdmits(net.admits, net.peers, id).ids.length !== net.admits.ids.length) admit(net.admits);   // someone left: off the list
   const room = net.room.replace(/^photo-/, ''), host = net.peers[net.leader]?.name || 'the host';
   if (performance.now() - joinedAt < 8000) {   // just arrived: is my name taken, or the heap full?
     const other = nameTaken(id, net.peers);
@@ -545,7 +546,7 @@ function gate() {
 }
 $('letin').onclick = () => {
   const k = $('askbox').dataset.who, p = net.peers[k], a = net.admits, open = $('askopen').checked;
-  if (open) try { localStorage.setItem(OPEN_KEY, '1'); } catch {}
+  if (open) try { localStorage.setItem(OPEN_KEY, rememberOpen(localStorage.getItem(OPEN_KEY), net.room.replace(/^photo-/, ''))); } catch {}
   if (p) admit({ ...a, open: a.open || open, ids: [...a.ids, k], names: [...a.names, nameKey(p.name)] });
 };
 $('notnow').onclick = () => { const k = $('askbox').dataset.who, a = net.admits; admit({ ...a, no: [...a.no, k] }); };
