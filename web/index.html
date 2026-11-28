@@ -624,7 +624,7 @@ import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './m
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
-import { saveBatch, createSaveAll, REVOKE_AFTER } from './saveall.js';
+import { saveBatch, createSaveAll, REVOKE_AFTER, SHARE_TIMEOUT } from './saveall.js';
 import { pickRoom, inviteLink, cleanUrl, watchJoin, ROOM_KEY } from './invite.js';
 import { LIMITS, BIG_FILE, refused, cleanText, isWebLink, validPrint, validMove, validMoves, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex, cleanName } from './check.js';
 
@@ -1191,6 +1191,7 @@ function save(p) {
     sharingOne.add(p.pid);   // one share sheet for this photo at a time (Qodo on #163)
     navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); })
       .finally(() => sharingOne.delete(p.pid));
+    setTimeout(() => sharingOne.delete(p.pid), SHARE_TIMEOUT);   // a sheet that never settles (WebKit) doesn't hold this photo for ever
   }
   else { downloadFile(file); pickSave.handed.add(p.pid); }
 }
@@ -1222,29 +1223,33 @@ function getPicked() {
 }
 
 // ---------- start ----------
-function start(room) {
+// again: Try again after a lost connection. The same keys and links stay, because the others keep the key
+// they already have for this device and would ignore a new one (Qodo re-review of #163)
+function start(room, again = false) {
   $('lobby').hidden = true;
   const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
-  peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
-  peers.on((from, m, bytes) => {
-    if (from !== id && !inHeap(from)) return;   // not let in yet: nothing it sends is taken (Qodo on #162)
-    if (blocked.has(from)) return;   // blocked: nothing from them counts (5.6)
-    if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
-    if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
-      const p = validPidMsg(m) && prints.get(m.pid);
-      if (p && p.owner === from) {
-        if ((incoming.has(p.pid) || files.has(p.pid)) && cutShort.size < 500) cutShort.add(p.pid);   // if Undo brings it back, ask for it again
-        prints.delete(p.pid); files.delete(p.pid); incoming.delete(p.pid); picked.delete(p.pid); moving.delete(p.pid); showPicks();
+  if (!again) {
+    peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
+    peers.on((from, m, bytes) => {
+      if (from !== id && !inHeap(from)) return;   // not let in yet: nothing it sends is taken (Qodo on #162)
+      if (blocked.has(from)) return;   // blocked: nothing from them counts (5.6)
+      if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
+      if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
+        const p = validPidMsg(m) && prints.get(m.pid);
+        if (p && p.owner === from) {
+          if ((incoming.has(p.pid) || files.has(p.pid)) && cutShort.size < 500) cutShort.add(p.pid);   // if Undo brings it back, ask for it again
+          prints.delete(p.pid); files.delete(p.pid); incoming.delete(p.pid); picked.delete(p.pid); moving.delete(p.pid); showPicks();
+        }
+        return;
       }
-      return;
-    }
-    if (m.t === 'give') {   // sent to me with Send to…: only from someone who has it
-      const p = validPidMsg(m) && prints.get(m.pid);
-      if (p && (p.owner === from || (p.holders || []).includes(from))) given(from, p, m.drop);   // already here: it still lands on my screen
-      return;
-    }
-    onMessage(from, m, bytes);
-  });
+      if (m.t === 'give') {   // sent to me with Send to…: only from someone who has it
+        const p = validPidMsg(m) && prints.get(m.pid);
+        if (p && (p.owner === from || (p.holders || []).includes(from))) given(from, p, m.drop);   // already here: it still lands on my screen
+        return;
+      }
+      onMessage(from, m, bytes);
+    });
+  }
   const known = new Set();
   // Catch everyone up. The owner announces its prints; once the owner has left, anyone
   // still holding a print announces it. Re-checked on every change in who's here, because
@@ -1257,7 +1262,7 @@ function start(room) {
       for (const k of others()) if (!sentTo(p.pid).has(k)) announce(k, p);
     }
   };
-  peers.onReady(catchUp);
+  if (!again) peers.onReady(catchUp);
   const roomChanged = () => {
     showWho(); showHeader(); gate();
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
@@ -1796,7 +1801,7 @@ function netState() {
 $('losttry').onclick = () => {
   $('lostbox').hidden = true; wasLive = false; clearTimeout(lostTimer); lostTimer = 0;
   const room = net.room.replace(/^photo-/, ''); net.leave(); announced.clear();
-  start(room);
+  start(room, true);
 };
 $('lostleave').onclick = () => { try { sessionStorage.removeItem(ROOM_KEY); } catch {} location.replace(location.pathname); };
 // Send to… (2A.8): let go where no screen is joined: choose who gets it instead
