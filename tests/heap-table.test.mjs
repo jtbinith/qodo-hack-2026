@@ -63,7 +63,7 @@ test('decks on the table: a stack per person with a name and count pill, no loos
   const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
   assert.match(frame, /groupDecks\(visiblePrints\(\)\)/, 'drawn deck by deck, without hidden or blocked people');
   assert.match(frame, /deck\.pids\.length > 1 \? `\$\{who\} \$\{deck\.pids\.length\}`/, 'the pill says whose and how many');
-  assert.match(html, /\$\('pick'\)\.onchange[\s\S]*?deckSpot\(prints, id/, 'what I share goes on my deck');
+  assert.match(html, /function addFiles\([\s\S]*?deckSpot\(prints, id/, 'what I share goes on my deck');
   assert.match(html, /t: 'moves', pids: /, 'a deck moves as one message');
   assert.match(html, /m\.t === 'moves'[\s\S]{0,80}validMoves\(m\)/, 'checked when it arrives');
 });
@@ -85,7 +85,7 @@ test('picking in the deck sheet (2B.3): tap picks, Pick all, then Review and Get
   assert.match(box, /<button type="button" id="pickall">Pick all<\/button>/);
   assert.match(box, /<div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"><\/button><button type="button" id="getpick" class="pri"><\/button><button type="button" id="removepick" hidden><\/button><\/div>/);
   assert.match(html, /function togglePick\(/, 'a tap picks or unpicks');
-  assert.match(html, /b\.onpointerup = \(\) => \{ b\.onpointermove = b\.onpointerup = null; togglePick\(p\.pid\)/, 'tapping a photo in the sheet picks it');
+  assert.match(html, /b\.onpointerup = \(\) => \{ b\.onpointermove = b\.onpointerup = null; if \(!held\) togglePick\(p\.pid\)/, 'tapping a photo in the sheet picks it (holding opens the preview)');
   assert.match(html, /`Get \$\{s\.n\} · \$\{mb\(s\.bytes\)\}`/, 'Get says how many and how big');
   assert.match(html, /aria-pressed/, 'picked photos say so to screen readers');
 });

@@ -33,7 +33,8 @@ export function validPrint(m) {
     isInt(m.size, 1, LIMITS.fileBytes) && isInt(m.thumbSize ?? 0, 0, LIMITS.thumbBytes) && isSha(m.sha) &&
     isNum(m.x) && isNum(m.y) && isNum(m.w, 400) && m.w >= 40 && isNum(m.h, 400) && m.h >= 40 &&
     isNum(m.rot, Math.PI) &&
-    Array.isArray(m.holders) && m.holders.length <= 50 && m.holders.every(isDevId);
+    Array.isArray(m.holders) && m.holders.length <= 50 && m.holders.every(isDevId) &&
+    (m.text === undefined || isStr(m.text, 500));   // a link or note carries its plain text (3.4)
 }
 
 export const validMove = (m) => !!m && isPid(m.pid) && isDevId(m.anchor) && isNum(m.x) && isNum(m.y);
@@ -234,3 +235,14 @@ export function cleanName(v) {
   for (const g of seg.slice(0, 20)) { if (out.length + g.length > 40) break; out += g; }
   return out.trim();
 }
+
+// Sharing more than photos (3.1, 3.4, 3.9)
+export const BIG_FILE = 25 * 1024 * 1024;   // bigger files land closed and wait for a tap
+// programs, scripts and pages that could run when opened are never shared
+const RUNS = /\.(exe|bat|cmd|com|msi|msp|scr|pif|cpl|apk|app|dmg|pkg|deb|rpm|sh|bash|zsh|ps1|psm1|vbs|vbe|js|mjs|jse|wsf|wsh|hta|jar|lnk|reg|html?|xhtml|svg|xml|php|py|rb|pl)$/i;
+const RUN_TYPES = /^(application\/(x-msdownload|x-msdos-program|x-sh|x-executable|java-archive|vnd\.android\.package-archive|javascript|x-javascript|xhtml\+xml)|text\/(html|javascript)|image\/svg\+xml)$/i;
+export const refused = (name, type) => RUNS.test(String(name || '')) || RUN_TYPES.test(String(type || ''));
+// a note or link as plain text: no control or direction characters, no walls of blank lines, at most 500 characters
+export const cleanText = (v) => [...String(v ?? '').replace(/\r\n?/g, '\n').replace(/[^\S\n]+/g, ' ').replace(/[\p{Cc}\p{Cf}]/gu, (c) => (c === '\n' ? c : ''))
+  .replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim()].slice(0, 500).join('');
+export const isWebLink = (v) => { try { const u = new URL(String(v)); return (u.protocol === 'https:' || u.protocol === 'http:') && !!u.hostname; } catch { return false; } };
