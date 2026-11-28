@@ -27,10 +27,12 @@ export function reacher(cv, G, { colour = '#000', reach = 55, near = 330, dropR 
   for (const [x, y, r] of G.dots) { cx += x * r; cy += y * r; w += r; }
   cx /= w; cy /= w; drop = [cx, cy];
   const [cr, cg, cb] = colour.match(/\w\w/g).map((h) => parseInt(h, 16));
-  const fit = () => { const r = cv.getBoundingClientRect(); const d = Math.min(devicePixelRatio || 1, 2); size = Math.max(8, Math.round(Math.min(r.width, r.height) * d));
+  const fit = () => { const r = cv.getBoundingClientRect(); if (!r.width || !r.height) return false;   // hidden: size it when it shows
+    const d = Math.min(devicePixelRatio || 1, 2); size = Math.max(8, Math.round(Math.min(r.width, r.height) * d));
     cv.width = cv.height = size; scale = (size * fill) / Math.max(x1 - x0, y1 - y0);   // the glyph takes `fill` of the canvas; the rest is room to reach
-    ox = size / 2 - ((x0 + x1) / 2) * scale; oy = size * (0.5 + dy) - ((y0 + y1) / 2) * scale; };
+    ox = size / 2 - ((x0 + x1) / 2) * scale; oy = size * (0.5 + dy) - ((y0 + y1) / 2) * scale; return true; };
   const draw = () => {
+    if (!size) return;   // not sized yet (hidden)
     const img = ctx.createImageData(size, size), px = img.data, aa = 1 / scale;
     for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
       const x = (i + 0.5 - ox) / scale, y = (j + 0.5 - oy) / scale;
@@ -57,7 +59,9 @@ export function reacher(cv, G, { colour = '#000', reach = 55, near = 330, dropR 
   };
   const wake = () => { if (!raf) raf = requestAnimationFrame(tick); };
   addEventListener('pointermove', (e) => { ptr = [e.clientX, e.clientY]; wake(); }, { passive: true });
-  addEventListener('resize', () => { fit(); draw(); });
-  fit(); draw();
+  // sized again whenever the canvas changes size, including when its screen shows after being hidden
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { if (fit()) draw(); }).observe(cv);
+  else addEventListener('resize', () => { if (fit()) draw(); });
+  if (fit()) draw();
   return { stop: () => cancelAnimationFrame(raf) };
 }

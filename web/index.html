@@ -77,7 +77,7 @@
   #lobby:has(.step:not([hidden])) .blob { display: none; }
   /* invite: a bottom sheet with the code in tiles, the QR and the link (component lab, pick 16) */
   #invitebox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
-  #invitebox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+  #invitebox .sheet { width: min(100%, 460px); box-sizing: border-box; max-height: calc(100dvh - 12px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
     border-radius: 28px 28px 0 0; padding: 12px 22px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
   /* it slides up from the bottom while the backdrop fades in, and back down on close */
   @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
@@ -115,7 +115,7 @@
   #toast { position: fixed; left: 50%; top: calc(62px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
     background: var(--ink); color: var(--paper); padding: 13px 18px; border-radius: 18px; font-size: 15px; font-weight: 500; line-height: 1.35; text-align: center;
     opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
-  #toast.in { animation: boing .6s cubic-bezier(.2, .8, .3, 1) both; }
+  #toast.in { animation: boing .6s cubic-bezier(.2, .8, .3, 1) backwards; }   /* backwards: once landed, the timer's opacity decides */
   @keyframes boing { 0% { transform: translateX(-50%) translateY(-18px) scale(.97, 1.04); opacity: 0 } 40% { transform: translateX(-50%) translateY(3px) scale(1.03, .97); opacity: 1 }
     70% { transform: translateX(-50%) translateY(1px) scale(.995, 1.005) } 100% { transform: translateX(-50%) } }
   @media (prefers-reduced-motion: reduce) { #toast.in { animation: none; } }
@@ -163,7 +163,7 @@
     <p class="sub" id="namewhy">Starting a new heap</p>
     <form id="nf">
       <label for="yourname">Your name</label>
-      <input id="yourname" maxlength="20" autocomplete="nickname" autocapitalize="words" spellcheck="false" required>
+      <input id="yourname" maxlength="80" autocomplete="nickname" autocapitalize="words" spellcheck="false" required>
       <p class="hint">Shown to everyone in this heap. Remembered on this device.</p>
       <button id="go">Start heap</button>
     </form>
@@ -482,9 +482,10 @@ function dropped(p) {
 const ORB = 26;
 const home = () => [W / 2, H - 120];
 let drag = null, orbDrag = null, ghosts = [];
+const PILL_BELOW = 40;   // the name pill under a photo is part of it: a tap there saves it too
 function hit(sx, sy) {
   const [mx, my] = meWorld(), x = sx + mx, y = sy + my;
-  return [...prints.values()].reverse().find((p) => { if (!visible(p)) return false; const [px, py] = world(p); return x >= px && x <= px + p.w && y >= py && y <= py + p.h; });
+  return [...prints.values()].reverse().find((p) => { if (!visible(p)) return false; const [px, py] = world(p); return x >= px && x <= px + p.w && y >= py && y <= py + p.h + PILL_BELOW; });
 }
 cv.addEventListener('pointerdown', (e) => {
   const [hx, hy] = home();
@@ -690,12 +691,18 @@ if (opening.join) tryStart(opening.join);
 // the table's colours are heap's tokens, read once from the page (rebrand, issue 158)
 const T = (() => { const st = getComputedStyle(document.documentElement), v = (k) => st.getPropertyValue(k).trim();
   return { ink: v('--ink'), paper: v('--paper'), mid: v('--text-mid'), line: v('--line'), ui: v('--ui') }; })();
+// a rounded rectangle on the current path; browsers without roundRect (Safari before 16.4) get it drawn with arcs
+function rr(ctx, x, y, w, h, r) {
+  if (ctx.roundRect) return ctx.roundRect(x, y, w, h, r);
+  r = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
 function frame() {
   requestAnimationFrame(frame);
   // a name pill: outlined, or filled when there's something to do (save it)
   function pill(text, x, y, filled) {
     ctx.font = `500 12px ${T.ui}`; const w = ctx.measureText(text).width + 22, h = 22;
-    ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
+    ctx.beginPath(); rr(ctx, x - w / 2, y - h / 2, w, h, h / 2);
     ctx.fillStyle = filled ? T.ink : T.paper; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = T.ink; ctx.stroke();
     ctx.fillStyle = filled ? T.paper : T.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 0.5); ctx.textBaseline = 'alphabetic';
   }
@@ -724,7 +731,7 @@ function frame() {
     const lifted = drag && drag.p === p && drag.moved;
     ctx.scale(lifted ? 1.05 : 1, lifted ? 1.05 : 1);
     ctx.fillStyle = T.paper; ctx.strokeStyle = T.ink; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.roundRect(-p.w / 2 - 8, -p.h / 2 - 8, p.w + 16, p.h + 16, 6); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); rr(ctx, -p.w / 2 - 8, -p.h / 2 - 8, p.w + 16, p.h + 16, 6); ctx.fill(); ctx.stroke();
     if (p.img) {
       // the photo fills the card (cropped to fit), inside a thin outline
       const s = Math.max(p.w / p.img.width, p.h / p.img.height), sw = p.w / s, sh = p.h / s, iw = p.w, ih = p.h;

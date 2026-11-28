@@ -222,6 +222,9 @@ export function askLimiter(now = () => performance.now()) {
 // and format characters removed, at most 20 characters (an emoji counts as one). '' means no name
 export function cleanName(v) {
   if (typeof v !== 'string') return '';
-  const s = v.replace(/[\p{Cc}\p{Cf}]/gu, (c) => (/\s/.test(c) ? ' ' : '')).replace(/\s+/g, ' ').trim();
-  return [...s].slice(0, 20).join('').trim();
+  // controls, direction overrides and invisible spaces go; the joiners some scripts and emoji need (U+200C, U+200D) stay
+  const s = v.replace(/[\p{Cc}\u00AD\u061C\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/gu, (c) => (/\s/.test(c) ? ' ' : '')).replace(/\s+/g, ' ').trim();
+  // 20 characters as people see them (an emoji made of several code points counts as one)
+  const seg = typeof Intl !== 'undefined' && Intl.Segmenter ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)].map((x) => x.segment) : [...s];
+  return seg.slice(0, 20).join('').trim();
 }
