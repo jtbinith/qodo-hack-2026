@@ -162,9 +162,9 @@
   #joinmode .strip { position: absolute; border: 2.5px dashed var(--paper); background: rgba(0, 0, 0, 0); color: var(--paper); font: 700 12px var(--ui); letter-spacing: .08em; text-transform: uppercase;
     border-radius: 999px; }
   #joinmode .strip.on { background: var(--paper); color: var(--ink); border-style: solid; }
-  #joinmode .strip[data-edge="T"] { left: 16%; right: 16%; top: calc(18px + env(safe-area-inset-top)); height: 44px; }
-  #joinmode .strip[data-edge="B"] { left: 16%; right: 16%; bottom: calc(18px + env(safe-area-inset-bottom)); height: 44px; }
-  #joinmode .strip[data-edge="L"], #joinmode .strip[data-edge="R"] { top: 30%; bottom: 30%; width: 44px; writing-mode: vertical-rl; }
+  #joinmode .strip[data-edge="T"] { left: 16%; right: 16%; top: calc(80px + env(safe-area-inset-top)); height: 44px; }   /* just below the header */
+  #joinmode .strip[data-edge="B"] { left: 16%; right: 16%; bottom: calc(92px + env(safe-area-inset-bottom)); height: 44px; }   /* just above the bar */
+  #joinmode .strip[data-edge="L"], #joinmode .strip[data-edge="R"] { top: calc(50% - 18vh); bottom: calc(50% - 18vh); width: 44px; writing-mode: vertical-rl; }
   #joinmode .strip[data-edge="L"] { left: 12px; }
   #joinmode .strip[data-edge="R"] { right: 12px; }
   #joinmode .joincard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(280px, calc(100vw - 140px)); box-sizing: border-box; padding: 18px 16px;
