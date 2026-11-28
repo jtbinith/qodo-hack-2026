@@ -1196,7 +1196,8 @@ function start(room) {
   const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
   peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
   peers.on((from, m, bytes) => {
-    if (from !== id && !inHeap(from)) return;   // not let in yet, or blocked (5.6): nothing it sends is taken (Qodo on #162)
+    if (from !== id && !inHeap(from)) return;   // not let in yet: nothing it sends is taken (Qodo on #162)
+    if (blocked.has(from)) return;   // blocked: nothing from them counts (5.6)
     if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
     if (m.t === 'unshare') {   // the owner took it off the table: it goes from here too
       const p = validPidMsg(m) && prints.get(m.pid);
