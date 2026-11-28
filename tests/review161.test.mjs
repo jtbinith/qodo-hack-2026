@@ -53,6 +53,15 @@ test('8, 10: a photo already here still says who it came from; each drop has its
   assert.match(html, /landed\.drop !== drop/);
 });
 
-test('9: a tap doesn’t hand over a photo that Get is still handing over', () => {
-  assert.match(html, /if \(pickSave\.busy\(\)\) return toast\('Still saving'\);/);
+test('9 and its re-review: a tap waits only for photos Get is handing over, and says how to recover a stuck share', () => {
+  assert.match(html, /if \(pickSave\.holds\(p\.pid\)\) return toast\('Still saving this one\. If the share sheet is stuck, tap Get again'\);/);
+  assert.doesNotMatch(html, /pickSave\.busy\(\)/, 'other photos aren’t blocked');
+});
+
+test('re-review of #161: a share that never settles holds only its own photos', async () => {
+  const s = createSaveAll({ batch: (handed) => ({ ready: [{ pid: 'a', file: {} }].filter((r) => !handed.has(r.pid)), arriving: 0 }), canShare: () => true,
+    share: () => new Promise(() => {}), download: () => {}, toast: () => {}, label: 'Get', wait: () => Promise.resolve() });
+  await s.tap();   // the sheet never settles; the timeout frees Get
+  assert.equal(s.holds('a'), true, 'the photo in the hung share is held');
+  assert.equal(s.holds('b'), false, 'another photo isn’t');
 });
