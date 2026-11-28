@@ -27,6 +27,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, label =
   let downloadNext = false;   // the share sheet failed: the next tap downloads instead
   let busy = null;            // the tap whose share sheet or download batch is still running
   const pending = new Set();  // pids in a share sheet that hasn't settled, even after SHARE_TIMEOUT
+  const inBatch = new Set();  // pids in the batch being handed over right now
   let release = false;        // the person was told a share didn't finish: the next tap downloads its photos too.
                               // This is its own download mode, gone if the share settles before that tap
   let shares = 0;             // share sheets opened so far, each numbered
@@ -55,7 +56,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, label =
     let sharing = false;
     if (!downloading) { try { sharing = !!canShare(list); } catch { sharing = false; } }
     const mine = {};
-    busy = mine;
+    busy = mine; inBatch.clear(); for (const r of ready) inBatch.add(r.pid);
     try {
       if (sharing) {
         // called now, inside the tap; a share that throws at once becomes a failure like any other
@@ -87,7 +88,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, label =
         if (handed.has(ready[i].pid)) continue;   // tapped and saved during the gap: read again after the await
         try { download(ready[i].file); handed.add(ready[i].pid); } catch (e) { console.warn('download failed', ready[i].file?.name, e); }
       }
-    } finally { if (busy === mine) busy = null; }   // a late share doesn't free a newer tap's batch
+    } finally { if (busy === mine) { busy = null; inBatch.clear(); } }   // a late share doesn't free a newer tap's batch
   }
-  return { handed, tap, busy: () => !!busy || pending.size > 0 };   // busy: a hand-over is still running
+  return { handed, tap, holds: (pid) => inBatch.has(pid) || pending.has(pid) };   // holds: that photo is being handed over (or stuck in a share)
 }

@@ -796,7 +796,7 @@ function save(p) {
   }
   if (p.owner === id) return toast('Already yours');
   // handed over once it was shared or its download started, so Save all doesn't save it again (F13)
-  if (pickSave.busy()) return toast('Still saving');
+  if (pickSave.holds(p.pid)) return toast('Still saving this one. If the share sheet is stuck, tap Get again');
   if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); });
   else { downloadFile(file); pickSave.handed.add(p.pid); }
 }
