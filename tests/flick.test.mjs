@@ -28,3 +28,8 @@ test('it lands on the last screen it crossed, even if it would have slid past it
   assert.deepEqual(landing([50, 80, 120], on), { at: 120, on: 'them' });
   assert.deepEqual(landing([50, 20, -40, -90], on), { at: 20, on: null }, 'went off into nowhere: no screen there');
 });
+
+test('a swipe that turned round flicks the way it last went', () => {
+  const v = velocity([{ x: 100, y: 0, t: 0 }, { x: 190, y: 0, t: 10 }, { x: 160, y: 0, t: 20 }, { x: 120, y: 0, t: 30 }, { x: 80, y: 0, t: 40 }]);
+  assert.ok(v.vx < -2, `heading left (${v.vx})`);
+});

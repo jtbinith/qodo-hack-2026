@@ -156,3 +156,8 @@ test('empty table (2D.1): says so and how to start', () => {
   assert.match(html, /<div id="empty" aria-hidden="true" hidden><i><\/i><b>The table is empty<\/b><span>Tap \+ Share to put your photos down\. Others take only what they want\.<\/span><small id="emptytip"><\/small><\/div>/);
   assert.match(html, /\$\('empty'\)\.hidden = !!prints\.size/);
 });
+
+test('a sheet that is already closed still carries on to what comes next (the avatars open People)', () => {
+  assert.match(html, /function closeSheet\(k, then\) \{\s*const b = \$\(k\);\s*if \(b\.hidden\) return then\?\.\(\);/);
+  assert.match(css, /#toast \{[^}]*top: calc\(124px/, 'toasts sit below the All photos chip');
+});
