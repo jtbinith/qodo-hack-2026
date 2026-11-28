@@ -197,3 +197,8 @@ test('round 4: Try again keeps who was let in, so guests aren’t sent back to w
   assert.match(netSrc, /admits: admitted \|\| \{ open: false, ids: \[\], names: \[\], no: \[\] \},/);
   assert.match(html, /admitted: again \? net\?\.admits : null/);
 });
+
+// CI, again: after a reload the old copy of this tab can still be the time keeper for a moment
+test('reload: a tab whose own old copy still keeps time doesn’t wait to be let in by it', () => {
+  assert.match(html, /const inHeap = \(k\) => !net \|\| \(k === id && before\.includes\(net\.leader\)\) \|\| \(!blocked\.has\(k\) && isIn\(k, gateOf\(\)\)\);/);
+});
