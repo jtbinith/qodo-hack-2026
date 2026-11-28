@@ -39,7 +39,7 @@ async function device(w, h, { at = room, init, relay = RELAY } = {}) {
   const page = await (await browser.newContext({ viewport: { width: w, height: h } })).newPage();
   page.on('pageerror', (e) => { console.log('page error:', e.message); failed = true; });
   // every test device has a name of its own, as a person would after their first visit (#156)
-  await page.addInitScript((n) => { try { if (!localStorage.getItem('heap-name')) localStorage.setItem('heap-name', n); } catch {} }, 'T' + Math.random().toString(36).slice(2, 8));
+  await page.addInitScript((n) => { try { if (!localStorage.getItem('heap-name')) localStorage.setItem('heap-name', n); localStorage.setItem('heap-open', '1'); } catch {} }, 'T' + Math.random().toString(36).slice(2, 8));
   if (init) await page.addInitScript(init);
   await page.goto(`${BASE}?room=${at}&auto${relay ? '&relay' : ''}`);
   await enter(page);
@@ -853,6 +853,13 @@ try {
   await G.goto(`${BASE}?room=${s1.tiles}&auto`);
   const linkAsk = await G.evaluate(() => ({ step: document.getElementById('s-name')?.hidden === false, name: document.getElementById('yourname').value })).catch(() => ({}));
   await G.fill('#yourname', 'Guest'); await G.click('#go');
+  const waitSays = await until(G, () => document.getElementById('s-wait')?.hidden === false, null, 15000).then(() => G.evaluate(() => document.getElementById('waittitle').textContent), () => '');
+  const askSays = await until(S, () => !document.getElementById('askbox').hidden, null, 15000).then(() => S.evaluate(() => document.getElementById('asktitle').textContent), () => '');
+  const guestSeesNothing = await G.evaluate(() => window.__t.prints.size === 0 && document.getElementById('lobby').hidden === false);
+  await S.click('#letin');
+  const letIn = await until(G, () => document.getElementById('lobby').hidden && document.getElementById('s-wait').hidden, null, 10000).then(() => true, () => false);
+  check(waitSays === 'Waiting for Host to let you in' && askSays === 'Guest’s phone wants to join' && guestSeesNothing && letIn,
+    `the guest waits ("${waitSays}", sees nothing: ${guestSeesNothing}); the host is asked ("${askSays}") and Let in lets them in (${letIn})`);
   check(linkAsk.step && linkAsk.name === 'Guest', `an invite link asks for the name first, filled in with the saved one (${JSON.stringify(linkAsk)})`);
   const guestShown = await until(S, () => [...document.querySelectorAll('#inroom li')].some((li) => li.textContent === 'Guest'), null, 20000).then(() => true, () => false);
   const withGuest = await inHeap();
@@ -886,6 +893,7 @@ try {
   const T3 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
   await T3.addInitScript(() => { try { localStorage.setItem('heap-name', 'Third'); } catch {} });
   await T3.goto(`${BASE}?room=${s1.tiles}&auto`); await enter(T3);
+  await until(S, () => !document.getElementById('askbox').hidden, null, 15000); await S.click('#letin');
   await until(S, () => Object.keys(window.__t.net.peers).length === 3, null, 20000);
   const labels = await S.evaluate(() => window.__t.edgeLabels());
   await S.click('#mapbtn'); await until(S, () => !document.getElementById('mapbox').hidden, null, 5000);
@@ -934,6 +942,18 @@ try {
   const nf1 = await NF.evaluate(() => ({ code: document.getElementById('code').value, room: sessionStorage.getItem('room'), url: location.href }));
   check(nf && nf1.code === 'ZZZZZ22222' && nf1.room === null && !nf1.url.includes('ZZZZZ'), `a typed code for an empty heap comes back to the code screen with the error (${nf}), keeps the code (${nf1.code}) and stores nothing (${nf1.room})`);
   await NF.context().close();
+  // 1.5: someone else called Guest is sent back to pick another name; 1.7: Not now turns a device away
+  const D2 = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await D2.addInitScript(() => { try { localStorage.setItem('heap-name', 'guest'); } catch {} });
+  await D2.goto(`${BASE}?room=${s1.tiles}&auto`); await enter(D2);
+  const taken = await until(D2, () => document.getElementById('s-name')?.hidden === false && !document.getElementById('nameerr').hidden, null, 20000).then(() => D2.evaluate(() => document.getElementById('nameerr').textContent), () => '');
+  check(taken === 'Someone in this heap is already called Guest. Pick a different name.', `a second "guest" is asked for another name ("${taken}")`);
+  await D2.fill('#yourname', 'Dee'); await D2.click('#go');
+  await until(S, () => !document.getElementById('askbox').hidden && document.getElementById('asktitle').textContent.startsWith('Dee'), null, 20000);
+  await S.click('#notnow');
+  const turned = await until(D2, () => document.getElementById('s-home')?.hidden === false, null, 15000).then(() => D2.evaluate(() => document.getElementById('toast').textContent), () => '');
+  check(turned === 'Host didn’t let you in this time', `Not now sends Dee back to the home screen ("${turned}")`);
+  await D2.context().close();
   await G.context().close();
   // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
   const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();
