@@ -214,3 +214,20 @@ test('remove your own photos: pick them, Remove, gone from every table, with Und
   assert.match(html, /m\.t === 'unshare'[\s\S]{0,160}validPidMsg\(m\)[\s\S]{0,120}p\.owner === from/, 'only the owner takes a photo off the table');
   assert.match(html, /`Removed \$\{n\} photo\$\{n === 1 \? '' : 's'\}\. Copies already saved stay with whoever saved them`/);
 });
+
+test('a deck arriving (2A.6, 3.6): how many of how many, through relay while it is, then a tick', () => {
+  assert.equal(words.batchLine({ n: 1, k: 0, who: 'Ada', relay: false }), '1 photo from Ada');
+  assert.equal(words.batchLine({ n: 1, k: 1, who: 'Ada', relay: true }), '1 photo from Ada', 'arrived: no need to say how');
+  assert.equal(words.batchLine({ n: 1, k: 0, who: 'Ada', relay: true }), '1 photo from Ada · through relay');
+  assert.equal(words.batchLine({ n: 25, k: 3, who: 'Ada', relay: false }), '25 photos from Ada · 3 of 25');
+  assert.equal(words.batchLine({ n: 25, k: 3, who: 'Ada', relay: true }), '25 photos from Ada · 3 of 25 · through relay');
+  assert.equal(words.batchLine({ n: 25, k: 25, who: 'Ada', relay: true }), '25 photos from Ada ✓');
+});
+
+test('arriving photos show a progress bar on their card, and the line offers Stop until they are all here (3.5)', () => {
+  const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
+  assert.match(frame, /const coming = incoming\.get\(p\.pid\)/, 'knows how much of a photo is here');
+  assert.match(frame, /coming\.got \/ coming\.size/, 'the bar fills with what has arrived');
+  assert.match(html, /function stopLanding\(/);
+  assert.match(html, /\$\('snackact'\)\.textContent = k < n \? 'Stop' : 'Undo'/);
+});

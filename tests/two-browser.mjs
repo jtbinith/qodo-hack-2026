@@ -557,7 +557,10 @@ try {
   await new Promise((r) => setTimeout(r, 150)); await A.mouse.move(900 + 151, deckAt.y);
   await A.mouse.up();
   const deckCame = await until(B, (pids) => pids.every((p) => window.__t.files.has(p)), rest, 60000).then(() => true, () => false);
-  check(rest.length > 1 && deckCame, `dragging A's deck of ${rest.length} onto B sends them all (${deckCame})`);
+  await until(B, () => /^\d+ photos from .+ ✓$/.test(document.getElementById('snacktext').textContent), null, 10000).catch(() => {});
+  const deckLine = await B.evaluate(() => [document.getElementById('snacktext').textContent, document.getElementById('snackact').textContent]);
+  check(rest.length > 1 && deckCame && deckLine[0] === `${rest.length} photos from ${await A.evaluate(() => localStorage.getItem('heap-name'))} ✓` && deckLine[1] === 'Undo',
+    `dragging A's deck of ${rest.length} onto B sends them all (${deckCame}); B says "${deckLine.join('" [')}]"`);
 
   // a late guest still gets photos B holds after A (the owner) leaves
   await A.context().close();
