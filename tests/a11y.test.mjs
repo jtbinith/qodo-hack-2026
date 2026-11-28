@@ -36,7 +36,7 @@ test('6.4: spoken updates', () => {
   assert.equal(a11y.say.sent('Ada', 1), 'Ada sent you 1 photo.');
   assert.equal(a11y.say.getting(3, 12), 'Getting 12 photos. 3 of 12.');
   assert.equal(a11y.say.ready(12), 'All 12 photos checked and ready to save.');
-  assert.equal(a11y.say.left('Ada’s phone'), 'Ada’s phone left the room.');
+  assert.equal(a11y.say.left('Ada’s phone'), 'Ada’s phone left the heap.');   // heap, as everywhere else (Qodo on #165)
   assert.deepEqual([0, 2, 3, 6, 9, 11, 12].map((k) => a11y.progressStep(k, 12)), [0, 0, 1, 2, 3, 3, -1], 'once a quarter, not every piece');
   assert.match(html, /<div id="say" class="sr" aria-live="polite"><\/div>/);
   assert.match(html, /function speak\(/);

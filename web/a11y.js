@@ -21,7 +21,7 @@ export const say = {
   sent: (name, n) => `${name} sent you ${photos(n)}.`,
   getting: (k, n) => `Getting ${photos(n)}. ${k} of ${n}.`,
   ready: (n) => (n === 1 ? '1 photo checked and ready to save.' : `All ${n} photos checked and ready to save.`),
-  left: (device) => `${device} left the room.`,
+  left: (device) => `${device} left the heap.`,
 };
 // progress is said at most at each quarter, so a long download isn't read out piece by piece
 export const progressStep = (k, n) => (n > 1 && k < n ? Math.floor((4 * k) / n) : -1);
@@ -51,4 +51,20 @@ export function gridMove(key, i, n, cols) {
   const d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[key];
   if (d === undefined) return i;
   return Math.min(n - 1, Math.max(0, i + d));
+}
+// arrow keys by where the tiles really are (moments start new rows): the nearest tile that way, or stay
+export function nextByRect(rects, i, key) {
+  const c = rects[i]; if (!c) return i;
+  const cx = (c.left + c.right) / 2, cy = (c.top + c.bottom) / 2;
+  let best = i, score = Infinity;
+  rects.forEach((r, j) => {
+    if (j === i) return;
+    const x = (r.left + r.right) / 2, y = (r.top + r.bottom) / 2, dx = x - cx, dy = y - cy;
+    const ok = key === 'ArrowRight' ? dx > 1 && Math.abs(dy) < (c.bottom - c.top) / 2 : key === 'ArrowLeft' ? dx < -1 && Math.abs(dy) < (c.bottom - c.top) / 2
+      : key === 'ArrowDown' ? dy > 1 : key === 'ArrowUp' ? dy < -1 : false;
+    if (!ok) return;
+    const along = key === 'ArrowDown' || key === 'ArrowUp' ? Math.abs(dy) * 4 + Math.abs(dx) : Math.abs(dx);
+    if (along < score) { score = along; best = j; }
+  });
+  return best;
 }

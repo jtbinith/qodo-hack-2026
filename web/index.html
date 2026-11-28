@@ -805,7 +805,7 @@ import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels, proposeJoin, sideWords, dropSide } from './map.js';
-import { deckLabel, deckRow, say, progressStep, SHORTCUTS, keyAction, gridMove } from './a11y.js';
+import { deckLabel, deckRow, say, progressStep, SHORTCUTS, keyAction, nextByRect } from './a11y.js';
 import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen, forgetOpen } from './gate.js';
 import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
 import { solveLayout, addJoins } from './layout.js';
@@ -1334,10 +1334,10 @@ function hit(sx, sy) {
 }
 const toTop = (ps) => ps.forEach((p) => { prints.delete(p.pid); prints.set(p.pid, p); });
 // a drag holds a deck (or one photo pulled out of one): every photo in it moves together
-function startDrag(ps, cx, cy, moved = false, pointer = null) {
+function startDrag(ps, cx, cy, moved = false, pointer = null, home = null) {
   toTop(ps);
   const p = ps[ps.length - 1], [ox, oy] = world(p);
-  drag = { ps, p, pointer, sx: cx, sy: cy, ox, oy, moved, samples: [{ x: cx, y: cy, t: performance.now() }] };
+  drag = { ps, p, pointer, sx: cx, sy: cy, ox, oy, moved, home, samples: [{ x: cx, y: cy, t: performance.now() }] };
 }
 cv.addEventListener('pointerdown', (e) => {
   if (drag) return;   // one drag at a time: another finger doesn't take it over
@@ -1482,7 +1482,7 @@ function start(room) {
     }
     onMessage(from, m, bytes);
   });
-  const known = new Set(), seen = {};   // seen: who was here, by device name, to say who left
+  const known = new Set(), seen = {}, LEFT_AFTER = 5000;   // seen: who was here, by device name, to say who left
   // Catch everyone up. The owner announces its prints; once the owner has left, anyone
   // still holding a print announces it. Re-checked on every change in who's here, because
   // a device that closes can take a while to drop out of the room, and whenever a device's
@@ -1497,7 +1497,7 @@ function start(room) {
   peers.onReady(catchUp);
   const roomChanged = () => {
     showWho(); showHeader(); gate(); hostChanged();
-    for (const k of Object.keys(seen)) if (!net.peers[k]) { speak(say.left(seen[k])); delete seen[k]; }   // spoken (6.4)
+    for (const k of Object.keys(seen)) if (!net.peers[k]) { const was = seen[k]; delete seen[k]; setTimeout(() => { if (!net.peers[k]) speak(say.left(was)); }, LEFT_AFTER); }   // spoken (6.4), unless it was only a blip
     for (const k of Object.keys(net.peers)) if (k !== id) seen[k] = deviceName(k);
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
@@ -1678,8 +1678,9 @@ function openDeck(pids, all = false, kind = 'all') {
         b.releasePointerCapture?.(m.pointerId);
         $('deckbox').classList.remove('out'); $('deckbox').hidden = true;   // gone at once: the photo is now under the finger
         const [mx, my] = meWorld();
+        const home = { anchor: p.anchor, x: p.x, y: p.y };   // its deck, for Esc
         setWorld(p, mx + m.clientX - p.w / 2, my + m.clientY - p.h / 2);
-        startDrag([p], m.clientX, m.clientY, true, m.pointerId);
+        startDrag([p], m.clientX, m.clientY, true, m.pointerId, home);
       };
       b.onpointerup = () => { b.onpointermove = b.onpointerup = null; if (!held) togglePick(p.pid); };
     };
@@ -1870,10 +1871,12 @@ function updateLanding() {
   // spoken (6.4): how far a drop has come, once a quarter, then that it's all here
   const q = progressStep(st.k, n);
   if (q >= 1 && b.saidQ !== q) { b.saidQ = q; speak(say.getting(st.k, n)); }
-  if (st.done && st.k === n && n > 1 && !b.saidReady) { b.saidReady = true; speak(say.ready(n)); }
+  const here = b.pids.filter((k) => files.has(k)).length;   // a big file waiting for a tap isn't here yet
+  if (st.done && here === n && !b.saidReady) { b.saidReady = true; speak(say.ready(n)); }
 }
 // Stop: whatever hasn't arrived yet stops (the sender is told, so it stops sending), and goes back to the sender's screen
 function stopLanding(b) {
+  clearTimeout(b.sayT);   // stopped: not said as sent
   landedSaid = '';
   const left = b.pids.filter((pid) => !files.has(pid));
   for (const pid of left) { const inc = incoming.get(pid); if (inc) peers.send(inc.from, { t: 'stop', pid }); incoming.delete(pid); }
@@ -1883,6 +1886,7 @@ function stopLanding(b) {
 }
 $('snackact').onclick = () => { const f = snackUndo; snackUndo = null; $('snack').hidden = true; clearTimeout(snackTimer); f?.(); $('snackact').textContent = 'Undo'; };
 function undoLanding(b) {
+  if (b) clearTimeout(b.sayT);
   landings = landings.filter((x) => x !== b); landed = null; landedSaid = '';
   if (!b || !sizes[b.from]) return;
   const spot = deckSpot(prints, b.from, sizes[b.from]);
@@ -2106,28 +2110,42 @@ function speak(text) { const el = $('say'); el.textContent = ''; clearTimeout(sa
 const sidesNow = () => (sizes[id] ? Object.fromEntries(edgeLabels(Object.keys(sizes), layout, sizes, id).map((l) => [l.id, l.side])) : {});   // nothing joined before the heap is live
 // 6.1: a button over each deck on my screen, for screen readers and the keyboard. The canvas stays in charge of
 // fingers and the mouse (the buttons let them through); a button's own Actions are one more button after it
+// focus into an open deck: its first photo (6.7), so the arrows and Space work straight away
+function focusDeck() { setTimeout(() => $('decktiles').querySelector('button[data-pid]')?.focus(), 0); }
 let layerSig = '';
 function showDeckLayer() {
   if (!net || !$('lobby').hidden) { if (layerSig) { layerSig = ''; $('decklayer').replaceChildren(); } return; }
   const [mx, my] = meWorld(), sides = sidesNow();
   const ds = groupDecks(visiblePrints()).filter((d) => visible(d.top)).map((d) => { const [x, y] = world(d.top); return { d, x: Math.round(x - mx), y: Math.round(y - my) }; })
     .filter(({ d, x, y }) => x + d.top.w > 0 && y + d.top.h > 0 && x < W && y < H);
-  const sig = ds.map(({ d, x, y }) => `${d.key}:${d.pids.length}:${x}:${y}:${sides[d.owner] || ''}:${nameOf(d.owner)}`).join('|');
+  const sig = ds.map(({ d, x, y }) => `${d.key}:${d.pids.join(',')}:${x}:${y}:${sides[d.owner] || ''}:${nameOf(d.owner)}`).join('|');
   if (sig === layerSig) return;
   layerSig = sig;
-  $('decklayer').replaceChildren(...ds.map(({ d, x, y }) => {
-    const mine = d.owner === id, item = document.createElement('div'); item.setAttribute('role', 'listitem');
-    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'deckbtn' });
+  // kept by deck and updated in place, so the button in focus stays (Qodo on #165); each opens what's there now
+  const old = new Map([...$('decklayer').children].map((el) => [el.dataset.key, el]));
+  const items = ds.map(({ d, x, y }) => {
+    const mine = d.owner === id;
+    let item = old.get(d.key);
+    if (!item) {
+      item = document.createElement('div'); item.setAttribute('role', 'listitem'); item.dataset.key = d.key;
+      const b = Object.assign(document.createElement('button'), { type: 'button', className: 'deckbtn' });
+      b.dataset.key = d.key;
+      b.onclick = () => { const el = b.parentElement; openDeck(el._pids); focusDeck(); };   // the photos there now, and focus goes with it
+      b.onkeydown = (e) => { if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); openDeckActions(item._deck); } };
+      const a = Object.assign(document.createElement('button'), { type: 'button', className: 'deckacts sr' });
+      a.onclick = () => openDeckActions(item._deck);
+      item.append(b, a);
+    }
+    old.delete(d.key);
+    item._deck = d; item._pids = d.pids;
+    const [b, a] = item.children;
     b.setAttribute('aria-label', deckLabel({ mine, name: nameOf(d.owner), n: d.pids.length, side: sides[d.owner] }));
     Object.assign(b.style, { left: x + 'px', top: y + 'px', width: d.top.w + 'px', height: d.top.h + 'px' });
-    b.dataset.key = d.key;
-    b.onclick = () => openDeck(d.pids);
-    b.onkeydown = (e) => { if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); openDeckActions(d); } };
-    const a = Object.assign(document.createElement('button'), { type: 'button', className: 'deckacts sr', textContent: `Actions for ${mine ? 'your deck' : nameOf(d.owner) + '’s deck'}` });
-    a.onclick = () => openDeckActions(d);
-    item.append(b, a);
+    a.textContent = `Actions for ${mine ? 'your deck' : nameOf(d.owner) + '’s deck'}`;
     return item;
-  }));
+  });
+  for (const el of old.values()) el.remove();
+  items.forEach((el, i) => { if ($('decklayer').children[i] !== el) $('decklayer').insertBefore(el, $('decklayer').children[i] || null); });
 }
 // 6.3: a deck's actions as a list
 let actDeck = null;
@@ -2144,7 +2162,7 @@ const actPrints = () => (actDeck ? actDeck.pids.map((k) => prints.get(k)).filter
 $('daopen').onclick = () => { const d = actDeck; closeSheet('deckacts', () => { if (d) openDeck(d.pids); }); };
 $('dasend').onclick = () => { const ps = actPrints(); closeSheet('deckacts', () => { if (ps.length) openSendTo(ps); }); };
 $('dapick').onclick = () => { for (const p of actPrints()) picked.add(p.pid); showPicks(); closeSheet('deckacts'); };
-$('daget').onclick = () => { const only = new Set(actPrints().map((p) => p.pid)); for (const k of only) picked.add(k); showPicks(); getPicked(only); closeSheet('deckacts'); };   // inside the tap; just this deck
+$('daget').onclick = () => { const only = new Set(actPrints().map((p) => p.pid).filter((k) => !sharingOne.has(k))); for (const k of only) picked.add(k); showPicks(); getPicked(only); closeSheet('deckacts'); };   // inside the tap; just this deck
 $('dahide').onclick = () => { const d = actDeck; if (d) { hiddenOwners.add(d.owner); for (const k of [...picked]) if (prints.get(k)?.owner === d.owner) picked.delete(k); showPicks(); } closeSheet('deckacts'); };
 $('daclose').onclick = () => closeSheet('deckacts');
 $('deckacts').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('deckacts'); };
@@ -2163,15 +2181,18 @@ function showDeckList() {
   const sides = sidesNow(), by = new Map();
   for (const d of groupDecks(visiblePrints())) by.set(d.owner, [...(by.get(d.owner) || []), ...d.pids]);
   const rows = [...by].sort(([a], [b]) => (a === id ? -1 : b === id ? 1 : 0));
-  const sig = rows.map(([o, ps]) => `${o}:${ps.length}:${sides[o] || ''}`).join('|');
+  const sig = rows.map(([o, ps]) => `${o}:${ps.join(',')}:${sides[o] || ''}`).join('|');   // the photos themselves, not just how many
   if (sig === listSig && $('decklist').childElementCount) return;
   listSig = sig;
   $('decklist').replaceChildren(...(rows.length ? rows.map(([owner, pids]) => {
     const r = deckRow({ mine: owner === id, name: nameOf(owner), n: pids.length, side: sides[owner], kind: deviceKind({ w: W, h: H }) });
-    const b = Object.assign(document.createElement('button'), { type: 'button' }); b.setAttribute('role', 'listitem');
+    const item = document.createElement('div'); item.setAttribute('role', 'listitem');
+    const b = Object.assign(document.createElement('button'), { type: 'button' });
     b.append(Object.assign(document.createElement('b'), { textContent: r.title }), Object.assign(document.createElement('small'), { textContent: r.where }));
-    b.onclick = () => openDeck(pids);
-    return b;
+    item._pids = pids;
+    b.onclick = () => { const el = b.parentElement; openDeck(el._pids); focusDeck(); };
+    item.append(b);
+    return item;
   }) : [Object.assign(document.createElement('p'), { className: 'deckhint', textContent: 'Nothing on the table yet.' })]));
 }
 function listView(on) {
@@ -2186,13 +2207,22 @@ try { if (localStorage.getItem(LIST_KEY) === '1') listView(true); } catch {}
 $('keyslist').replaceChildren(...SHORTCUTS.map(([k, what]) => { const li = document.createElement('li'); li.append(Object.assign(document.createElement('kbd'), { textContent: k }), Object.assign(document.createElement('span'), { textContent: what })); return li; }));
 $('keysclose').onclick = () => closeSheet('keysbox');
 $('keysbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('keysbox'); };
-const SHEETS = ['keysbox', 'deckacts', 'previewbox', 'sendbox', 'reviewbox', 'deckbox', 'mapbox', 'arrangebox', 'personbox', 'peoplebox', 'checkbox', 'sharebox', 'textbox', 'invitebox', 'leavebox'];
+// dialogs over sheets first: Esc acts on the top one. A dialog that asks a question is answered only where
+// Esc means "no" (keep, cancel); the rest just stop the shortcuts while they're up
+const OVERLAYS = ['askbox', 'movebox', 'rejoinbox', 'warnbox', 'blockbox', 'lostbox', 'endbox', 'unsavedbox', 'hostbox', 'pairbox', 'kindbox'];
+const ESC = { rejoinbox: 'rejoinkeep', blockbox: 'blockno', endbox: 'endno', movebox: 'moveno', hostbox: 'hostok', pairbox: 'pairclose' };
+const SHEETS = [...OVERLAYS, 'keysbox', 'deckacts', 'previewbox', 'sendbox', 'reviewbox', 'deckbox', 'mapbox', 'arrangebox', 'personbox', 'peoplebox', 'checkbox', 'sharebox', 'textbox', 'invitebox', 'leavebox'];
 const openNow = () => SHEETS.find((k) => $(k) && !$(k).hidden);
 function closeTop() {
-  if (drag) { const { ps, p, ox, oy } = drag; drag = null; showDropMap(false); moveAll(ps, p, ox, oy); sendMove(true, { ps, p }); return true; }   // a drag goes back where it started
+  if (drag) {   // a drag goes back where it started: its deck, for a photo pulled out of one
+    const { ps, p, ox, oy } = drag; moveAll(ps, p, ox, oy); if (drag.home) Object.assign(p, drag.home);
+    drag = null; showDropMap(false); sendMove(true, { ps, p }); return true;
+  }
   if (!$('menubox').hidden) { closeMenu(); return true; }
   if (!$('joinmode').hidden) { closeJoin(); return true; }
-  const k = openNow(); if (k) { if (k === 'previewbox') $('previewback').click(); else closeSheet(k); return true; }
+  const k = openNow();
+  if (k && OVERLAYS.includes(k)) { if (ESC[k]) $(ESC[k]).click(); else if (k === 'kindbox') closeSheet(k); return true; }
+  if (k) { if (k === 'previewbox') $('previewback').click(); else closeSheet(k); return true; }
   if (!$('decklist').hidden) { listView(false); return true; }
   return false;
 }
@@ -2201,8 +2231,7 @@ function onKey(e) {
   const tile = e.target?.closest?.('#decktiles button[data-pid]');
   if (tile && /^Arrow/.test(e.key)) {   // between photos in a deck
     const tiles = [...$('decktiles').querySelectorAll('button[data-pid]')], i = tiles.indexOf(tile);
-    const cols = Math.max(1, Math.round($('decktiles').clientWidth / Math.max(1, tile.offsetWidth)));
-    tiles[gridMove(e.key, i, tiles.length, cols)]?.focus(); e.preventDefault(); return;
+    tiles[nextByRect(tiles.map((t) => t.getBoundingClientRect()), i, e.key)]?.focus(); e.preventDefault(); return;
   }
   if (tile && (e.key === ' ' || e.key === 'Enter')) {   // Space picks, Enter looks closer
     e.preventDefault();
