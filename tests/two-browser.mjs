@@ -308,7 +308,7 @@ try {
   check(k4Holding && k4LetGo, `B sees A holding a photo near the seam (${k4Holding}), and stops once A lets go (${k4LetGo})`);
   // #161 review: two photos flicked one after another both land on B; a vertical swipe in the deck sheet doesn't pull a photo out;
   // Send to with a photo A doesn't have says so
-  const two = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 2); return d ? d.pids.slice(0, 2) : []; });
+  const two = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 2); return d ? d.pids.filter((k) => !['IMG_0004.JPG', 'IMG_0005.JPG'].includes(t.prints.get(k).name)).slice(0, 2) : []; });   // not the photos the tap checks use
   for (const [n, pid] of two.entries()) {
     await A.evaluate(([pid, y]) => { const t = window.__t, p = t.prints.get(pid); p.anchor = t.id; p.x = 560; p.y = y; t.prints.delete(pid); t.prints.set(pid, p); }, [pid, 80 + n * 220]);
     const y0 = 80 + n * 220 + 75;
@@ -340,7 +340,8 @@ try {
   await A.evaluate((ghost) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'photo-1.jpg');
     t.onMessage(ghost, { t: 'want', pid: p.pid }); }, GHOST);
   await drag(A, 'photo-1.jpg', 900 + 150);
-  await until(B, () => window.__t.files.size === 5, null, 60000);
+  const p1 = await A.evaluate(() => [...window.__t.prints.values()].find((p) => p.name === 'photo-1.jpg').pid);
+  await until(B, (pid) => window.__t.files.has(pid), p1, 60000);   // the photo it sent (others may have arrived by other ways)
   const gaveUpEarly = await A.evaluate(() => document.getElementById('toast').textContent.includes('Couldn’t send'));
   check(!gaveUpEarly, `photo-1.jpg reached B after ${((Date.now() - asked) / 1000).toFixed(1)} s, while A still waited on the silent device`);
   const toldSender = await A.waitForFunction(() => document.getElementById('toast').textContent.includes('Couldn’t send'), null, { timeout: 20000 }).then(() => true, () => false);
@@ -361,19 +362,22 @@ try {
   await B.click('#deckback');
   await B.click('#pickedbtn'); await sheetUp(B, 'reviewbox');
   const reviewSays = await B.evaluate(() => [document.getElementById('reviewtitle').textContent, document.getElementById('reviewline').textContent]);
-  check(heldByB.length === 5 && /^Get 5 · [\d.]+ MB$/.test(pickedSays[0]) && pickedSays[1] === 'Picked · 5' && reviewSays[0] === 'Picked · 5' && /^[\d.]+ MB · from .+ \(5\) · stays only on this device$/.test(reviewSays[1]),
+  const NB = heldByB.length;   // what B holds by now: the dragged photos, and any flicked or given to it
+  check(NB >= 5 && new RegExp(`^Get ${NB} · [\\d.]+ MB$`).test(pickedSays[0]) && pickedSays[1] === `Picked · ${NB}` && reviewSays[0] === `Picked · ${NB}` && new RegExp(`^[\\d.<\\s]+MB · from .+ \\(${NB}\\) · stays only on this device$`).test(reviewSays[1]),
     `picking 5 says "${pickedSays.join('", "')}", and the review says "${reviewSays.join('", "')}"`);
   await B.click('#getall');
   await until(B, () => document.getElementById('toast').textContent.startsWith('Downloading'), null, 5000);
   const saveSaid = await toastOf(B);
-  const allCame = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= 5 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length); } }, 100); });
+  const allCame = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= NB || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length); } }, 100); });
   const saved = await Promise.all(downloads.map(async (d) => [d.suggestedFilename(), sha(readFileSync(await d.path()))]));
-  check(allCame === 5 && saveSaid === 'Downloading 5' && saved.every(([n, h]) => expected[n] === h), `Get downloaded ${saved.map(([n]) => n).join(', ')} byte-identical ("${saveSaid}")`);
+  const heldByA = Object.fromEntries(await A.evaluate(() => Promise.all([...window.__t.files.values()].map(async (f) => [f.name, [...new Uint8Array(await f.arrayBuffer())]]))).then((l) => l.map(([n, b]) => [n, sha(Buffer.from(b))])));
+  for (const [n] of saved) if (!expected[n] || n.endsWith('.JPG')) expected[n] = heldByA[n] ?? expected[n];   // what A shared (location removed), not the original
+  check(allCame === NB && saveSaid === `Downloading ${NB}` && saved.every(([n, h]) => expected[n] === h), `Get downloaded ${saved.map(([n]) => n).join(', ')} byte-identical ("${saveSaid}")`);
   await B.click('#getall');
   await new Promise((r) => setTimeout(r, 1500));
-  check(downloads.length === 5 && await toastOf(B) === 'Nothing new to save', `a second Get downloads nothing again ("${await toastOf(B)}")`);
+  check(downloads.length === NB && await toastOf(B) === 'Nothing new to save', `a second Get downloads nothing again ("${await toastOf(B)}")`);
   // a picked photo that isn't here yet: Get asks for it, says it's arriving, and the next Get saves it
-  const away = await B.evaluate(() => [...window.__t.prints.values()].find((p) => p.owner !== window.__t.id && !window.__t.files.has(p.pid) && p.type.startsWith('image/'))?.pid);
+  const away = await B.evaluate(() => [...window.__t.prints.values()].find((p) => p.owner !== window.__t.id && !window.__t.files.has(p.pid) && p.type.startsWith('image/') && !['IMG_0004.JPG', 'IMG_0005.JPG'].includes(p.name))?.pid);   // not the photos the tap checks below use
   await B.evaluate(() => document.getElementById('reviewbox').hidden = true);
   await B.click('#allphotos'); await sheetUp(B, 'deckbox');
   await tapTile(B, 'deckbox', away);
@@ -381,7 +385,7 @@ try {
   const arrivingSaid = await toastOf(B);
   const fetched = await until(B, (pid) => window.__t.files.has(pid), away, 60000).then(() => true, () => false);
   await B.click('#getpick');
-  const gotAway = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= 6 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length === 6); } }, 100); });
+  const gotAway = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= NB + 1 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length === NB + 1); } }, 100); });
   check(!!away && /still arriving/.test(arrivingSaid) && fetched && gotAway, `Get on a photo that isn't here says "${arrivingSaid}", fetches it (${fetched}) and the next Get saves it (${gotAway})`);
   await B.evaluate(() => { document.getElementById('deckbox').hidden = true; });
   // a send that fails for another reason (here the file can't be read) doesn't blame the device
@@ -492,12 +496,12 @@ try {
     t.peers.send(b, { t: 'move', pid: p.pid, anchor: b, x, y, final: true });
     return p.pid;
   }, [name, ids.b, x, y]);
-  const tapPid = await place('IMG_0004.JPG', 120, 300);
+  const tapPid = await place('IMG_0004.JPG', 220, 120);   // top right of B: clear of photos that landed in the middle
   const edgePid = await place('IMG_0005.JPG', -100, 60);   // 150 wide: its middle is 25 px onto A's screen
   await A.evaluate((pid) => { const t = window.__t, real = t.peers.sendFile;
     t.peers.sendFile = (to, fid, ...a) => fid === pid ? new Promise((r) => setTimeout(r, 2000)).then(() => real(to, fid, ...a)) : real(to, fid, ...a); }, tapPid);
   await until(B, ([a, b]) => { const t = window.__t, pa = t.prints.get(a), pb = t.prints.get(b);
-    return pa?.anchor === t.id && pa.x === 120 && pb?.anchor === t.id && pb.x === -100; }, [tapPid, edgePid]);
+    return pa?.anchor === t.id && pa.x === 220 && pb?.anchor === t.id && pb.x === -100; }, [tapPid, edgePid]);
   await B.evaluate(() => { const t = window.__t, real = t.peers.send; t.wants = [];
     t.peers.send = (to, m, ...a) => { if (m?.t === 'want') t.wants.push(m.pid); return real(to, m, ...a); }; });
   const centre = (pid) => B.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid);

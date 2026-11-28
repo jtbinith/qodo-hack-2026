@@ -112,7 +112,7 @@
   .deckhint { margin: 0; font-size: 13px; color: var(--text-mid); text-align: center; }
   #decktiles { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; padding-bottom: 4px; }
   #decktiles button { position: relative; aspect-ratio: 1; padding: 0; border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; background: var(--ink); color: var(--paper);
-    font: 12px var(--ui); touch-action: none; }
+    font: 12px var(--ui); touch-action: pan-y; }
   #decktiles img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
   #decktiles .who { position: absolute; left: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--paper); color: var(--ink); border: 1.5px solid var(--ink);
     font: 700 10px/21px var(--ui); text-align: center; }
@@ -435,6 +435,8 @@ $('nf').onsubmit = (e) => {
   pending.typed = false;
   start(pending.code);
 };
+// timings for joining: how long a typed code waits for someone to be there (twice), and the window for two taps to pair
+const NOT_FOUND_AFTER = 4000, NOT_FOUND_TRIES = 2, JOIN_WINDOW_S = 2;
 // code not found (1.3): leave, and come back to the code screen with the code and why
 const NOT_FOUND_KEY = 'heap-notfound';
 function notFound(code) {
@@ -610,6 +612,7 @@ function onMessage(from, m, bytes) {
     if (tok) peers.sendFile(from, m.pid, file).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
   } else if (m.t === 'have') {           // someone now holds the bytes
     const p = validPidMsg(m) && prints.get(m.pid);
+    if (p) confirmSent(from, m.pid);   // something I sent has arrived
     if (p && !p.holders.includes(from) && p.holders.length < 50) p.holders.push(from);
   } else if (m.t === 'need') {           // receiver is missing pieces (null = all): resend them
     if (!validNeed(m)) return;
@@ -699,8 +702,8 @@ function dropped(p) {
 }
 
 // ---------- input: decks and photos (drag, flick, tap to open or save) ----------
-let drag = null, fly = null;
-const held = (p) => !!(drag?.ps.includes(p) || fly?.ps.includes(p));   // moved by this device right now: others' moves wait
+let drag = null, flies = [];   // several photos can glide at once
+const held = (p) => !!(drag?.ps.includes(p) || flies.some((f) => f.ps.includes(p)));   // moved by this device right now: others' moves wait
 const PILL_BELOW = 40;   // the name pill under a photo is part of it: a tap there saves it too
 // the deck under a point on my screen, top-most first
 function hit(sx, sy) {
@@ -709,15 +712,18 @@ function hit(sx, sy) {
 }
 const toTop = (ps) => ps.forEach((p) => { prints.delete(p.pid); prints.set(p.pid, p); });
 // a drag holds a deck (or one photo pulled out of one): every photo in it moves together
-function startDrag(ps, cx, cy, moved = false) {
+function startDrag(ps, cx, cy, moved = false, pointer = null) {
   toTop(ps);
   const p = ps[ps.length - 1], [ox, oy] = world(p);
-  drag = { ps, p, sx: cx, sy: cy, ox, oy, moved, samples: [{ x: cx, y: cy, t: performance.now() }] };
+  drag = { ps, p, pointer, sx: cx, sy: cy, ox, oy, moved, samples: [{ x: cx, y: cy, t: performance.now() }] };
 }
 cv.addEventListener('pointerdown', (e) => {
+  if (drag) return;   // one drag at a time: another finger doesn't take it over
   cv.setPointerCapture(e.pointerId);
   const d = hit(e.clientX, e.clientY);
-  if (d) startDrag(d.pids.map((k) => prints.get(k)), e.clientX, e.clientY);
+  if (!d) return;
+  flies = flies.filter((f) => !f.ps.some((q) => d.pids.includes(q.pid)));   // grabbing a gliding photo stops its glide
+  startDrag(d.pids.map((k) => prints.get(k)), e.clientX, e.clientY, false, e.pointerId);
 });
 let lastSend = 0;
 const sendMove = (final, { ps, p } = drag) => {
@@ -727,7 +733,7 @@ const sendMove = (final, { ps, p } = drag) => {
 };
 // moves and the let-go are heard on the window, so a photo pulled out of the deck sheet keeps following the finger
 addEventListener('pointermove', (e) => {
-  if (!drag) return;
+  if (!drag || e.pointerId !== drag.pointer) return;
   const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
   if (Math.hypot(dx, dy) > 8) drag.moved = true;
   drag.samples.push({ x: e.clientX, y: e.clientY, t: performance.now() }); if (drag.samples.length > 12) drag.samples.shift();
@@ -735,8 +741,15 @@ addEventListener('pointermove', (e) => {
   for (const q of drag.ps) if (q !== drag.p) { q.anchor = drag.p.anchor; q.x = drag.p.x; q.y = drag.p.y; }
   if (performance.now() - lastSend > 40) { lastSend = performance.now(); sendMove(false); }
 });
+// the browser took the pointer away (a call, a system gesture): the photo is put down where it is
+addEventListener('pointercancel', (e) => {
+  if (!drag || e.pointerId !== drag.pointer) return;
+  const { ps, p, ox, oy, moved } = drag; drag = null;
+  if (!moved) return;
+  const [x, y] = world(p); land(ps, p, { x: ox, y: oy }, [{ x, y }]);
+});
 addEventListener('pointerup', (e) => {
-  if (!drag) return;
+  if (!drag || e.pointerId !== drag.pointer) return;
   const { ps, p, moved, ox, oy, samples } = drag;
   if (!moved) { drag = null; return ps.length === 1 ? save(p) : openDeck(ps.map((q) => q.pid)); }   // a tap: save it, or open the deck
   samples.push({ x: e.clientX, y: e.clientY, t: performance.now() });
@@ -744,7 +757,7 @@ addEventListener('pointerup', (e) => {
   drag = null;
   const [x, y] = world(p);
   // let go while moving: it glides on (2A.3). Let go still: it lands where it is
-  if (Math.hypot(vx, vy) > 0.3) fly = { ps, p, from: { x: ox, y: oy }, x, y, vx, vy, t0: performance.now(), path: [{ x, y }] };
+  if (Math.hypot(vx, vy) > 0.3) flies.push({ ps, p, from: { x: ox, y: oy }, x, y, vx, vy, t0: performance.now(), path: [{ x, y }] });
   else land(ps, p, { x: ox, y: oy }, [{ x, y }]);
 });
 const centreOn = (p) => (pt) => screenAt(pt.x + p.w / 2, pt.y + p.h / 2);
@@ -755,17 +768,22 @@ function land(ps, p, from, path) {
   if (!end.on) { moveAll(ps, p, from.x, from.y); sendMove(true, { ps, p }); return openSendTo(ps); }
   moveAll(ps, p, end.at.x, end.at.y);
   sendMove(true, { ps, p });
-  for (const q of ps) broadcast((k) => peers.send(k, { t: 'dropcheck', pid: q.pid }));
-  ps.forEach(dropped);
-  if (end.on !== id) toast(`Sent to ${net.peers[end.on]?.name || 'a device'} ✓`);
+  const drop = pidOf();   // this drop, so the receiver's Undo covers just it
+  for (const q of ps) broadcast((k) => peers.send(k, { t: 'dropcheck', pid: q.pid, drop }));
+  ps.forEach((q) => dropped(q));
+  if (end.on !== id) waitSent(end.on, ps);
 }
 // a glide, one frame at a time; others see it cross the seam as it goes
 function glide() {
-  if (!fly) return;
-  const g = glideAt(fly, performance.now() - fly.t0);
-  moveAll(fly.ps, fly.p, g.x, g.y); fly.path.push({ x: g.x, y: g.y });
-  if (performance.now() - lastSend > 40) { lastSend = performance.now(); sendMove(false, fly); }
-  if (g.done) { const f = fly; fly = null; land(f.ps, f.p, f.from, f.path); }
+  if (!flies.length) return;
+  const send = performance.now() - lastSend > 40;
+  if (send) lastSend = performance.now();
+  for (const f of [...flies]) {
+    const g = glideAt(f, performance.now() - f.t0);
+    moveAll(f.ps, f.p, g.x, g.y); f.path.push({ x: g.x, y: g.y });
+    if (send) sendMove(false, f);
+    if (g.done) { flies = flies.filter((x) => x !== f); land(f.ps, f.p, f.from, f.path); }
+  }
 }
 // Saving must happen inside the tap, with the file already in hand (iOS rule).
 function save(p) {
@@ -778,7 +796,8 @@ function save(p) {
   }
   if (p.owner === id) return toast('Already yours');
   // handed over once it was shared or its download started, so Save all doesn't save it again (F13)
-  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), () => {});
+  if (pickSave.busy()) return toast('Still saving');
+  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); });
   else { downloadFile(file); pickSave.handed.add(p.pid); }
 }
 function downloadFile(file) {
@@ -794,6 +813,7 @@ const pickSave = createSaveAll({
   share: (list) => navigator.share({ files: list }),
   download: downloadFile,
   toast,
+  label: 'Get',
 });
 // Get: ask for every picked photo that isn't here yet, then save what is here, inside this tap (iOS rule)
 function getPicked() {
@@ -813,10 +833,10 @@ function start(room) {
   const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
   peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) });
   peers.on((from, m, bytes) => {
-    if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (incoming.has(p.pid) && onMyScreen(p)) noteLanding(from, p); } return; }
+    if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
     if (m.t === 'give') {   // sent to me with Send to…: only from someone who has it
       const p = validPidMsg(m) && prints.get(m.pid);
-      if (p && !files.has(p.pid) && (p.owner === from || (p.holders || []).includes(from))) given(from, p);
+      if (p && (p.owner === from || (p.holders || []).includes(from))) given(from, p, m.drop);   // already here: it still lands on my screen
       return;
     }
     onMessage(from, m, bytes);
@@ -873,7 +893,9 @@ function start(room) {
       if (pending.fresh) { pending.fresh = false; $('invite').click(); }
       if (pending.mustExist) {   // heaps exist only while someone is in them: alone after a moment means no such heap
         pending.mustExist = false;
-        setTimeout(() => { if (net !== attempt) return; if (!others().length) notFound(room); }, 4000);
+        let tries = 0;
+        const check = () => { if (net !== attempt || others().length) return; if (++tries < NOT_FOUND_TRIES) return setTimeout(check, NOT_FOUND_AFTER); if (!others().length) notFound(room); };
+        setTimeout(check, NOT_FOUND_AFTER);   // a slow link gets a second look before we say there's no such heap
       }
     },
     failed: () => {
@@ -951,14 +973,17 @@ function openDeck(pids, all = false) {
     b.onpointerdown = (e) => {
       const sx = e.clientX, sy = e.clientY;
       b.setPointerCapture(e.pointerId);
+      const letGo = () => { b.onpointermove = b.onpointerup = b.onpointercancel = null; b.releasePointerCapture?.(e.pointerId); };   // a scroll, or the browser took over
+      b.onpointercancel = letGo;
       b.onpointermove = (m) => {
         if (Math.hypot(m.clientX - sx, m.clientY - sy) < 10) return;
-        b.onpointermove = b.onpointerup = null;
+        if (Math.abs(m.clientY - sy) > Math.abs(m.clientX - sx)) return letGo();   // up or down: that's scrolling the sheet
+        b.onpointermove = b.onpointerup = b.onpointercancel = null;
         b.releasePointerCapture?.(m.pointerId);
         $('deckbox').classList.remove('out'); $('deckbox').hidden = true;   // gone at once: the photo is now under the finger
         const [mx, my] = meWorld();
         setWorld(p, mx + m.clientX - p.w / 2, my + m.clientY - p.h / 2);
-        startDrag([p], m.clientX, m.clientY, true);
+        startDrag([p], m.clientX, m.clientY, true, m.pointerId);
       };
       b.onpointerup = () => { b.onpointermove = b.onpointerup = null; togglePick(p.pid); };
     };
@@ -1015,9 +1040,10 @@ $('allphotos').onclick = () => openDeck([...prints.keys()], true);
 // landed (2A.4): photos that came onto this screen from someone, counted together for a moment, with Undo.
 // Undo puts them back on the sender's screen (on their deck if they're the owner)
 let landed = null, snackTimer = 0;
-function noteLanding(from, p) {
-  // one drop (a deck lands as many photos at once) counts together; a later drop starts again
-  if (!landed || landed.from !== from || performance.now() - landed.t > 1000) landed = { from, pids: [] };
+function noteLanding(from, p, drop) {
+  // one drop (a deck lands as many photos at once) counts together; a later drop, even a moment after, starts again
+  drop = typeof drop === 'string' ? drop.slice(0, 32) : '';
+  if (!landed || landed.from !== from || landed.drop !== drop || performance.now() - landed.t > 1000) landed = { from, drop, pids: [] };
   landed.t = performance.now();
   if (!landed.pids.includes(p.pid)) landed.pids.push(p.pid);
   const n = landed.pids.length, who = net.peers[from]?.name || 'someone';
@@ -1052,7 +1078,7 @@ for (const st of document.querySelectorAll('#joinmode .strip')) st.onclick = (e)
   const edge = st.dataset.edge, along = edge === 'L' || edge === 'R' ? e.clientY : e.clientX;
   for (const o of document.querySelectorAll('#joinmode .strip')) o.classList.toggle('on', o === st);
   net.push(edge, along);
-  let left = 2;
+  let left = JOIN_WINDOW_S;
   joinCard(String(left), 'Now tap the facing edge on the other screen. Both taps must land within 2 seconds', { count: true });
   clearInterval(joinTick);
   joinTick = setInterval(() => { left--; if (left > 0) $('jointitle').textContent = String(left); else { clearInterval(joinTick); joinCard('Waiting for a match…', 'Checking with the other screen'); } }, 1000);
@@ -1082,21 +1108,45 @@ function openSendTo(ps) {
   if (!people.length) $('sendlist').replaceChildren(Object.assign(document.createElement('p'), { className: 'deckhint', textContent: 'Nobody else is in this heap yet. Invite someone from the menu.' }));
   openSheet('sendbox');
 }
-$('sendlist').onclick = (e) => {
+$('sendlist').onclick = async (e) => {
   const to = e.target.closest('button')?.dataset.to; if (!to) return;
   const list = to === '*' ? others() : [to];
-  for (const k of list) for (const p of sending) peers.send(k, { t: 'give', pid: p.pid });
-  toast(`Sent to ${to === '*' ? 'everyone' : net.peers[to]?.name || 'a device'} ✓`);
+  // only photos this device has can be sent; someone else's that hasn't come here yet can't
+  const sendable = sending.filter((p) => p.owner === id || files.has(p.pid)), notHere = sending.length - sendable.length;
+  if (!sendable.length) return toast(`You don’t have ${sending.length === 1 ? 'this photo' : 'these photos'} yet. Get ${sending.length === 1 ? 'it' : 'them'} first, then send`);
+  const drop = pidOf();
+  const results = await Promise.all(list.flatMap((k) => sendable.map((p) => peers.send(k, { t: 'give', pid: p.pid, drop }).then((ok) => [k, ok], () => [k, false]))));
+  const failed = [...new Set(results.filter(([, ok]) => !ok).map(([k]) => k))];
+  if (failed.length) return toast(`Couldn’t send to ${failed.map((k) => net.peers[k]?.name || 'a device').join(', ')}. Try again`);   // Send to stays open to try again
+  for (const k of list) waitSent(k, sendable, notHere);
   sending = []; closeSheet('sendbox');
 };
+// Sent ✓ only once the receiver says it has them (it sends 'have'); until then, Sending…
+const sendsOut = [];   // { to, left: Set of pids, n, notHere, t }
+function waitSent(to, ps, notHere = 0) {
+  const left = new Set(ps.filter((p) => !(p.holders || []).includes(to)).map((p) => p.pid)), who = net.peers[to]?.name || 'a device';
+  const extra = notHere ? `. ${notHere} not sent: you don’t have ${notHere === 1 ? 'it' : 'them'} yet` : '';
+  if (!left.size) return toast(`Sent to ${who} ✓${extra}`);
+  sendsOut.push({ to, left, n: ps.length, notHere, t: performance.now() });
+  toast(`Sending to ${who}…${extra}`);
+}
+function confirmSent(from, pid) {
+  for (const s of [...sendsOut]) {
+    if (s.to !== from || !s.left.delete(pid) || s.left.size) continue;
+    sendsOut.splice(sendsOut.indexOf(s), 1);
+    toast(`Sent to ${net.peers[from]?.name || 'a device'} ✓`);
+  }
+}
 $('sendjoin').onclick = () => closeSheet('sendbox', openJoin);
 $('sendbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('sendbox'); };
 // given to me (3.3, 3.11): it comes onto my screen and arrives by itself
-function given(from, p) {
+function given(from, p, drop) {
   const spot = { x: Math.max(0, W / 2 - p.w / 2 + (Math.random() - 0.5) * 60), y: Math.max(90, H / 2 - p.h / 2 + (Math.random() - 0.5) * 60) };
   p.anchor = id; p.x = spot.x; p.y = spot.y;
   broadcast((k) => peers.send(k, { t: 'move', pid: p.pid, anchor: id, x: p.x, y: p.y, final: true }));
-  dropped(p); noteLanding(from, p);
+  if (files.has(p.pid)) peers.send(from, { t: 'have', pid: p.pid });   // already here: tell the sender it arrived
+  else dropped(p);
+  noteLanding(from, p, drop);
 }
 // the header: the heap's name (after its time keeper), who's here and how much is shared, and their initials
 let headWas = '';
