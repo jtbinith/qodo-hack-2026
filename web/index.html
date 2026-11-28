@@ -1229,7 +1229,7 @@ function getPicked() {
 // they already have for this device and would ignore a new one (Qodo re-review of #163)
 function start(room, again = false) {
   $('lobby').hidden = true;
-  const attempt = net = joinRoom({ since: again ? net?.joinedAt : null, room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
+  const attempt = net = joinRoom({ since: again ? net?.joinedAt : null, admitted: again ? net?.admits : null, room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
   if (!again) {
     peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
     peers.on((from, m, bytes) => {

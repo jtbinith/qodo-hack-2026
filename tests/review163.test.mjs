@@ -179,7 +179,7 @@ test('re-review: a share sheet that never settles frees that photo after SHARE_T
 // the third look at #163
 const netSrc = readFileSync(new URL('../web/net.js', import.meta.url), 'utf8');
 test('round 3: Try again keeps this device’s place in the queue, so nobody who came later becomes the host', () => {
-  assert.match(netSrc, /export function joinRoom\(\{ room, id, name, size, onSignal, onReturn = \(\) => \{\}, linked = \(\) => false, since = null \}\)/);
+  assert.match(netSrc, /export function joinRoom\(\{ room, id, name, size, onSignal, onReturn = \(\) => \{\}, linked = \(\) => false, since = null(, admitted = null)? \}\)/);
   assert.match(netSrc, /const joinedAt = since \?\? wall\(\);/);
   assert.match(netSrc, /joinedAt,\s*\/\/ when this device joined/);
   assert.match(html, /since: again \? net\?\.joinedAt : null/);
