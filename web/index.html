@@ -301,6 +301,18 @@
   #kindlist button[aria-checked="true"] { background: var(--line); }
   #kindlist button::before { content: '○'; margin-right: 12px; } #kindlist button[aria-checked="true"]::before { content: '●'; }
   #kindlist button span { margin-left: auto; color: var(--text-mid); }
+  /* arrange screens (4.7, 4.8, 4.11, 4.12) */
+  #mapmove, #maparrange { font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #maparrange[hidden] { display: none; }
+  #arrangebox, #movebox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 6; }
+  #arrangebox .sheet, #movebox .sheet { width: min(100%, 480px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+  #movebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #arrangebox h2, #movebox h2 { margin: 4px 0; font: 700 18px var(--ui); text-align: center; }
+  #arrangecancel { justify-self: start; background: none; border: 0; color: var(--text-mid); font: 500 15px var(--ui); }
+  #arrangelist button { display: flex; justify-content: space-between; width: 100%; padding: 14px 4px; background: none; border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: 500 17px var(--ui); text-align: left; }
+  #arrangelist button::after { content: '›'; color: var(--text-mid); }
+  #movesub { margin: 0; font-size: 14px; color: var(--text-mid); line-height: 1.45; }
   /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
@@ -411,6 +423,8 @@
   <canvas id="mapcv" aria-hidden="true"></canvas>
   <p id="mapkey"></p>
   <button type="button" id="mapjoin" class="pri">Join a screen</button>
+  <button type="button" id="mapmove">Move my screen</button>
+  <button type="button" id="maparrange" hidden>Arrange screens</button>
   <button type="button" id="mapclose">Close</button>
 </div></div><!-- /mapbox -->
 <div id="dropmap" hidden><small>Or drop on the map</small><canvas id="dropcv"></canvas></div>
@@ -504,6 +518,19 @@
   <div id="kindlist" role="radiogroup"></div>
   <p class="deckhint">Only kinds in this heap are listed</p>
 </div></div><!-- /kindbox -->
+<div id="arrangebox" hidden><div class="sheet" role="dialog" aria-labelledby="arrangetitle">
+  <button type="button" id="arrangecancel" class="quiet">Cancel</button>
+  <h2 id="arrangetitle"></h2>
+  <div id="arrangelist" role="list"></div>
+  <p class="deckhint" id="arrangenote"></p>
+</div></div><!-- /arrangebox -->
+<div id="movebox" hidden><div class="sheet" role="alertdialog" aria-labelledby="movetitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="movetitle"></h2>
+  <p id="movesub"></p>
+  <div class="pills"><button type="button" id="moveno"></button><button type="button" class="pri" id="moveyes"></button></div>
+  <p class="deckhint" id="movenote"></p>
+</div></div><!-- /movebox -->
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -618,7 +645,7 @@ import { heapTitle, heapSub, initials, batchLine, landingState } from './words.j
 import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
-import { deviceKind, mapTiles, edgeLabels } from './map.js';
+import { deviceKind, mapTiles, edgeLabels, proposeJoin, sideWords } from './map.js';
 import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen, forgetOpen } from './gate.js';
 import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
 import { solveLayout } from './layout.js';
@@ -1268,7 +1295,13 @@ function start(room) {
     showWho(); showHeader();
     roomChanged();
   });
-  net.on((ev) => { if (ev === 'admits' || ev === 'leader') roomChanged(); if (ev === 'status') netState(); });
+  net.on((ev, d) => {
+    if (ev === 'admits' || ev === 'leader') roomChanged();
+    if (ev === 'status') netState();
+    if (ev === 'moveask') moveAsked(d);
+    if (ev === 'moveno') toast(`${nameOf(d.from)} kept their screen where it is`);
+    if (ev === 'moved') movedNote(d);
+  });
   // Join results go to the whole room: each one is shown only on the devices it names.
   // For results that answer this device's latest push (d.latest), until it pushes again,
   // "Joined" always wins and "Try again" stays on screen and isn't replaced by "No match".
@@ -1641,9 +1674,63 @@ function openMap() {
   const all = [id, ...others()], apart = others().filter((k) => (layout.group[k] || k) !== (layout.group[id] || id));
   $('maptitle').textContent = `${$('heapname').textContent} · ${all.length} screen${all.length === 1 ? '' : 's'}`;
   $('mapkey').textContent = [`You = ${name}’s ${deviceKind({ w: W, h: H })}`, ...apart.map((k) => `${nameOf(k)} isn’t joined yet`)].join(' · ');
+  $('maparrange').hidden = net.leader !== id; $('mapmove').hidden = !others().length;
   openSheet('mapbox'); requestAnimationFrame(() => drawMap($('mapcv')));
 }
 $('mapbtn').onclick = openMap;
+// arrange screens (4.7): which screen, next to which, which side. Anyone can move their own; the host can move anyone's (they're asked first)
+let arr = {};
+function arrangeStep(title, items, note = '') {
+  $('arrangetitle').textContent = title; $('arrangenote').textContent = note;
+  $('arrangelist').replaceChildren(...items.map(([k, label]) => { const b = Object.assign(document.createElement('button'), { type: 'button', textContent: label }); b.dataset.k = k; b.setAttribute('role', 'listitem'); return b; }));
+}
+function startArrange(own) {
+  arr = { step: own ? 'target' : 'who', moved: own ? id : null };
+  if (own) arrangeStep('Next to which screen?', others().map((k) => [k, deviceName(k)]));
+  else arrangeStep('Which screen moves?', [id, ...others()].map((k) => [k, k === id ? `You · ${deviceName(k)}` : deviceName(k)]), 'You’re the host, so you can move anyone’s screen. Each person is asked before their screen moves.');
+  closeSheet('mapbox', () => { $('arrangebox').hidden = false; });
+}
+$('mapmove').onclick = () => startArrange(true);
+$('maparrange').onclick = () => startArrange(false);
+$('arrangecancel').onclick = () => { $('arrangebox').hidden = true; };
+$('arrangelist').onclick = (e) => {
+  const k = e.target.closest('button')?.dataset.k; if (!k) return;
+  if (arr.step === 'who') { arr.moved = k; arr.step = 'target'; return arrangeStep('Next to which screen?', [id, ...others()].filter((x) => x !== k).map((x) => [x, x === id ? `You · ${deviceName(x)}` : deviceName(x)])); }
+  if (arr.step === 'target') { arr.target = k; arr.step = 'side'; return arrangeStep(`Where, next to ${deviceName(k)}?`, [['below', 'Below it'], ['above', 'Above it'], ['left', 'On its left'], ['right', 'On its right']]); }
+  const all = Object.fromEntries([id, ...others()].map((x) => [x, sizeOf(x)]));
+  const j = proposeJoin(arr.moved, arr.target, k, all);
+  j.side = undefined; delete j.side;
+  $('arrangebox').hidden = true;
+  // the screen that moves says yes; if it's mine, the screen I'm joining says yes
+  const to = arr.moved === id ? arr.target : arr.moved;
+  net.askMove({ ...j }, to); moveSide = k;
+  toast(`Waiting for ${nameOf(to)} to accept…`);
+};
+let moveSide = '', moveAsk = null, moveTimer = 0;
+const sideOf = (j) => ({ T: 'below', B: 'above', L: 'right', R: 'left' })[j.edgeA];   // where a sits next to b
+function moveAsked(ask) {
+  moveAsk = ask; const j = ask.j, mine = j.a === id;
+  if (mine) {   // the host wants to move my screen (4.11)
+    $('movetitle').textContent = 'The host wants to move your screen';
+    $('movesub').textContent = `The host (${nameOf(ask.by)}) wants to put your screen ${sideWords(sideOf(j))} ${deviceName(j.b)}. Photos dropped there will start arriving on your screen.`;
+    $('moveno').textContent = 'Keep it here'; $('moveyes').textContent = 'Move it';
+    $('movenote').textContent = 'Nothing changes unless you tap Move it. If you ignore this, it cancels after 30 s.';
+  } else {      // someone wants to join next to me (4.8)
+    $('movetitle').textContent = `${deviceName(j.a)} wants to join ${sideWords(sideOf(j))} you`;
+    $('movesub').textContent = `Their screen will join yours along your ${({ T: 'top', B: 'bottom', L: 'left', R: 'right' })[j.edgeB]} edge.`;
+    $('moveno').textContent = 'No'; $('moveyes').textContent = 'Accept'; $('movenote').textContent = '';
+  }
+  $('movebox').hidden = false;
+  clearTimeout(moveTimer); moveTimer = setTimeout(() => { if (moveAsk === ask) { $('movebox').hidden = true; net.answerMove(ask, false); moveAsk = null; } }, 30000);
+}
+$('moveyes').onclick = () => { const a = moveAsk; moveAsk = null; clearTimeout(moveTimer); $('movebox').hidden = true; if (a) net.answerMove(a, true); };
+$('moveno').onclick = () => { const a = moveAsk; moveAsk = null; clearTimeout(moveTimer); $('movebox').hidden = true; if (a) net.answerMove(a, false); };
+// moved (4.12): the screen that moved can undo it straight after
+function movedNote(d) {
+  const j = d.j; if (j.a !== id && j.b !== id) return;
+  if (j.a === id) snackSay(`Moved ${sideWords(sideOf(j))} ${deviceName(j.b)}`, () => { net.unjoin(j.b); toast('Moved back'); }, 10000);
+  else toast(`${deviceName(j.a)} joined ${sideWords(sideOf(j))} you`);
+}
 $('mapjoin').onclick = () => closeSheet('mapbox', openJoin);
 $('mapclose').onclick = () => closeSheet('mapbox');
 $('mapbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('mapbox'); };

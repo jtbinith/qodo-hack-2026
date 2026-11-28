@@ -266,6 +266,28 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     admitsAnsweredAt = performance.now(); sendAdmits();
   });
   s.setAdmits = (a) => { if (s.leader !== id || !validAdmits(a)) return; s.admits = a; sendAdmits(); emit('admits', a); };
+  // moving a screen (4.7, 4.8, 4.11): asked of one screen, done by the time keeper only with that screen's yes.
+  // by: who asked (the host, or one of the two screens); from: who said yes (one of the two screens)
+  const okSides = (j) => isValidJoins([j], [...Object.keys(s.peers), id]);
+  const sizesNow = () => Object.fromEntries(Object.entries(s.peers).map(([k, p]) => [k, { w: p.w, h: p.h }]));
+  ch.on('broadcast', { event: 'joinok' }, ({ payload }) => { if (Object.hasOwn(s.peers, payload?.from)) applyMove(payload); });
+  function applyMove(payload) {
+    const j = payload?.j;
+    if (s.leader !== id || !j || !okSides(j)) return;
+    if (payload.from !== j.a && payload.from !== j.b) return;
+    if (payload.by !== s.leader && payload.by !== j.a && payload.by !== j.b) return;
+    s.joins = addJoins(s.joins, [j], sizesNow()); sendLayout();
+    announce('moved', { j, by: payload.by, from: id });
+  }
+  ch.on('broadcast', { event: 'moveask' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.by) && payload.j && okSides(payload.j)) emit('moveask', payload); });
+  ch.on('broadcast', { event: 'moveno' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.from)) emit('moveno', payload); });
+  ch.on('broadcast', { event: 'moved' }, ({ payload }) => { if (payload?.from === s.leader && payload.j && okSides(payload.j)) emit('moved', payload); });
+  s.askMove = (j, to) => send('moveask', { by: id, to, j });
+  s.answerMove = (ask, yes) => {
+    if (!yes) return send('moveno', { from: id, to: ask.by, j: ask.j });
+    const p = { from: id, by: ask.by, j: ask.j };
+    if (s.leader === id) applyMove(p); else send('joinok', p);
+  };
   s.push = (edge, along) => {
     const p = { dev: id, edge, along, t: s.now() };
     latest = p.t;
