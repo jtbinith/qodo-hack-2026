@@ -1176,6 +1176,7 @@ function glide() {
 }
 // Saving must happen inside the tap, with the file already in hand (iOS rule).
 const sharingOne = new Set();   // photos whose own share sheet is open
+const stuckShare = new Set();   // photos whose share sheet never settled: the browser won't open another, so they download
 function save(p) {
   const file = files.get(p.pid);
   if (!file) {
@@ -1186,12 +1187,13 @@ function save(p) {
   }
   if (p.owner === id) return toast('Already yours');
   // handed over once it was shared or its download started, so Save all doesn't save it again (F13)
+  if (stuckShare.delete(p.pid)) { downloadFile(file); pickSave.handed.add(p.pid); return; }
   if (pickSave.holds(p.pid) || sharingOne.has(p.pid)) return toast('Still saving this one. If the share sheet is stuck, tap Get again');
   if (navigator.canShare?.({ files: [file] })) {
     sharingOne.add(p.pid);   // one share sheet for this photo at a time (Qodo on #163)
     navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); })
       .finally(() => sharingOne.delete(p.pid));
-    setTimeout(() => sharingOne.delete(p.pid), SHARE_TIMEOUT);   // a sheet that never settles (WebKit) doesn't hold this photo for ever
+    setTimeout(() => { if (sharingOne.delete(p.pid)) stuckShare.add(p.pid); }, SHARE_TIMEOUT);   // a sheet that never settles (WebKit): the next tap downloads
   }
   else { downloadFile(file); pickSave.handed.add(p.pid); }
 }
@@ -1227,7 +1229,7 @@ function getPicked() {
 // they already have for this device and would ignore a new one (Qodo re-review of #163)
 function start(room, again = false) {
   $('lobby').hidden = true;
-  const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
+  const attempt = net = joinRoom({ since: again ? net?.joinedAt : null, room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
   if (!again) {
     peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) && inHeap(p) });
     peers.on((from, m, bytes) => {

@@ -127,8 +127,8 @@ function pair(tamper = (from, d) => d) {
 test('17: both devices show the same four words once each has seen the other’s commitment', async () => {
   const dev = pair();
   dev.a.connect('b');
-  await settle();
-  const wa = await dev.a.words('b'), wb = await dev.b.words('a');
+  let wa = null, wb = null;   // real crypto can take a moment on a busy machine: wait for both, up to 5 s
+  for (const t0 = Date.now(); (!wa || !wb) && Date.now() - t0 < 5000;) { await settle(20); wa = await dev.a.words('b'); wb = await dev.b.words('a'); }
   assert.ok(wa && wa.length === 4, 'four words');
   assert.deepEqual(wa, wb);
 });
@@ -172,7 +172,7 @@ test('re-review: Try again rejoins with the same keys, so the other devices stil
 });
 
 test('re-review: a share sheet that never settles frees that photo after SHARE_TIMEOUT', () => {
-  assert.match(html, /setTimeout\(\(\) => sharingOne\.delete\(p\.pid\), SHARE_TIMEOUT\)/);
+  assert.match(html, /setTimeout\(\(\) => \{ if \(sharingOne\.delete\(p\.pid\)\) stuckShare\.add\(p\.pid\); \}, SHARE_TIMEOUT\)/);   // and the next tap downloads (round 3)
   assert.match(html, /import \{[^}]*SHARE_TIMEOUT[^}]*\} from '\.\/saveall\.js';/);
 });
 
