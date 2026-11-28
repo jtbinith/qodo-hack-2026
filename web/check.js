@@ -145,10 +145,11 @@ const B64 = /^[A-Za-z0-9+/]*={0,2}$/;
 const isB64 = (v, max) => typeof v === 'string' && v.length <= max && B64.test(v);
 export function validSignal(env) {
   if (!env || !isDevId(env.from) || !isDevId(env.to) || !env.data || typeof env.data !== 'object') return false;
-  const d = env.data, kinds = ['pub', 'r', 'desc', 'cand'].filter((k) => k in d);
+  const d = env.data, kinds = ['pub', 'r', 'desc', 'cand', 'reveal'].filter((k) => k in d);
   if (kinds.length !== 1) return false;
   switch (kinds[0]) {
-    case 'pub': return isB64(d.pub, 200) && (d.reply === undefined || d.reply === true);
+    case 'pub': return isB64(d.pub, 200) && (d.reply === undefined || d.reply === true) && (d.commit === undefined || isB64(d.commit, 64));
+    case 'reveal': return isB64(d.reveal, 32) && (d.again === undefined || d.again === true);   // the secret behind a commitment (5.3)
     case 'r': return isB64(d.r, 128 * 1024);
     case 'desc': return !!d.desc && (d.desc.type === 'offer' || d.desc.type === 'answer') && typeof d.desc.sdp === 'string' && d.desc.sdp.length <= 20000;
     case 'cand': return !!d.cand && typeof d.cand.candidate === 'string' && d.cand.candidate.length <= 2000;
@@ -240,7 +241,7 @@ export function cleanName(v) {
 // Sharing more than photos (3.1, 3.4, 3.9)
 export const BIG_FILE = 25 * 1024 * 1024;   // bigger files land closed and wait for a tap
 // programs, scripts and pages that could run when opened are never shared
-const RUNS = /\.(exe|bat|cmd|com|msi|msp|scr|pif|cpl|apk|app|dmg|pkg|deb|rpm|sh|bash|zsh|ps1|psm1|vbs|vbe|js|mjs|jse|wsf|wsh|hta|jar|lnk|reg|html?|xhtml|svg|xml|php|py|rb|pl)$/i;
+const RUNS = /\.(exe|bat|cmd|com|command|msi|msp|msix|appx|scr|pif|cpl|apk|app|appimage|dmg|iso|img|pkg|deb|rpm|run|bin|sh|bash|zsh|csh|ps1|psm1|vbs|vbe|js|mjs|cjs|jse|wsf|wsh|hta|chm|jar|lnk|url|desktop|webloc|inf|reg|html?|shtml|xhtml|mht|mhtml|svgz?|xml|xsl|php|py|rb|pl|docm|dotm|xlsm|xltm|xlam|pptm|potm|ppam)$/i;
 const RUN_TYPES = /^(application\/(x-msdownload|x-msdos-program|x-sh|x-executable|java-archive|vnd\.android\.package-archive|javascript|x-javascript|xhtml\+xml)|text\/(html|javascript)|image\/svg\+xml)$/i;
 export const refused = (name, type) => RUNS.test(String(name || '')) || RUN_TYPES.test(String(type || ''));
 // a note or link as plain text: no control or direction characters, no walls of blank lines, at most 500 characters

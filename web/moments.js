@@ -8,15 +8,17 @@ export function kindCounts(list) {
   return Object.fromEntries(KINDS.filter((k) => c[k]).map((k) => [k, c[k]]));
 }
 
-// newest first, split wherever the gap between two is GAP or more. Items without a time go in the newest moment
+// newest first, split wherever the gap between two is GAP or more. Items without a time (from an older
+// device) go in their own moment at the end, "Earlier", so they can't stretch or erase the timed ones
 export function moments(list) {
-  const sorted = [...list].sort((a, b) => (b.at ?? Infinity) - (a.at ?? Infinity));
+  const timed = list.filter((p) => typeof p.at === 'number').sort((a, b) => b.at - a.at), untimed = list.filter((p) => typeof p.at !== 'number');
   const out = [];
-  for (const p of sorted) {
+  for (const p of timed) {
     const last = out[out.length - 1];
-    if (last && (p.at === undefined || last.from === undefined || last.from - p.at < GAP)) { last.items.push(p); if (p.at !== undefined) last.from = Math.min(last.from ?? p.at, p.at); }
+    if (last && last.from - p.at < GAP) { last.items.push(p); last.from = p.at; }
     else out.push({ from: p.at, to: p.at, items: [p] });
   }
+  if (untimed.length) out.push({ from: undefined, to: undefined, items: untimed });
   return out;
 }
 // "Thu 19:02 – 19:40", in this device's language and time zone unless asked otherwise

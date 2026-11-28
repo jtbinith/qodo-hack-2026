@@ -619,7 +619,7 @@ import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
 import { deviceKind, mapTiles, edgeLabels } from './map.js';
-import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen } from './gate.js';
+import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen, forgetOpen } from './gate.js';
 import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
@@ -632,6 +632,9 @@ const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const rnd = new Uint32Array(2); crypto.getRandomValues(rnd);
 const id = rnd[0].toString(36) + rnd[1].toString(36);
+// this tab's ids before a reload: the old one can linger in the room for a moment, and isn't someone else with my name
+const PREV_KEY = 'heap-me-before';
+const before = (() => { try { const b = JSON.parse(sessionStorage.getItem(PREV_KEY) || '[]'); sessionStorage.setItem(PREV_KEY, JSON.stringify([...(Array.isArray(b) ? b : []).slice(-4), id])); return Array.isArray(b) ? b.filter((x) => typeof x === 'string') : []; } catch { return []; } })();
 // Your name (#156): picked by the person, remembered on this device (localStorage), and sent only
 // to the others in the heap. No random names: with none saved, the home screen asks first
 const NAME_KEY = 'heap-name';
@@ -664,11 +667,12 @@ $('leave').onclick = () => {
   $('leaveunsaved').dataset.pids = unsaved.join(',');
   openSheet('leavebox');
 };
-$('leavesave').onclick = () => { for (const k of $('leaveunsaved').dataset.pids.split(',').filter(Boolean)) picked.add(k); showPicks(); closeSheet('leavebox', () => getPicked()); };
+$('leavesave').onclick = () => { for (const k of $('leaveunsaved').dataset.pids.split(',').filter(Boolean)) picked.add(k); showPicks(); getPicked(); closeSheet('leavebox'); };   // inside the tap: the share sheet opens only there
 $('leavestay').onclick = () => closeSheet('leavebox');
 $('leaveclear').onclick = () => leaveAndClear();
 function leaveAndClear() {
   const heap = $('heapname').textContent || 'this heap';
+  try { const room = net?.room.replace(/^photo-/, ''); if (room) localStorage.setItem(OPEN_KEY, forgetOpen(localStorage.getItem(OPEN_KEY), room)); } catch {}   // nothing of it stays
   try { sessionStorage.removeItem(ROOM_KEY); sessionStorage.setItem('heap-bounce', JSON.stringify({ k: 'cleared', heap })); } catch {}
   location.replace(location.pathname);
 }
@@ -721,7 +725,7 @@ function gate() {
   } else if (net.leader === id && trimAdmits(net.admits, net.peers, id).ids.length !== net.admits.ids.length) admit(net.admits);   // someone left: off the list
   const room = net.room.replace(/^photo-/, ''), host = net.peers[net.leader]?.name || 'the host';
   if (performance.now() - joinedAt < 8000) {   // just arrived: is my name taken, or the heap full?
-    const other = nameTaken(id, net.peers);
+    const other = nameTaken(id, net.peers, before);
     if (other) return bounce({ k: 'name', code: room, other });
     if (overLimit(id, net.peers, LIMITS.devices)) return bounce({ k: 'full', code: room });   // only those after the first 20
   }
@@ -883,15 +887,21 @@ $('shareclose').onclick = () => closeSheet('sharebox');
 $('sharebox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('sharebox'); };
 // a link or a note (3.4): plain text; a link must be a web address
 let textKind = 'note';
+let textSending = false;   // one note per Share, however many taps
 const openText = (kind) => closeSheet('sharebox', () => {
-  textKind = kind; $('texttitle').textContent = kind === 'link' ? 'Paste a link' : 'Write a note';
+  textKind = kind; textSending = false; $('texttitle').textContent = kind === 'link' ? 'Paste a link' : 'Write a note';
   $('textfield').value = ''; $('textfield').placeholder = kind === 'link' ? 'https://' : 'Meet at the gate at 8';
   openSheet('textbox'); $('textfield').focus();
 });
 $('sharelink').onclick = () => openText('link');
 $('sharenote').onclick = () => openText('note');
 $('textcancel').onclick = () => closeSheet('textbox');
-$('textshare').onclick = () => { const t = cleanText($('textfield').value); if (!t) return toast('Write something first'); addText(textKind, t); };
+$('textshare').onclick = () => {
+  if (textSending) return;
+  const t = cleanText($('textfield').value); if (!t) return toast('Write something first');
+  if (textKind === 'link' && !isWebLink(t)) return toast('That isn’t a web link. Links start with https://');
+  textSending = true; addText(textKind, t);
+};
 function addText(kind, text) {
   if (kind === 'link' && !isWebLink(text)) return toast('That isn’t a web link. Links start with https://');
   closeSheet('textbox');
@@ -945,7 +955,7 @@ function expect(fid, from, size) {
 }
 function onMessage(from, m, bytes) {
   if (m.t === 'print') {
-    if (prints.has(m.pid) || prints.size >= LIMITS.prints || !validPrint(m)) return;
+    if (prints.has(m.pid) || prints.size >= LIMITS.prints || !validPrint(m) || refused(m.name, m.type)) return;   // a program is refused here too
     const { t, thumbSize, ...meta } = m;
     if (meta.text !== undefined) meta.text = cleanText(meta.text);   // plain text only (3.4)
     prints.set(m.pid, { ...meta, img: null, thumb: null });
@@ -1009,7 +1019,7 @@ async function done(fid, parts) {
   const p = prints.get(fid); if (!p) return;
   // the bytes must match the fingerprint announced with the print, or it isn't the photo
   if (await sha256Hex(parts) !== p.sha) {
-    const from = p.holders.find((k) => k !== id && net.peers[k] && k !== p.lastSource);
+    const from = p.holders.find((k) => k !== id && net.peers[k] && inHeap(k) && k !== p.lastSource);
     p.holders = p.holders.filter((k) => k !== p.lastSource);   // stop trusting that source
     toast(from ? 'That copy was damaged. Trying another' : 'That copy was damaged. Drag it again to retry');
     if (from) { p.lastSource = from; expect(p.pid, from, p.size); peers.send(from, { t: 'want', pid: p.pid }); }
@@ -1047,16 +1057,32 @@ function screenAt(x, y) {
   return null;
 }
 const onMyScreen = (p) => { const [x, y] = world(p); return screenAt(x + p.w / 2, y + p.h / 2) === id; };
+// who to ask for a photo: someone holding it who is here and let in, else its owner if they are. Never a device
+// that has gone or is blocked: its pieces would be dropped (Qodo on #163)
+function sourceOf(p) {
+  const held = (p.holders || []).find((k) => k !== id && net.peers[k] && inHeap(k));
+  return held || (p.owner !== id && net.peers[p.owner] && inHeap(p.owner) ? p.owner : null);
+}
+function askFor(p) {
+  const src = sourceOf(p);
+  if (!src) return toast(`Nobody here has ${p.name} now`);
+  if (!expect(p.pid, src, p.size)) return toast('Too many photos arriving. Try again in a moment');
+  p.lastSource = src;
+  peers.send(src, { t: 'want', pid: p.pid });
+  toast('Receiving…');
+}
 function dropped(p, tapped = false) {
-  // landed on my screen and I don't have it yet: ask the owner for the full photo. A big file waits for a tap (3.9)
+  // landed on my screen and I don't have it yet: ask for the full photo. A big file waits for a tap (3.9)
   if (onMyScreen(p) && !files.has(p.pid) && !incoming.has(p.pid)) {
     if (p.size > BIG_FILE && !tapped) return toast(`${p.name} is ${mb(p.size)}. Tap it to get it`);
-    const src = p.holders.find((k) => k !== id && net.peers[k]) || p.owner;
-    if (!expect(p.pid, src, p.size)) return toast('Too many photos arriving. Try again in a moment');
-    p.lastSource = src;
-    peers.send(src, { t: 'want', pid: p.pid });
-    toast('Receiving…');
+    askFor(p);
   }
+}
+// Get on one photo (the preview, a problem row): just that one. Here: saved in this tap. Not here: asked for
+function getOne(p) {
+  if (files.has(p.pid)) return save(p);
+  if (incoming.has(p.pid)) return toast('Receiving…');
+  askFor(p);
 }
 
 // ---------- input: decks and photos (drag, flick, tap to open or save) ----------
@@ -1149,6 +1175,7 @@ function glide() {
   }
 }
 // Saving must happen inside the tap, with the file already in hand (iOS rule).
+const sharingOne = new Set();   // photos whose own share sheet is open
 function save(p) {
   const file = files.get(p.pid);
   if (!file) {
@@ -1159,8 +1186,12 @@ function save(p) {
   }
   if (p.owner === id) return toast('Already yours');
   // handed over once it was shared or its download started, so Save all doesn't save it again (F13)
-  if (pickSave.holds(p.pid)) return toast('Still saving this one. If the share sheet is stuck, tap Get again');
-  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); });
+  if (pickSave.holds(p.pid) || sharingOne.has(p.pid)) return toast('Still saving this one. If the share sheet is stuck, tap Get again');
+  if (navigator.canShare?.({ files: [file] })) {
+    sharingOne.add(p.pid);   // one share sheet for this photo at a time (Qodo on #163)
+    navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); })
+      .finally(() => sharingOne.delete(p.pid));
+  }
   else { downloadFile(file); pickSave.handed.add(p.pid); }
 }
 function downloadFile(file) {
@@ -1182,7 +1213,7 @@ const pickSave = createSaveAll({
 function getPicked() {
   let full = false;
   for (const p of toFetch(prints, picked, files, incoming, id)) {
-    const src = (p.holders || []).find((k) => k !== id && net.peers[k]) || p.owner;
+    const src = sourceOf(p); if (!src) continue;   // nobody here has it: the problems row says so
     if (!expect(p.pid, src, p.size)) { full = true; break; }
     p.lastSource = src; peers.send(src, { t: 'want', pid: p.pid });
   }
@@ -1427,7 +1458,7 @@ function showProblems(list) {
   };
   $('deckproblems').replaceChildren(
     ...(gone.length ? [row(`${gone.length} couldn’t arrive`, `${nameOf(gone[0].owner) === 'a device' ? 'Their owner' : nameOf(gone[0].owner)} left the heap. Nobody else has them.`)] : []),
-    ...big.slice(0, 3).map((p) => row(`${p.name} · ${mb(p.size)}`, 'Big files wait until you tap them.', 'Get', () => { picked.add(p.pid); showPicks(); getPicked(); })));
+    ...big.slice(0, 3).map((p) => row(`${p.name} · ${mb(p.size)}`, 'Big files wait until you tap them.', 'Get', () => getOne(p))));
 }
 // the preview (3.10): hold a photo to look closer; Get, Pick or Send to, and the next one either side
 let previewList = [], previewAt = 0, previewUrl = '';
@@ -1449,7 +1480,7 @@ function showPreview() {
 $('previewback').onclick = () => { $('previewbox').hidden = true; if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = ''; showPicks(); };
 $('previewprev').onclick = () => { if (previewAt > 0) { previewAt--; showPreview(); } };
 $('previewnext').onclick = () => { if (previewAt < previewList.length - 1) { previewAt++; showPreview(); } };
-$('previewget').onclick = () => { const p = previewList[previewAt]; if (!p) return; if (files.has(p.pid)) save(p); else { picked.add(p.pid); getPicked(); } };
+$('previewget').onclick = () => { const p = previewList[previewAt]; if (p) getOne(p); };   // just this one
 $('previewpick').onclick = () => { const p = previewList[previewAt]; if (p) { togglePick(p.pid); showPreview(); } };
 $('previewsend').onclick = () => { const p = previewList[previewAt]; if (p) { $('previewbox').hidden = true; openSendTo([p]); } };
 // picking (2B.3–2B.6): a tap picks or unpicks; every sheet and the bar say how many and how big
@@ -1539,14 +1570,16 @@ function noteLanding(from, p, drop) {
   landings = landings.filter((x) => x === b || !landingState([x], hasFile, onTheWay).done).slice(-20);
   updateLanding();
 }
-const hasFile = (pid) => files.has(pid), onTheWay = (pid) => incoming.has(pid);
+// a big file waits on my screen for a tap (3.9): for the line it has landed, not "didn't come"
+const waitsForTap = (pid) => { const p = prints.get(pid); return !!p && p.size > BIG_FILE && !files.has(pid) && !incoming.has(pid); };
+const hasFile = (pid) => files.has(pid) || waitsForTap(pid), onTheWay = (pid) => incoming.has(pid);
 // the line for what's landing: how many of how many while they arrive, Stop until they're all here, then Undo.
 // One that gave up, or that there wasn't room to ask for, counts as didn't come, so the line ends
 let landedSaid = '';
 function updateLanding() {
   if (!$('dropmap').hidden) return;   // the map has the line's place while dragging
   // a sender who left: what hadn't come from them can't come now, so stop waiting for it
-  for (const x of landings) if (!net.peers[x.from]) for (const pid of x.pids) if (!files.has(pid)) incoming.delete(pid);
+  for (const x of landings) if (!net.peers[x.from]) for (const pid of x.pids) if (!files.has(pid) && incoming.get(pid)?.from === x.from) incoming.delete(pid);   // only what was coming from them
   if (!landings.length) return;
   const st = landingState(landings, hasFile, onTheWay), b = landed = st.b, n = b.pids.length;
   const relay = /relay/.test(peers.path(b.from) || ''), who = net.peers[b.from]?.name || 'someone';
@@ -1704,7 +1737,11 @@ function openPerson(k) {
 }
 $('personclose').onclick = () => closeSheet('personbox');
 $('personbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('personbox'); };
-$('phide').onclick = () => { hiddenOwners.has(personK) ? hiddenOwners.delete(personK) : hiddenOwners.add(personK); closeSheet('personbox'); showPicks(); };
+$('phide').onclick = () => {
+  if (hiddenOwners.has(personK)) hiddenOwners.delete(personK);
+  else { hiddenOwners.add(personK); for (const k of [...picked]) if (prints.get(k)?.owner === personK) picked.delete(k); }   // hidden: not picked either
+  closeSheet('personbox'); showPicks();
+};
 $('pblock').onclick = () => {
   if (blocked.has(personK)) { blocked.delete(personK); closeSheet('personbox'); return roomChangedLater(); }
   closeSheet('personbox', () => { $('blocktitle').textContent = `Block ${deviceName(personK)}?`; $('blockbox').hidden = false; });
@@ -1724,15 +1761,21 @@ $('pcheck').onclick = () => closeSheet('personbox', async () => {
   $('checktitle').textContent = `Check ${deviceName(k)}`;
   $('checksub').textContent = `Look at ${nameOf(k)}’s screen together. It should show these same four words.`;
   $('checkwords').replaceChildren(Object.assign(document.createElement('small'), { textContent: 'Waiting for their key…' }));
+  $('checkyes').disabled = true; delete $('checkyes').dataset.for;   // Yes only once these words are on screen
   openSheet('checkbox');
   for (let i = 0; i < 40; i++) {
     const w = await peers.words(k);
-    if (w) { $('checkwords').replaceChildren(...w.map((x) => Object.assign(document.createElement('span'), { textContent: x }))); return; }
+    if (personK !== k || $('checkbox').hidden) return;   // closed, or someone else's check now: these words aren't theirs
+    if (w) { $('checkwords').replaceChildren(...w.map((x) => Object.assign(document.createElement('span'), { textContent: x }))); $('checkyes').dataset.for = k; $('checkyes').disabled = false; return; }
     await new Promise((r) => setTimeout(r, 250));
   }
+  if (personK === k && !$('checkbox').hidden) $('checkwords').replaceChildren(Object.assign(document.createElement('small'), { textContent: 'Couldn’t get their words. Close this and try again in a moment' }));
 });
 $('checkcancel').onclick = () => closeSheet('checkbox');
-$('checkyes').onclick = () => { checked.add(personK); closeSheet('checkbox'); toast(`Your connection to ${deviceName(personK)} is private ✓`); };
+$('checkyes').onclick = () => {
+  const k = $('checkyes').dataset.for; if (!k || $('checkyes').disabled) return;
+  checked.add(k); closeSheet('checkbox'); toast(`Your connection to ${deviceName(k)} is private ✓`);
+};
 $('checkno').onclick = () => {
   const k = personK; blockNow(k); closeSheet('checkbox');
   $('warnsub').textContent = `The words were different, so something may be passing itself off as ${deviceName(k)}. Nothing more will be sent to or from ${deviceName(k)}.`;
@@ -1749,7 +1792,12 @@ function netState() {
   $('netbanner').hidden = false;
   if (!lostTimer) lostTimer = setTimeout(() => { if (net.status !== 'live') { $('netbanner').hidden = true; $('lostbox').hidden = false; } }, 15000);
 }
-$('losttry').onclick = () => location.reload();
+// Try again: join the room again in this tab, so photos already here stay (a reload would lose them)
+$('losttry').onclick = () => {
+  $('lostbox').hidden = true; wasLive = false; clearTimeout(lostTimer); lostTimer = 0;
+  const room = net.room.replace(/^photo-/, ''); net.leave(); announced.clear();
+  start(room);
+};
 $('lostleave').onclick = () => { try { sessionStorage.removeItem(ROOM_KEY); } catch {} location.replace(location.pathname); };
 // Send to… (2A.8): let go where no screen is joined: choose who gets it instead
 let sending = [];
@@ -1819,7 +1867,8 @@ function showHeader() {
   $('empty').hidden = !!prints.size;
   const nextTo = others().find((k) => (layout.group[k] || k) === (layout.group[id] || id));
   $('emptytip').textContent = nextTo ? `Flick a photo toward ${net.peers[nextTo]?.name || 'the other screen'} to pass it across.` : '';
-  $('allphotos').hidden = !prints.size; $('allphotos').textContent = `All photos · ${prints.size}`;
+  const shown = visiblePrints().size;
+  $('allphotos').hidden = !shown; $('allphotos').textContent = `All photos · ${shown}`;   // what this screen shows, not hidden people's
   const all = [name, ...others().map((k) => net.peers[k]?.name || '?')];
   const face = (t, cls) => Object.assign(document.createElement('i'), { textContent: t, className: cls || '' });
   $('peoplebtn').querySelector('b').textContent = `People (${all.length})`;

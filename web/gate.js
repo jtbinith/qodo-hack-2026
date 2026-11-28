@@ -6,11 +6,12 @@ const LOOK = { 0: 'o', 1: 'i', l: 'i', 3: 'e', 5: 's', 7: 't', 8: 'b' };
 export const nameKey = (n) => String(n || '').normalize('NFKC').toLowerCase().normalize('NFKD').replace(/\p{M}/gu, '')
   .replace(/\s+/g, ' ').trim().replace(/[0-9l]/g, (c) => LOOK[c] || c);
 
-// the name of someone who had my name first (joined earlier; at the same moment, the smaller id), or null
-export function nameTaken(me, peers) {
+// the name of someone who had my name first (joined earlier; at the same moment, the smaller id), or null.
+// `before`: this tab's ids before a reload, which can linger in the room for a moment and aren't someone else
+export function nameTaken(me, peers, before = []) {
   const mine = peers[me]; if (!mine) return null;
   for (const [k, p] of Object.entries(peers)) {
-    if (k === me || nameKey(p.name) !== nameKey(mine.name)) continue;
+    if (k === me || before.includes(k) || nameKey(p.name) !== nameKey(mine.name)) continue;
     if (p.joinedAt < mine.joinedAt || (p.joinedAt === mine.joinedAt && k < me)) return p.name;
   }
   return null;
@@ -18,7 +19,9 @@ export function nameTaken(me, peers) {
 
 // ctx: { leader, admits: { open, ids, names, no }, peers }
 export function isIn(k, { leader, admits, peers }) {
-  if (k === leader || admits.open || admits.ids.includes(k)) return true;
+  if (k === leader) return true;
+  if (admits.no.includes(k)) return false;   // turned away or removed stays out, even when everyone else is let in (Qodo on #163)
+  if (admits.open || admits.ids.includes(k)) return true;
   return !!peers[k] && admits.names.includes(nameKey(peers[k].name));
 }
 export const waitingFor = (ctx) => Object.keys(ctx.peers).filter((k) => !isIn(k, ctx) && !ctx.admits.no.includes(k));
@@ -42,4 +45,9 @@ export function rememberOpen(stored, room) {
   if (stored === '1') return stored;
   const codes = String(stored || '').split(',').filter((c) => c && c !== room);
   return [...codes, room].slice(-20).join(',');
+}
+// Leave and clear (5.8): this heap's code goes from the list too
+export function forgetOpen(stored, room) {
+  if (stored === '1') return stored;
+  return String(stored || '').split(',').filter((c) => c && c !== room).join(',');
 }
