@@ -1,7 +1,7 @@
 // Room networking over Supabase Realtime: who is here, a shared clock, and joins.
 // The server only relays messages. One device (the earliest to arrive) is the "time
 // keeper": everyone syncs their clock to it, and it decides which orb pushes pair up.
-import { addJoins, matchPushes, isValidJoins } from './layout.js';
+import { addJoins, matchPushes, isValidJoins, removeJoin } from './layout.js';
 import { validPeerMeta, validPing, validPong, validJoined, validRetry, validNoMatch, validSignal, validLayoutAsk, inRoom, cleanName } from './check.js';
 
 const SUPABASE_URL = 'https://aimoujzdcaxkejraattw.supabase.co';
@@ -222,6 +222,18 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   ch.on('broadcast', { event: 'retry' }, ({ payload }) => { if (fromLeader(payload) && validRetry(payload)) result('retry', payload); });
   ch.on('broadcast', { event: 'nomatch' }, ({ payload }) => { if (fromLeader(payload) && validNoMatch(payload)) result('nomatch', payload); });
 
+  // undo a join (4.4): either of the two screens can ask; the time keeper takes the pair apart for everyone
+  ch.on('broadcast', { event: 'unjoin' }, ({ payload }) => {
+    if (s.leader !== id || !payload || typeof payload.a !== 'string' || typeof payload.b !== 'string') return;
+    if (payload.from !== payload.a && payload.from !== payload.b) return;
+    if (!Object.hasOwn(s.peers, payload.from)) return;
+    s.joins = removeJoin(s.joins, payload.a, payload.b); sendLayout();
+  });
+  s.unjoin = (other) => {
+    const p = { a: id, b: other, from: id };
+    if (s.leader === id) { s.joins = removeJoin(s.joins, id, other); sendLayout(); }
+    else send('unjoin', p);
+  };
   s.push = (edge, along) => {
     const p = { dev: id, edge, along, t: s.now() };
     latest = p.t;

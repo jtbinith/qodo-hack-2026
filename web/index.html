@@ -878,7 +878,7 @@ function start(room) {
       const mine = d.a === id, other = net.peers[mine ? d.b : d.a]?.name || 'a device';
       if (d.latest) { said = 'joined'; unstick(); }
       toast(`Joined with ${other}, ${SIDE[mine ? d.edgeA : d.edgeB]}`);
-      if (d.latest) joinResult('joined', `Joined with ${other}, ${SIDE[mine ? d.edgeA : d.edgeB]}`);
+      if (d.latest) joinResult('joined', `Joined with ${other}, ${SIDE[mine ? d.edgeA : d.edgeB]}`, mine ? d.b : d.a);
     } else if (ev === 'retry' && d.latest && said !== 'joined') {
       said = 'retry';
       toast('Couldn’t tell who to join. Try again', true);
@@ -1046,6 +1046,7 @@ $('allphotos').onclick = () => openDeck([...prints.keys()], true);
 // landed (2A.4): photos that came onto this screen from someone, counted together for a moment, with Undo.
 // Undo puts them back on the sender's screen (on their deck if they're the owner)
 let landed = null, snackTimer = 0;
+let snackUndo = null;   // what Undo on the line above the bar does now
 function noteLanding(from, p, drop) {
   // one drop (a deck lands as many photos at once) counts together; a later drop, even a moment after, starts again
   drop = typeof drop === 'string' ? drop.slice(0, 32) : '';
@@ -1054,11 +1055,12 @@ function noteLanding(from, p, drop) {
   if (!landed.pids.includes(p.pid)) landed.pids.push(p.pid);
   const n = landed.pids.length, who = net.peers[from]?.name || 'someone';
   $('snacktext').textContent = `${n} photo${n === 1 ? '' : 's'} from ${who}`;
-  $('snackact').hidden = false; $('snack').hidden = false;
-  clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; landed = null; }, 6000);
+  snackUndo = undoLanding; $('snackact').hidden = false; $('snack').hidden = false;
+  clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; landed = null; snackUndo = null; }, 6000);
 }
-$('snackact').onclick = () => {
-  const l = landed; $('snack').hidden = true; landed = null;
+$('snackact').onclick = () => { const f = snackUndo; snackUndo = null; $('snack').hidden = true; clearTimeout(snackTimer); f?.(); };
+function undoLanding() {
+  const l = landed; landed = null;
   if (!l || !sizes[l.from]) return;
   const spot = deckSpot(prints, l.from, sizes[l.from]);
   for (const pid of l.pids) {
@@ -1092,17 +1094,17 @@ for (const st of document.querySelectorAll('#joinmode .strip')) st.onclick = (e)
 $('joincancel').onclick = closeJoin;
 $('jointry').onclick = openJoin;
 // what came of the latest tap
-function joinResult(kind, text) {
+function joinResult(kind, text, other) {
   if ($('joinmode').hidden) return;
   clearInterval(joinTick);
-  if (kind === 'joined') { closeJoin(); return snackSay(text); }
+  if (kind === 'joined') { closeJoin(); return snackSay(text, () => { net.unjoin(other); toast('Screens apart again'); }, 10000); }
   if (kind === 'nomatch') return joinCard('No match', 'The other screen didn’t tap in time, or tapped the wrong edge.', { retry: true });
   joinCard('More than two screens tapped at once', 'Join one pair at a time. You can add the next screen after.', { retry: true });
 }
 // a line just above the bar, without an action
-function snackSay(text) {
-  landed = null; $('snacktext').textContent = text; $('snackact').hidden = true; $('snack').hidden = false;
-  clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; $('snackact').hidden = false; }, 6000);
+function snackSay(text, undo = null, ms = 6000) {
+  landed = null; snackUndo = undo; $('snacktext').textContent = text; $('snackact').hidden = !undo; $('snack').hidden = false;
+  clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; snackUndo = null; }, ms);
 }
 // Send to… (2A.8): let go where no screen is joined: choose who gets it instead
 let sending = [];

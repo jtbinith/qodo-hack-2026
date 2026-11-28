@@ -45,6 +45,12 @@ export function isValidJoins(joins, ids) {
 // Add new joins. An old join between the same two devices is replaced. If the result
 // makes screens overlap or disagree, older joins touching the new devices are dropped
 // (oldest first) until the layout makes sense again: someone moved their device.
+// undo a join (4.4): that pair comes apart, whichever way round it was made; other joins stay
+export function removeJoin(joins, a, b) {
+  const pair = [a, b].sort().join('|');
+  return joins.filter((j) => [j.a, j.b].sort().join('|') !== pair);
+}
+
 export function addJoins(joins, fresh, sizes) {
   const pair = (j) => [j.a, j.b].sort().join('|');
   const freshPairs = new Set(fresh.map(pair));
