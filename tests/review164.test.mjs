@@ -31,10 +31,10 @@ test('4: the other device keeps saying hello until it’s joined to the screen t
 
 test('5: the heap waits for a save that is still going before it closes (at most 30 s)', async () => {
   const s = createSaveAll({ batch: () => ({ ready: [{ pid: 'a', file: {} }], arriving: 0 }), canShare: () => true, share: () => new Promise(() => {}), download: () => {}, toast: () => {}, wait: () => new Promise(() => {}) });
-  assert.equal(s.busy(), false);
+  assert.equal(s.saving(), false);
   s.tap();
-  assert.equal(s.busy(), true);
-  assert.match(html, /if \(left <= 0\) \{ if \(\(pickSave\.busy\(\) \|\| sharingOne\.size\) && left > -END_WAIT\) return; endNow\(\); \}/);
+  assert.equal(s.saving(), true);
+  assert.match(html, /if \(left <= 0\) \{ if \(\(pickSave\.saving\(\) \|\| sharingOne\.size\) && left > -END_WAIT\) return; endNow\(\); \}/);
 });
 
 test('6: replacing a side ends every join on that side', () => {

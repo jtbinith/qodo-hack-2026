@@ -882,8 +882,9 @@ function ending() {   // the host ended it: a countdown, nothing new added, a nu
     $('unsavedtitle').textContent = `${unsaved.length} photo${unsaved.length === 1 ? '' : 's'} not saved yet`;
     $('unsavedsave').textContent = `Save ${unsaved.length} photo${unsaved.length === 1 ? '' : 's'}`; $('unsavedbox').hidden = false;
   }
-  if (left <= 0) endNow();
+  if (left <= 0) { if ((pickSave.saving() || sharingOne.size) && left > -END_WAIT) return; endNow(); }   // a save still going gets up to 30 s more
 }
+const END_WAIT = 30000;
 function endNow() {
   clearInterval(endTick);
   try { sessionStorage.removeItem(ROOM_KEY); sessionStorage.setItem(BOUNCE_KEY, JSON.stringify({ k: 'ended', heap: $('heapname').textContent || 'this heap' })); } catch {}
@@ -1052,6 +1053,7 @@ async function addFiles(list, keep, text = null) {
   const spot = deckSpot(prints, id, { w: W, h: H });   // what I share goes on my deck (2A.1)
   const kept = [];   // files sent with their details still in them
   for (const one of list) {
+    if (net?.admits?.ended) { toast('This heap has ended. Nothing new can be added'); break; }   // ended while these were chosen or being prepared
     if (refused(one.name, one.type)) { toast(`${one.name} was refused. Programs and scripts can’t be shared here`); continue; }
     if (one.size > LIMITS.fileBytes) { toast(`${one.name} is too big`); continue; }
     // location and camera details come out of JPEGs before the fingerprint is taken (S6)
@@ -1462,15 +1464,17 @@ function start(room) {
     showWho(); showHeader();
     roomChanged();
   });
+  const admitDevice = (k) => { const a = net.admits, p = net.peers[k]; if (p) admit({ ...a, ids: [...a.ids, k], names: [...a.names, nameKey(p.name)] }); };
   net.on((ev, d) => {
     if (ev === 'admits' || ev === 'leader') roomChanged();
     if (ev === 'status') netState();
     if (ev === 'pair' && pairToken && d.token === pairToken) {   // my other device: let it in and line it up on my right
       pairToken = null; const p = net.peers[d.from];
-      if (net.leader === id && p) { const a = net.admits; admit({ ...a, ids: [...a.ids, d.from], names: [...a.names, nameKey(p.name)] }); }
+      if (p) { if (net.leader === id) admitDevice(d.from); else net.vouch(d.from); }   // not the host: ask the host to let it in
       const all = Object.fromEntries([id, d.from].map((x) => [x, sizeOf(x) || { w: p?.w || 390, h: p?.h || 844 }]));
       net.askMove(proposeJoin(d.from, id, 'right', all), d.from);
     }
+    if (ev === 'vouch' && net.leader === id && inHeap(d.from) && net.peers[d.who]) admitDevice(d.who);   // someone in the heap vouches for their own device
     if (ev === 'moveask' && pairing && d.by === pairing.by && d.j.a === id) { net.answerMove(d, true); return; }   // lining up with my own device: yes
     if (ev === 'moveask') moveAsked(d);
     if (ev === 'moveno') toast(`${nameOf(d.from)} kept their screen where it is`);
@@ -1509,7 +1513,7 @@ function start(room) {
       invite.room = room; $('top').hidden = false; showHeader();
       if (pending.fresh) { pending.fresh = false; $('invite').click(); }
       joinedAt = performance.now(); gate(); netState();
-      if (pairing) { let n = 0; const hi = setInterval(() => { if (++n > 15 || (inHeap(id) && net.joins.length)) return clearInterval(hi); net.pairHello(pairing.token, pairing.by); }, 1000); }
+      if (pairing) { let n = 0; const hi = setInterval(() => { if (++n > 15 || (inHeap(id) && net.joins.some((j) => (j.a === id && j.b === pairing.by) || (j.b === id && j.a === pairing.by)))) return clearInterval(hi); net.pairHello(pairing.token, pairing.by); }, 1000); }
       if (pending.mustExist) {   // heaps exist only while someone is in them: alone after a moment means no such heap
         pending.mustExist = false;
         let tries = 0;
@@ -1715,6 +1719,7 @@ function tileOf(p, onTap) {
   b.onclick = onTap;
   return b;
 }
+const ppUrls = [];   // the Picked panel's thumbnails, let go on each redraw
 function showPicks() {
   for (const k of [...picked]) if (!prints.has(k)) picked.delete(k);
   const s = pickSummary(prints, picked, (o) => net?.peers[o]?.name, id);
@@ -1732,9 +1737,10 @@ function showPicks() {
   // the Picked panel beside an open deck on wide screens (L2)
   $('pptitle').textContent = `Picked · ${s.n}`;
   $('ppline').textContent = s.n ? pickLine(s) : 'Tap photos to pick them, then get them all at once.';
+  for (const u of ppUrls.splice(0)) URL.revokeObjectURL(u);   // the panel's last thumbnails go before new ones are made
   $('pptiles').replaceChildren(...[...picked].slice(0, 12).map((k) => prints.get(k)).filter(Boolean).map((p) => {
     if (!p.thumb) return Object.assign(document.createElement('span'), { textContent: p.text ? p.text.slice(0, 30) : p.name });
-    const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); deckUrls.push(u); return Object.assign(document.createElement('img'), { src: u, alt: p.name });
+    const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); ppUrls.push(u); return Object.assign(document.createElement('img'), { src: u, alt: p.name });
   }));
   $('reviewline').textContent = s.n ? pickLine(s) : 'Nothing picked yet. Open a deck and tap photos to pick them.';
   $('getall').textContent = `Get all ${s.n} · ${mb(s.bytes)}`; $('getall').disabled = !s.n;
@@ -1959,7 +1965,7 @@ $('moveno').onclick = () => { const a = moveAsk; moveAsk = null; clearTimeout(mo
 // moved (4.12): the screen that moved can undo it straight after
 function movedNote(d) {
   const j = d.j; if (j.a !== id && j.b !== id) return;
-  if (j.a === id) snackSay(`Moved ${sideWords(sideOf(j))} ${deviceName(j.b)}`, () => { net.unjoin(j.b); toast('Moved back'); }, 10000);
+  if (j.a === id) snackSay(`Moved ${sideWords(sideOf(j))} ${deviceName(j.b)}`, () => { net.unmove(); toast('Moved back'); }, 10000);   // back to the joins it had
   else toast(`${deviceName(j.a)} joined ${sideWords(sideOf(j))} you`);
 }
 $('mapjoin').onclick = () => closeSheet('mapbox', openJoin);
@@ -1989,10 +1995,11 @@ const joinCard = (title, sub, { count = false, retry = false } = {}) => {
 };
 function openJoin() {
   clearInterval(joinTick);
-  const sides = Object.fromEntries(edgeLabels(Object.keys(sizes), layout, sizes, id).map((l) => [l.side, l.id]));
+  const sides = {};   // edge -> every screen joined along it
+  for (const l of edgeLabels(Object.keys(sizes), layout, sizes, id)) sides[l.side] = [...(sides[l.side] || []), l.id];
   for (const strip of document.querySelectorAll('#joinmode .strip')) {   // a side that's joined says who it's joined to
-    const k = sides[strip.dataset.edge];
-    strip.classList.remove('on'); strip.classList.toggle('joined', !!k); strip.dataset.who = k || '';
+    const ks = sides[strip.dataset.edge] || [], k = ks[0];
+    strip.classList.remove('on'); strip.classList.toggle('joined', !!k); strip.dataset.who = k || ''; strip.dataset.all = ks.join(',');
     strip.textContent = k ? `Joined · ${nameOf(k)}` : strip.dataset.edge === 'T' || strip.dataset.edge === 'B' ? 'Tap here' : 'Tap';
   }
   joinCard('Which side is the other screen?', 'Put the screens side by side. Each person taps the edge that faces the other one.');
@@ -2003,16 +2010,16 @@ let rejoin = null;
 for (const st of document.querySelectorAll('#joinmode .strip')) st.onclick = (e) => {
   const along = st.dataset.edge === 'L' || st.dataset.edge === 'R' ? e.clientY : e.clientX;
   if (st.dataset.who) {   // already joined on this side: say what joining someone else here would end
-    rejoin = { st, along, k: st.dataset.who };
+    rejoin = { st, along, k: st.dataset.who, ks: (st.dataset.all || st.dataset.who).split(',').filter(Boolean) };
     $('rejointitle').textContent = `${deviceName(rejoin.k)} is joined on this side`;
-    $('rejoinsub').textContent = `Join another screen here? You’ll lose the join with ${nameOf(rejoin.k)}.`;
+    $('rejoinsub').textContent = rejoin.ks.length > 1 ? `Join another screen here? You’ll lose the joins with ${rejoin.ks.map((k) => nameOf(k)).join(' and ')}.` : `Join another screen here? You’ll lose the join with ${nameOf(rejoin.k)}.`;
     $('rejoinkeep').textContent = `Keep ${nameOf(rejoin.k).split(/\s+/)[0]}`; $('rejoinbox').hidden = false;
     return;
   }
   pushEdge(st, along);
 };
 $('rejoinkeep').onclick = () => { rejoin = null; $('rejoinbox').hidden = true; };
-$('rejoinnew').onclick = () => { const r = rejoin; rejoin = null; $('rejoinbox').hidden = true; if (!r) return; net.unjoin(r.k); r.st.classList.remove('joined'); r.st.dataset.who = ''; pushEdge(r.st, r.along); };
+$('rejoinnew').onclick = () => { const r = rejoin; rejoin = null; $('rejoinbox').hidden = true; if (!r) return; for (const k of r.ks) net.unjoin(k); r.st.classList.remove('joined'); r.st.dataset.who = ''; r.st.dataset.all = ''; pushEdge(r.st, r.along); };
 function pushEdge(st, along) {
   const edge = st.dataset.edge;
   for (const o of document.querySelectorAll('#joinmode .strip')) o.classList.toggle('on', o === st);
