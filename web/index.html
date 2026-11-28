@@ -104,7 +104,7 @@
     border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); }
   /* the deck sheet (2B.1, 2B.2): one person's photos, or everyone's, newest first */
   #deckbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
-  #deckbox .sheet { width: min(100%, 560px); box-sizing: border-box; max-height: 86vh; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+  #deckbox .sheet { width: min(100%, 900px); box-sizing: border-box; max-height: 86vh; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
     border-radius: 28px 28px 0 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto 1fr; gap: 8px; }
   #deckbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
   #deckbox .deckhead { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
@@ -428,6 +428,31 @@
   @keyframes boing { 0% { transform: translateX(-50%) translateY(-18px) scale(.97, 1.04); opacity: 0 } 40% { transform: translateX(-50%) translateY(3px) scale(1.03, .97); opacity: 1 }
     70% { transform: translateX(-50%) translateY(1px) scale(.995, 1.005) } 100% { transform: translateX(-50%) } }
   @media (prefers-reduced-motion: reduce) { #toast.in { animation: none; } }
+  #pickpanel { display: none; }
+  #topacts { display: contents; }
+  /* laptops and tablets in landscape (wireframes L1, L2, T3): the actions in the top bar, decks full width with Picked open on the right */
+  @media (min-width: 1000px) {
+    #bar { display: none; }
+    #topacts { display: flex; gap: 8px; }
+    #top #topacts button { font: 500 14px var(--ui); padding: 9px 16px; border-radius: 12px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); white-space: nowrap; }
+    #top #topacts #share { background: var(--ink); color: var(--paper); }
+    #snack, #dropmap { bottom: calc(16px + env(safe-area-inset-bottom)); }
+    #joinmode .strip[data-edge="B"] { bottom: calc(20px + env(safe-area-inset-bottom)); }
+    #deckbox { top: calc(66px + env(safe-area-inset-top)); align-items: stretch; background: var(--paper); }
+    #deckbox .sheet { width: 100%; max-height: none; height: 100%; border: 0; border-radius: 0; grid-template-columns: 1fr 320px; grid-template-rows: auto auto auto auto 1fr auto;
+      column-gap: 0; padding: 16px 0 16px 24px; }
+    #deckbox .sheet > :not(#pickpanel):not(#pickfoot) { grid-column: 1; }
+    #deckbox .handle { display: none; }
+    #deckbox .deckhead, #deckbox .deckhint, #kindrow, #deckproblems, #decktiles { margin-right: 24px; }
+    #deckbox #pickpanel { display: grid; grid-column: 2; grid-row: 1 / 6; align-content: start; gap: 10px; padding: 0 20px; border-left: 1.5px solid var(--line); }
+    #pickpanel h3 { margin: 4px 0 0; font: 700 18px var(--ui); }
+    #ppline { margin: 0; font-size: 13px; color: var(--text-mid); }
+    #pptiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    #pptiles img, #pptiles span { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); font-size: 11px; overflow: hidden; }
+    #deckbox #pickfoot { grid-column: 2; grid-row: 6; padding: 0 20px; display: grid; gap: 8px; }
+    #deckbox #pickfoot[hidden] { display: none; }
+    #decktiles .mgrid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
+  }
 </style>
 </head>
 <body>
@@ -440,6 +465,7 @@
   <button id="joinbtn" type="button" aria-label="Join a screen">Join</button>
   <button id="people" type="button" aria-label="People in this heap"></button>
   <button id="mapbtn" type="button" aria-label="Map of the screens in this heap" aria-controls="mapbox"><i aria-hidden="true"></i>Map</button>
+  <span id="topacts"></span>
   <button id="menu" type="button" aria-label="Menu" aria-controls="menubox" aria-expanded="false"><span aria-hidden="true">≡</span></button>
 </header>
 <div id="bar"><button type="button" id="share">+ Add photos &amp; files</button><button id="pickedbtn" type="button">Picked · 0</button></div>
@@ -627,6 +653,11 @@
   <div id="kindrow" hidden><button type="button" id="kindbtn"></button><span id="kindnote"></span><button type="button" id="kindall">Show all</button></div>
   <div id="deckproblems" role="status"></div>
   <div id="decktiles" role="list"></div>
+  <aside id="pickpanel" aria-label="Picked">
+    <h3 id="pptitle"></h3>
+    <p id="ppline"></p>
+    <div id="pptiles"></div>
+  </aside>
   <div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"></button><button type="button" id="getpick" class="pri"></button><button type="button" id="removepick" hidden></button></div>
 </div></div><!-- /deckbox -->
 <div id="reviewbox" hidden><div class="sheet" role="dialog" aria-labelledby="reviewtitle">
@@ -1044,6 +1075,10 @@ $('pick').onchange = async (e) => {
 };
 $('pickfile').onchange = async (e) => { const list = [...e.target.files]; e.target.value = ''; closeSheet('sharebox'); await addFiles(list, $('keep').checked); };
 $('share').onclick = () => openSheet('sharebox');
+// on wide screens the actions live in the top bar (L1); on phones and portrait tablets, at the bottom
+const WIDE = matchMedia('(min-width: 1000px)');
+function placeActions() { const into = WIDE.matches ? $('topacts') : $('bar'); into.append($('share'), $('pickedbtn')); }
+WIDE.addEventListener('change', placeActions); placeActions();
 $('shareclose').onclick = () => closeSheet('sharebox');
 $('sharebox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('sharebox'); };
 // a link or a note (3.4): plain text; a link must be a web address
@@ -1696,6 +1731,13 @@ function showPicks() {
   $('pickall').textContent = tiles.length && tiles.every((t) => picked.has(t.dataset.pid)) ? 'Unpick all' : 'Pick all';
   for (const sec of document.querySelectorAll('#decktiles .moment')) { const ks = [...sec.querySelectorAll('button[data-pid]')].map((t) => t.dataset.pid); sec.querySelector('.mpick').textContent = ks.length && ks.every((k) => picked.has(k)) ? 'Unpick all' : 'Pick all'; }
   $('reviewtitle').textContent = `Picked · ${s.n}`;
+  // the Picked panel beside an open deck on wide screens (L2)
+  $('pptitle').textContent = `Picked · ${s.n}`;
+  $('ppline').textContent = s.n ? pickLine(s) : 'Tap photos to pick them, then get them all at once.';
+  $('pptiles').replaceChildren(...[...picked].slice(0, 12).map((k) => prints.get(k)).filter(Boolean).map((p) => {
+    if (!p.thumb) return Object.assign(document.createElement('span'), { textContent: p.text ? p.text.slice(0, 30) : p.name });
+    const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); deckUrls.push(u); return Object.assign(document.createElement('img'), { src: u, alt: p.name });
+  }));
   $('reviewline').textContent = s.n ? pickLine(s) : 'Nothing picked yet. Open a deck and tap photos to pick them.';
   $('getall').textContent = `Get all ${s.n} · ${mb(s.bytes)}`; $('getall').disabled = !s.n;
 }

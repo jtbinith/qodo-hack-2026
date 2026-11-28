@@ -19,7 +19,7 @@ test('wide screens (L2, T3): the deck fills the screen with Picked always open o
   assert.match(html, /<aside id="pickpanel" aria-label="Picked">\s*<h3 id="pptitle"><\/h3>\s*<p id="ppline"><\/p>\s*<div id="pptiles"><\/div>\s*<\/aside>/);
   assert.match(wide, /#deckbox \{[^}]*top: calc\(66px/);
   assert.match(wide, /#deckbox \.sheet \{[^}]*grid-template-columns: 1fr 320px/);
-  assert.match(wide, /#pickpanel \{[^}]*display: grid/);
+  assert.match(wide, /#deckbox #pickpanel \{[^}]*display: grid/);
   assert.match(css, /#pickpanel \{[^}]*display: none/, 'phones and portrait tablets: Picked is a sheet');
   assert.match(wide, /#decktiles \.mgrid \{[^}]*minmax\(124px, 1fr\)/);
 });
