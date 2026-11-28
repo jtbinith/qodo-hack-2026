@@ -237,7 +237,7 @@
   .pills button { flex: 1; font-size: 16px; font-weight: 500; padding: 13px 16px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
   .pills .pri { background: var(--ink); color: var(--paper); }
   /* toasts: a charcoal pill that lands with a small squash and settles (component lab, "Boing, subtle") */
-  #toast { position: fixed; left: 50%; top: calc(78px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+  #toast { position: fixed; left: 50%; top: calc(124px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
     background: var(--ink); color: var(--paper); padding: 13px 18px; border-radius: 18px; font-size: 15px; font-weight: 500; line-height: 1.35; text-align: center;
     opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
   #toast.in { animation: boing .6s cubic-bezier(.2, .8, .3, 1) backwards; }   /* backwards: once landed, the timer's opacity decides */
@@ -914,7 +914,8 @@ $('invite').onclick = () => {
 function openSheet(k) { const b = $(k); b.classList.remove('out'); b.hidden = false; }
 function closeSheet(k, then) {
   const b = $(k);
-  if (b.hidden || b.classList.contains('out')) return;
+  if (b.hidden) return then?.();   // already closed: carry straight on
+  if (b.classList.contains('out')) return;
   const done = () => { b.classList.remove('out'); b.hidden = true; then?.(); };
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
   b.classList.add('out');

@@ -3,10 +3,10 @@
 export const MAX_SPEED = 3;   // px per ms
 export const TAU = 220;       // ms: how quickly a glide slows down; it travels speed × TAU in all
 
-// speed from the drag's last 80 ms: [{ x, y, t }] in screen pixels and ms
+// speed from the drag's last 50 ms (at most its last 4 moves), so a swipe that turned round reads its last direction: [{ x, y, t }] in px and ms
 export function velocity(samples) {
   const last = samples[samples.length - 1];
-  const first = last && samples.find((s) => last.t - s.t <= 80);
+  const recent = samples.slice(-4), first = last && recent.find((s) => last.t - s.t <= 50);
   if (!first || first === last || last.t === first.t) return { vx: 0, vy: 0 };
   let vx = (last.x - first.x) / (last.t - first.t), vy = (last.y - first.y) / (last.t - first.t);
   const v = Math.hypot(vx, vy);
