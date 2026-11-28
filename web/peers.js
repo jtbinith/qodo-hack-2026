@@ -7,7 +7,7 @@
 // Direct links use "perfect negotiation": either side may start; if both start at once the
 // "polite" side (smaller id) backs off.
 
-import { makeKeyPair, deriveKey, seal, open, b64, unb64 } from './seal.js';
+import { makeKeyPair, deriveKey, seal, open, b64, unb64, checkWords } from './seal.js';
 
 const ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
 const DIRECT_CHUNK = 64 * 1024;
@@ -118,7 +118,8 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
       if (L.key || L.keyFailed) return;     // first key wins; ignore later swaps
       try {
         const { kp } = await mine;
-        L.key = await deriveKey(kp, unb64(data.pub), { table, a: myId, b: from });
+        L.theirPub = unb64(data.pub);   // kept for the check words (5.3)
+        L.key = await deriveKey(kp, L.theirPub, { table, a: myId, b: from });
       } catch (e) {
         L.keyFailed = true;                 // malformed key: stop waiting on this peer
         console.warn('bad key from', from, e);
@@ -303,5 +304,7 @@ export function createPeers({ myId, table, signal, forceRelay = false, present =
     onReady: (f) => readyHandlers.add(f),   // f(peer) when a peer's key arrives
     path: (peer) => { const L = links[peer]; return !L ? 'none' : L.open ? 'direct' : L.key ? 'relay (encrypted)' : 'keys…'; },
     state: (peer) => links[peer]?.pc.connectionState || 'none',
+    // the four check words for this peer, once its key is here (5.3); null before
+    words: async (peer) => { const L = links[peer]; if (!L?.theirPub) return null; const { pub } = await mine; return checkWords(pub, L.theirPub, table); },
   };
 }

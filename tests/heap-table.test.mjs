@@ -61,7 +61,7 @@ test('the header is filled from the room, as text', () => {
 
 test('decks on the table: a stack per person with a name and count pill, no loose photos', () => {
   const frame = (html.match(/function frame\(\) {([\s\S]*?)\n}\nframe\(\);/) || [, ''])[1];
-  assert.match(frame, /groupDecks\(prints\)/, 'drawn deck by deck');
+  assert.match(frame, /groupDecks\(visiblePrints\(\)\)/, 'drawn deck by deck, without hidden or blocked people');
   assert.match(frame, /deck\.pids\.length > 1 \? `\$\{who\} \$\{deck\.pids\.length\}`/, 'the pill says whose and how many');
   assert.match(html, /\$\('pick'\)\.onchange[\s\S]*?deckSpot\(prints, id/, 'what I share goes on my deck');
   assert.match(html, /t: 'moves', pids: /, 'a deck moves as one message');

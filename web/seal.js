@@ -56,3 +56,14 @@ export async function fingerprint(pubA, pubB) {
 
 export const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
 export const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+// Check words (wireframe 5.3): four words from both devices' public keys (sorted, so both sides agree) and the heap.
+// A device in the middle would hold other keys, so the two screens would show different words.
+export const WORDS = ('acorn anchor apple arrow aspen badger bamboo banjo barley basil beacon beaver birch bison blossom bluebell bonfire boulder bramble breeze brook bubble buckle burrow butter cabin cactus camel candle canoe canyon carrot castle cedar cello chalk cherry chestnut cider cinder clover cobble comet coral cotton cougar crane crater cricket crystal cuckoo daisy dawn delta denim dingo dolphin donkey dragon drift drum dune eagle easel echo ember emerald falcon fennel fern ferry fiddle finch fjord flame flint flute forest fossil fox frost galaxy garnet gecko geyser ginger glacier globe goose granite grape gravel gull hammock harbor hazel heron hickory hill honey hornet husky iceberg igloo indigo iris island ivory ivy jade jaguar jasmine jelly jetty juniper kayak kelp kettle kite kiwi koala ladder lagoon lantern larch lark lava lemon lilac lily lime linen lizard llama lobster locket lotus lynx magnet mango maple marble meadow melon meteor mint mitten moose moss moth mountain muffin mushroom nectar nest nutmeg oasis oak oat ocean olive onyx opal orbit orchid osprey otter owl oyster paddle panda pansy parrot peach pebble pelican pepper pine plum pond poppy prairie puffin pumpkin quail quartz quill rabbit radish raven reef ribbon river robin rocket rose ruby saddle saffron salmon sandal sapphire seal sequoia shell sierra silver sparrow spruce squid star stone storm sugar summit swan tangerine thistle thunder tiger timber toffee topaz tortoise tulip tundra turtle valley velvet violet volcano walnut walrus wave willow wind winter wolf wren yak yarrow yew zebra zephyr zinnia bay cove glen moor reed tide vale plume fable crest prism').split(' ');
+export async function checkWords(pubA, pubB, table) {
+  const [x, y] = [pubA, pubB].sort((a, b) => { for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i] - b[i]; return a.length - b.length; });
+  const t = new TextEncoder().encode(table), all = new Uint8Array(x.length + y.length + t.length);
+  all.set(x); all.set(y, x.length); all.set(t, x.length + y.length);
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', all));
+  return [...h.slice(0, 4)].map((b) => WORDS[b]);
+}

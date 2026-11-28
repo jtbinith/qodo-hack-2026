@@ -869,18 +869,20 @@ try {
   check(waitSays === 'Waiting for Host to let you in' && askSays === 'Guest’s phone wants to join' && guestSeesNothing && letIn,
     `the guest waits ("${waitSays}", sees nothing: ${guestSeesNothing}); the host is asked ("${askSays}") and Let in lets them in (${letIn})`);
   // 5.1–5.4: People lists everyone; checking a device shows the same four words on both screens
-  const openPerson = async (page, who) => { await page.click('#menu'); await page.click('#peoplebtn'); await until(page, () => !document.getElementById('peoplebox').hidden, null, 5000);
+  const sheetsDown = (page) => until(page, () => ['peoplebox', 'personbox', 'checkbox', 'menubox', 'invitebox'].every((k) => document.getElementById(k).hidden), null, 5000);
+  const openPerson = async (page, who) => { await sheetsDown(page); await page.click('#menu'); await page.click('#peoplebtn'); await until(page, () => !document.getElementById('peoplebox').hidden, null, 5000);
     await page.click(`#peoplelist button[data-who="${who}"]`); await until(page, () => !document.getElementById('personbox').hidden, null, 5000); };
+  if (await S.evaluate(() => !document.getElementById('invitebox').hidden)) { await S.click('#closeinvite'); await until(S, () => document.getElementById('invitebox').hidden, null, 3000); }   // the new heap's invite sheet
   const [sId, gId] = [await S.evaluate(() => window.__t.id), await G.evaluate(() => window.__t.id)];
   await S.click('#menu'); await S.click('#peoplebtn'); await until(S, () => !document.getElementById('peoplebox').hidden, null, 5000);
   const plist = await S.evaluate(() => [document.getElementById('peopletitle').textContent, ...[...document.querySelectorAll('#peoplelist button, #peoplelist .me')].map((r) => r.querySelector('b').textContent)]);
-  await S.click('#peopleback');
+  await S.click('#peopleback'); await sheetsDown(S);
   await openPerson(S, gId); await S.click('#pcheck'); await openPerson(G, sId); await G.click('#pcheck');
   await until(S, () => document.querySelectorAll('#checkwords span').length === 4, null, 10000); await until(G, () => document.querySelectorAll('#checkwords span').length === 4, null, 10000);
   const words = await Promise.all([S, G].map((p) => p.evaluate(() => [...document.querySelectorAll('#checkwords span')].map((x) => x.textContent).join(' '))));
-  await S.click('#checkyes'); const privateSaid = await toastOf(S); await G.click('#checkcancel');
+  await S.click('#checkyes'); const privateSaid = await toastOf(S); await G.click('#checkcancel'); await sheetsDown(S); await sheetsDown(G);
   const badge = await S.evaluate((g) => { document.getElementById('menu').click(); document.getElementById('peoplebtn').click(); return null; }, gId).then(() => until(S, (g) => document.querySelector(`#peoplelist button[data-who="${g}"] .badge`)?.textContent === '✓ Checked', gId, 5000)).then(() => true, () => false);
-  await S.click('#peopleback');
+  await S.click('#peopleback'); await sheetsDown(S);
   check(plist[0] === 'People (2)' && plist.length === 3 && words[0].split(' ').length === 4 && words[0] === words[1] && privateSaid === 'Your connection to Guest’s phone is private ✓' && badge,
     `People lists ${JSON.stringify(plist)}; both screens show "${words[0]}" / "${words[1]}"; Yes says "${privateSaid}" and the badge stays (${badge})`);
   // 5.9: a dropped connection says it's reconnecting, and the line goes once it's back
