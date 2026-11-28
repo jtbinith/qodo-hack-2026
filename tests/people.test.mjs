@@ -34,7 +34,7 @@ test('check (5.3–5.5): the four words, Yes they match or No; a mismatch warns 
 
 test('block (5.6): quiet, for the rest of this heap; their photos go and nothing more comes from them', () => {
   assert.match(box('blockbox'), /For the rest of this heap, their photos disappear from your screen and they can’t send you anything\. They aren’t told\./);
-  assert.match(html, /const inHeap = \(k\) => !net \|\| \(!blocked\.has\(k\) && isIn\(k, gateOf\(\)\)\)/);
+  assert.match(html, /const inHeap = \(k\) => !net \|\| [^\n]*\(!blocked\.has\(k\) && isIn\(k, gateOf\(\)\)\)/);   // blocked is never in
   assert.match(html, /if \(blocked\.has\(from\)\) return;/);
   assert.match(html, /function visiblePrints\(\)/);
 });

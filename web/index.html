@@ -912,7 +912,8 @@ function addText(kind, text) {
 // who is in the heap (1.6, 1.7): the host, and whoever the host let in. Nobody else is sent anything or answered
 const gateOf = () => ({ leader: net.leader, admits: net.admits, peers: net.peers });
 const blocked = new Set(), hiddenOwners = new Set(), checked = new Set();   // this heap only (5.2–5.6)
-const inHeap = (k) => !net || (!blocked.has(k) && isIn(k, gateOf()));
+// me, when the time keeper is my own tab before a reload (it lingers in the room a moment): I'm not waiting for myself
+const inHeap = (k) => !net || (k === id && before.includes(net.leader)) || (!blocked.has(k) && isIn(k, gateOf()));
 const others = () => (inHeap(id) ? Object.keys(net?.peers || {}).filter((k) => k !== id && inHeap(k)) : []);   // waiting to be let in: nobody yet
 const broadcast = (f) => others().forEach(f);
 const announced = new Map(); // pid -> devices we've announced it to
