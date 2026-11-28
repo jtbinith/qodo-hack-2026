@@ -36,7 +36,7 @@ const uniqLast = (xs) => xs.filter((x, i) => xs.lastIndexOf(x) === i);
 // `me` (the host) stays even if the room doesn't list it yet, or adding it would never settle (Qodo re-review of #162)
 export function trimAdmits(a, peers, me = null) {
   const here = (k) => k === me || Object.hasOwn(peers, k);
-  return { open: a.open, ids: uniqLast(a.ids.filter(here)), names: uniqLast(a.names).slice(-200), no: uniqLast(a.no.filter(here)) };
+  return { open: a.open, ids: uniqLast(a.ids.filter(here)), names: uniqLast(a.names).slice(-200), no: uniqLast(a.no.filter(here)), ...(a.ended ? { ended: a.ended } : {}) };   // an ended heap stays ended
 }
 // "Let everyone in without asking" (1.7) is remembered per heap: the codes of the latest 20. '1' (set only by the
 // device check, never by a tap) opens every heap this device hosts

@@ -383,10 +383,16 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
   check(downloads.length === NB && await toastOf(B) === 'Nothing new to save', `a second Get downloads nothing again ("${await toastOf(B)}")`);
   // a picked photo that isn't here yet: Get asks for it, says it's arriving, and the next Get saves it
-  const away = await B.evaluate(() => [...window.__t.prints.values()].find((p) => p.owner !== window.__t.id && !window.__t.files.has(p.pid) && p.type.startsWith('image/') && !['IMG_0004.JPG', 'IMG_0005.JPG'].includes(p.name))?.pid);   // not the photos the tap checks below use
+  // not the photos the tap checks below use. If every other photo has reached B by now, B lets one go first
+  const away = await B.evaluate(() => {
+    const t = window.__t, mine = (p) => p.owner === t.id, ok = (p) => !mine(p) && p.type.startsWith('image/') && !['IMG_0004.JPG', 'IMG_0005.JPG'].includes(p.name);
+    let p = [...t.prints.values()].find((p) => ok(p) && !t.files.has(p.pid));
+    if (!p) { p = [...t.prints.values()].reverse().find(ok); if (p) { t.files.delete(p.pid); t.handed.delete(p.pid); p.holders = p.holders.filter((k) => k !== t.id); } }
+    return p?.pid;
+  });
   await B.evaluate(() => document.getElementById('reviewbox').hidden = true);
   await B.click('#allphotos'); await sheetUp(B, 'deckbox');
-  await tapTile(B, 'deckbox', away);
+  if (!(await B.evaluate((a) => document.querySelector(`#decktiles [data-pid="${a}"]`)?.classList.contains('on'), away))) await tapTile(B, 'deckbox', away);   // picked already (Get took it before): stays picked
   await B.evaluate(() => { window.__said = []; new MutationObserver(() => window.__said.push(document.getElementById('toast').textContent)).observe(document.getElementById('toast'), { childList: true, characterData: true, subtree: true }); });   // every toast, so one arriving at the same moment can't hide it
   await B.click('#getpick');
   const arrivingSaid = await B.evaluate(() => window.__said.find((t) => /still arriving/.test(t)) || document.getElementById('toast').textContent);
@@ -584,6 +590,9 @@ try {
   await until(C, (a) => !(a in window.__t.net.peers), a.id, 45000);                     // and C's: hearing it late is the #61 step below
   await Promise.all([B.evaluate(() => window.__t.net.push('R', 300)), C.evaluate(() => window.__t.net.push('L', 300))]);
   await until(C, () => window.__t.net.joins.length === 1, null, 30000);
+  // A (the host) left, so B is the host now (2D.10): B says Got it first
+  await until(B, () => !document.getElementById('hostbox').hidden, null, 10000).then(() => B.click('#hostok'), () => {});
+  await until(B, () => document.getElementById('hostbox').hidden, null, 5000);
   await drag(B, 'photo-0.jpg', 390 + 150);                                          // B drags its copy onto C
   await until(C, () => window.__t.files.size === 1, null, 60000);
   const [cname, cbytes] = await C.evaluate(async () => { const f = [...window.__t.files.values()][0]; return [f.name, [...new Uint8Array(await f.arrayBuffer())]]; });
@@ -968,6 +977,20 @@ try {
   await G.click('#snackact');
   const backAgain = await until(S, (pids) => pids.every((p) => window.__t.prints.has(p)), gd.pids, 10000).then(() => true, () => false);
   check(rmSays === 'Remove 2' && rmGone && /^Removed 2 photos\./.test(rmLine) && backAgain, `"${rmSays}" takes G's photos off S's table (${rmGone}), G says "${rmLine}", and Undo puts them back (${backAgain})`);
+  // the joined side shows in join mode; tapping it asks before it's joined to someone else
+  await joinModeOpen(S); await joinModeOpen(G);
+  await S.click('#joinmode .strip[data-edge="R"]'); await G.click('#joinmode .strip[data-edge="L"]');
+  await until(S, () => window.__t.net.joins.length === 1 && document.getElementById('joinmode').hidden, null, 15000);
+  await joinModeOpen(S);
+  const rjSideShown = await S.evaluate(() => { const st = document.querySelector('#joinmode .strip[data-edge="R"]'); return [st.classList.contains('joined'), st.textContent]; });
+  await S.click('#joinmode .strip[data-edge="R"]');
+  const rjWarned = await until(S, () => !document.getElementById('rejoinbox').hidden, null, 3000).then(() => S.evaluate(() => document.getElementById('rejoinsub').textContent), () => '');
+  await S.click('#rejoinkeep');
+  const rjKept = await S.evaluate(() => window.__t.net.joins.length === 1 && document.getElementById('rejoinbox').hidden);
+  await S.click('#joincancel'); await S.evaluate(() => window.__t.net.unjoin(Object.keys(window.__t.net.peers).find((k) => k !== window.__t.id)));
+  await until(S, () => window.__t.net.joins.length === 0, null, 10000);
+  check(rjSideShown[0] && rjSideShown[1] === 'Joined · Guest' && /You’ll lose the join with Guest/.test(rjWarned) && rjKept,
+    `join mode shows the joined side ("${rjSideShown[1]}"); tapping it warns ("${rjWarned}") and Keep keeps the join (${rjKept})`);
   await joinModeOpen(S);
   await S.click('#joinmode .strip[data-edge="T"]');
   const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
@@ -983,14 +1006,48 @@ try {
   const nf1 = await NF.evaluate(() => ({ code: document.getElementById('code').value, room: sessionStorage.getItem('room'), url: location.href }));
   check(nf && nf1.code === 'ZZZZZ22222' && nf1.room === null && !nf1.url.includes('ZZZZZ'), `a typed code for an empty heap comes back to the code screen with the error (${nf}), keeps the code (${nf1.code}) and stores nothing (${nf1.room})`);
   await NF.context().close();
+  // 4.7, 4.11, 4.12: the host puts G's screen below its own; G is mvAsked, says Move it, and can undo
+  await sheetsDown(S); await sheetsDown(G);
+  await S.click('#mapbtn'); await until(S, () => !document.getElementById('mapbox').hidden && !document.querySelector('#mapbox .sheet').getAnimations().length, null, 5000);
+  const [gBox, sBox] = await S.evaluate(([g, me]) => [window.__t.mapTileBox(g), window.__t.mapTileBox(me)], [gId, sId]);
+  await S.mouse.move(gBox.x, gBox.y); await S.mouse.down();
+  for (let k = 1; k <= 8; k++) await S.mouse.move(gBox.x + (sBox.x - gBox.x) * k / 8, gBox.y + (sBox.y + sBox.h / 2 + 30 - gBox.y) * k / 8);
+  await S.mouse.up();
+  const askLine = await until(S, () => !document.getElementById('mapask').hidden, null, 5000).then(() => S.evaluate(() => document.getElementById('mapasktext').textContent), () => '');
+  await S.click('#mapaskgo');
+  const mvAsked = await until(G, () => !document.getElementById('movebox').hidden, null, 10000).then(() => G.evaluate(() => [document.getElementById('movetitle').textContent, document.getElementById('moveyes').textContent, document.getElementById('movecv').width > 0]), () => []);
+  await G.click('#moveyes');
+  const mvMoved = await until(S, ([g, me]) => window.__t.net.joins.some((j) => [j.a, j.b].includes(g) && [j.a, j.b].includes(me)), [gId, sId], 10000).then(() => true, () => false);
+  const mvMovedSaid = await until(G, () => /^Moved below /.test(document.getElementById('snacktext').textContent) && !document.getElementById('snack').hidden, null, 5000).then(() => G.evaluate(() => document.getElementById('snacktext').textContent), () => '');
+  await G.click('#snackact');
+  const mvUnmoved = await until(S, () => window.__t.net.joins.length === 0, null, 10000).then(() => true, () => false);
+  check(askLine === 'Ask Guest to move below your phone' && mvAsked[0] === 'The host wants to move your screen' && mvAsked[1] === 'Move it' && mvAsked[2] && mvMoved && mvMovedSaid === 'Moved below Host’s phone' && mvUnmoved,
+    `G is mvAsked ("${mvAsked[0]}", "${mvAsked[1]}"), the move joins them (${mvMoved}), G says "${mvMovedSaid}" and Undo takes it back (${mvUnmoved})`);
+  // 4.9: S invites its own other device: it's let in by itself and lines up on S's right
+  await sheetsDown(S); await S.click('#joinbtn'); await until(S, () => !document.getElementById('joinmode').hidden, null, 5000);
+  await S.click('#joinpair');
+  const pairLink = await until(S, () => /&pair=/.test(document.getElementById('pairlink').value), null, 5000).then(() => S.evaluate(() => [document.getElementById('pairlink').value, document.querySelector('#pairbox h2').textContent]), () => ['', '']);
+  await S.click('#pairclose'); await sheetsDown(S);
+  const P2 = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await P2.goto(pairLink[0]);
+  const pairName = await until(P2, () => document.getElementById('s-name')?.hidden === false && document.getElementById('yourname').value, null, 10000).then(() => P2.evaluate(() => document.getElementById('yourname').value), () => '');
+  await P2.click('#go');
+  const pIn = await until(P2, () => window.__t && window.__t.net.status === 'live' && document.getElementById('lobby').hidden, null, 20000).then(() => true, () => false);
+  const askedHost = await S.evaluate(() => !document.getElementById('askbox').hidden);
+  const pId = await P2.evaluate(() => window.__t?.id);
+  const lined = await until(S, ([p, me]) => window.__t.net.joins.some((j) => j.a === p && j.b === me && j.edgeA === 'L'), [pId, sId], 15000).then(() => true, () => false);
+  check(pairLink[1] === 'Add your other device' && pairName === 'Host (2)' && pIn && !askedHost && lined,
+    `"${pairLink[1]}" gives a link; the other device is named "${pairName}", let in without asking (${pIn}, host asked: ${askedHost}) and lined up on S's right (${lined})`);
+  await P2.context().close();
+  await until(S, () => window.__t.net.joins.length === 0, null, 15000);
   // 3.1, 3.4: S writes a note from the share sheet: G gets it as plain text. A program is refused (3.9)
   await sheetsDown(S); await S.click('#share'); await until(S, () => !document.getElementById('sharebox').hidden, null, 5000);
-  await S.click('#sharenote'); await until(S, () => !document.getElementById('textbox').hidden, null, 5000);
-  await S.fill('#textfield', 'Meet at the gate at 8'); await S.click('#textshare');
-  const noteAt = await until(G, () => [...window.__t.prints.values()].some((p) => p.text === 'Meet at the gate at 8' && p.type === 'text/plain'), null, 10000).then(() => true, () => false);
+  await S.click('#sharelink'); await until(S, () => !document.getElementById('textbox').hidden, null, 5000);
+  await S.fill('#textfield', 'https://maps.example.com/gate'); await S.click('#textshare');
+  const noteAt = await until(G, () => [...window.__t.prints.values()].some((p) => p.text === 'https://maps.example.com/gate' && p.type === 'text/plain'), null, 10000).then(() => true, () => false);
   await S.setInputFiles('#pickfile', [{ name: 'setup.exe', mimeType: 'application/x-msdownload', buffer: Buffer.from('MZ') }]);
   const refusedSaid = await until(S, () => document.getElementById('toast').textContent.startsWith('setup.exe'), null, 5000).then(() => toastOf(S), () => toastOf(S));
-  check(noteAt && refusedSaid === 'setup.exe was refused. Programs and scripts can’t be shared here', `a note reaches G as text (${noteAt}); a program is refused ("${refusedSaid}")`);
+  check(noteAt && refusedSaid === 'setup.exe was refused. Programs and scripts can’t be shared here', `a link reaches G as plain text (${noteAt}); a program is refused ("${refusedSaid}")`);
   // 5.6: S blocks G: G's photos go from S's table and nothing new from G arrives
   await G.setInputFiles('#pick', [{ name: 'before.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) }]);
   await until(S, () => [...window.__t.prints.values()].some((p) => p.name === 'before.jpg'), null, 10000);
@@ -1012,6 +1069,15 @@ try {
   const turned = await until(D2, () => document.getElementById('s-home')?.hidden === false && document.getElementById('toast').textContent, null, 15000).then(() => D2.evaluate(() => document.getElementById('toast').textContent), () => '');
   check(turned === 'Host didn’t let you in this time', `Not now sends Dee back to the home screen ("${turned}")`);
   await D2.context().close();
+  // 2D.11, 2D.12: the host ends the heap: G is told it closes in five minutes, adding stops, and at the end G sees it has ended
+  await sheetsDown(S); await S.click('#menu'); await S.click('#endheap'); await until(S, () => !document.getElementById('endbox').hidden, null, 5000);
+  const endAsk = await S.evaluate(() => document.getElementById('endtitle').textContent);
+  await S.click('#endyes');
+  const endLine = await until(G, () => !document.getElementById('endbanner').hidden, null, 10000).then(() => G.evaluate(() => [document.getElementById('endbanner').textContent, document.getElementById('share').disabled]), () => ['', false]);
+  await G.evaluate(() => window.__t.endNow());
+  const endedSaid = await until(G, () => document.getElementById('s-ended')?.hidden === false, null, 10000).then(() => G.evaluate(() => document.getElementById('endedsub').textContent), () => '');
+  check(endAsk === 'End “Host’s heap” for everyone?' && /^Host ended the heap\. It closes in [45]:\d\d\.$/.test(endLine[0]) && endLine[1] && /^Nothing from “Host’s heap” is kept\.$/.test(endedSaid),
+    `ending asks "${endAsk}"; G sees "${endLine[0]}" with adding off (${endLine[1]}), then "${endedSaid}"`);
   await G.context().close();
   // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
   const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();
@@ -1037,6 +1103,33 @@ try {
   check(sharp, `after an invite link and Back, the wordmark's a is drawn at its size (${sharp})`);
   await GL.context().close();
   await S.context().close();
+  // 2D.9, 2D.10: the host leaves: the other device is told, and it's the host now
+  const hostPage = async (n) => { const p = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage(); await p.addInitScript((n) => { try { localStorage.setItem('heap-name', n); localStorage.setItem('heap-open', '1'); } catch {} }, n); return p; };
+  const X = await hostPage('Xena'); await X.goto(BASE); await X.click('#new'); await X.click('#go');
+  await until(X, () => window.__t?.net.status === 'live' && !document.getElementById('invitebox').hidden, null, 20000);
+  const xc = await X.evaluate(() => [...document.querySelectorAll('#invcode span')].map((x) => x.textContent).join(''));
+  const Y = await hostPage('Yuri'); await Y.goto(`${BASE}?room=${xc}&auto`); await enter(Y);
+  await until(Y, () => window.__t?.net.status === 'live' && document.getElementById('lobby').hidden && Object.keys(window.__t.net.peers).length === 2, null, 20000);
+  await X.context().close();
+  const hostNow = await until(Y, () => !document.getElementById('hostbox').hidden, null, 45000).then(() => Y.evaluate(() => [document.getElementById('hostsub').textContent, window.__t.toasts.some((t) => t === 'Xena left. Yuri is now the host.')]), () => ['', false]);
+  check(hostNow[0] === 'Xena left, so you look after the heap.' && hostNow[1], `when the host leaves, the other device is told (${hostNow[1]}) and sees "You’re the host now": "${hostNow[0]}"`);
+  await Y.context().close();
+  // L1, L2: on a laptop the actions sit in the top bar, and a deck opens full width with Picked on the right
+  const W1 = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await W1.addInitScript(() => { try { localStorage.setItem('heap-name', 'Wide'); } catch {} });
+  await W1.goto(BASE); await W1.click('#new'); await W1.click('#go');
+  await until(W1, () => window.__t?.net.status === 'live' && !document.getElementById('invitebox').hidden, null, 20000);
+  await W1.click('#closeinvite'); await until(W1, () => document.getElementById('invitebox').hidden, null, 3000);
+  const top = await W1.evaluate(() => ({ share: !!document.querySelector('#top #share'), picked: !!document.querySelector('#top #pickedbtn'), bar: getComputedStyle(document.getElementById('bar')).display }));
+  await W1.setInputFiles('#pick', ['w1.jpg', 'w2.jpg', 'w3.jpg'].map((n) => ({ name: n, mimeType: 'image/jpeg', buffer: Buffer.from(iphoneJpeg()) })));
+  await until(W1, () => window.__t.prints.size === 3, null, 10000);
+  const wd = await W1.evaluate(() => { const t = window.__t, d = t.decks()[0], [wx, wy] = t.world(d.top), me = t.layout.pos[t.id]; return { x: wx - me[0] + 75, y: wy - me[1] + 75 }; });
+  await W1.mouse.click(wd.x, wd.y); await until(W1, () => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length, null, 5000);
+  await W1.click('#decktiles button[data-pid]');
+  const panel = await W1.evaluate(() => { const r = document.querySelector('#deckbox .sheet').getBoundingClientRect(), p = document.getElementById('pickpanel'); return { w: Math.round(r.width), shown: getComputedStyle(p).display !== 'none', title: document.getElementById('pptitle').textContent, tiles: document.querySelectorAll('#pptiles img, #pptiles span').length }; });
+  check(top.share && top.picked && top.bar === 'none' && panel.w === 1280 && panel.shown && panel.title === 'Picked · 1' && panel.tiles === 1,
+    `on a laptop the actions are in the top bar (${top.share}, ${top.picked}, bar ${top.bar}); a deck opens ${panel.w} px wide with Picked on the right ("${panel.title}", ${panel.tiles} tile)`);
+  await W1.context().close();
 } catch (e) {
   check(false, e.message.split('\n')[0]);
 } finally {

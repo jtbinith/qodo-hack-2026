@@ -255,12 +255,13 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
   // who is in (1.6, 1.7): only the time keeper's list counts; it's sent again whenever the room changes,
   // so a device that just arrived, or a new time keeper's room, hears it
   const strs = (a, n) => Array.isArray(a) && a.length <= n && a.every((x) => typeof x === 'string' && x.length <= 80);
-  const validAdmits = (a) => !!a && typeof a.open === 'boolean' && strs(a.ids, 200) && strs(a.names, 200) && strs(a.no, 200);
+  const validAdmits = (a) => !!a && typeof a.open === 'boolean' && strs(a.ids, 200) && strs(a.names, 200) && strs(a.no, 200) &&
+    (a.ended === undefined || (Number.isFinite(a.ended) && a.ended > 0));   // the host ended the heap: when it closes (2D.11)
   function sendAdmits() { if (s.leader === id) send('admits', { from: id, ...s.admits }); }
   ch.on('broadcast', { event: 'admits' }, ({ payload }) => {
     if (payload?.from === s.leader && payload.from !== id && validAdmits(payload)) {
       stopAskingAdmits();
-      s.admits = { open: payload.open, ids: payload.ids, names: payload.names, no: payload.no }; emit('admits', s.admits);
+      s.admits = { open: payload.open, ids: payload.ids, names: payload.names, no: payload.no, ...(payload.ended ? { ended: payload.ended } : {}) }; emit('admits', s.admits);
     }
   });
   let admitsAnsweredAt = 0;
@@ -269,6 +270,46 @@ export function joinRoom({ room, id, name, size, onSignal, onReturn = () => {}, 
     admitsAnsweredAt = performance.now(); sendAdmits();
   });
   s.setAdmits = (a) => { if (s.leader !== id || !validAdmits(a)) return; s.admits = a; sendAdmits(); emit('admits', a); };
+  // moving a screen (4.7, 4.8, 4.11): asked of one screen, done by the time keeper only with that screen's yes.
+  // by: who asked (the host, or one of the two screens); from: who said yes (one of the two screens)
+  const okSides = (j) => isValidJoins([j], [...Object.keys(s.peers), id]);
+  const sizesNow = () => Object.fromEntries(Object.entries(s.peers).map(([k, p]) => [k, { w: p.w, h: p.h }]));
+  ch.on('broadcast', { event: 'joinok' }, ({ payload }) => { if (Object.hasOwn(s.peers, payload?.from)) applyMove(payload); });
+  // the joins a move replaced, by the screen that moved, so its Undo can put them back (Qodo on #164)
+  const lastMoves = new Map();
+  function applyMove(payload) {
+    const j = payload?.j;
+    if (s.leader !== id || !j || !okSides(j)) return;
+    if (payload.from !== j.a && payload.from !== j.b) return;
+    if (payload.by !== s.leader && payload.by !== j.a && payload.by !== j.b) return;
+    lastMoves.set(j.a, { j, before: s.joins.filter((x) => x.a === j.a || x.b === j.a) });
+    s.joins = addJoins(s.joins, [j], sizesNow()); sendLayout();
+    announce('moved', { j, by: payload.by, from: id });
+  }
+  ch.on('broadcast', { event: 'moveask' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.by) && payload.j && okSides(payload.j)) emit('moveask', payload); });
+  ch.on('broadcast', { event: 'moveno' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.from)) emit('moveno', payload); });
+  ch.on('broadcast', { event: 'moved' }, ({ payload }) => { if (payload?.from === s.leader && payload.j && okSides(payload.j)) emit('moved', payload); });
+  // your own other device (4.9): it says hello with the token from the screen that showed the QR
+  ch.on('broadcast', { event: 'pair' }, ({ payload }) => { if (payload?.to === id && Object.hasOwn(s.peers, payload.from) && typeof payload.token === 'string' && payload.token.length <= 64) emit('pair', payload); });
+  s.pairHello = (token, to) => send('pair', { from: id, token, to });
+  // a member lets their own other device in (4.9): only the host's list counts, so they ask the host to add it
+  ch.on('broadcast', { event: 'vouch' }, ({ payload }) => { if (s.leader === id && Object.hasOwn(s.peers, payload?.from) && typeof payload.who === 'string' && Object.hasOwn(s.peers, payload.who)) emit('vouch', payload); });
+  s.vouch = (who) => send('vouch', { from: id, who });
+  // Undo after a move (4.12): the moved screen goes back to the joins it had before
+  function undoMove(a) {
+    const m = lastMoves.get(a); if (s.leader !== id || !m) return;
+    lastMoves.delete(a);
+    const here = [...Object.keys(s.peers), id], back = m.before.filter((x) => isValidJoins([x], here));
+    s.joins = addJoins(removeJoin(s.joins, m.j.a, m.j.b), back, sizesNow()); sendLayout();
+  }
+  ch.on('broadcast', { event: 'unmove' }, ({ payload }) => { if (Object.hasOwn(s.peers, payload?.from)) undoMove(payload.from); });
+  s.unmove = () => { if (s.leader === id) undoMove(id); else send('unmove', { from: id }); };
+  s.askMove = (j, to) => send('moveask', { by: id, to, j });
+  s.answerMove = (ask, yes) => {
+    if (!yes) return send('moveno', { from: id, to: ask.by, j: ask.j });
+    const p = { from: id, by: ask.by, j: ask.j };
+    if (s.leader === id) applyMove(p); else send('joinok', p);
+  };
   s.push = (edge, along) => {
     const p = { dev: id, edge, along, t: s.now() };
     latest = p.t;

@@ -104,7 +104,7 @@
     border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); }
   /* the deck sheet (2B.1, 2B.2): one person's photos, or everyone's, newest first */
   #deckbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
-  #deckbox .sheet { width: min(100%, 560px); box-sizing: border-box; max-height: 86vh; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+  #deckbox .sheet { width: min(100%, 900px); box-sizing: border-box; max-height: 86vh; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
     border-radius: 28px 28px 0 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto 1fr; gap: 8px; }
   #deckbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
   #deckbox .deckhead { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
@@ -162,9 +162,9 @@
   #joinmode .strip { position: absolute; border: 2.5px dashed var(--paper); background: rgba(0, 0, 0, 0); color: var(--paper); font: 700 12px var(--ui); letter-spacing: .08em; text-transform: uppercase;
     border-radius: 999px; }
   #joinmode .strip.on { background: var(--paper); color: var(--ink); border-style: solid; }
-  #joinmode .strip[data-edge="T"] { left: 16%; right: 16%; top: calc(18px + env(safe-area-inset-top)); height: 44px; }
-  #joinmode .strip[data-edge="B"] { left: 16%; right: 16%; bottom: calc(18px + env(safe-area-inset-bottom)); height: 44px; }
-  #joinmode .strip[data-edge="L"], #joinmode .strip[data-edge="R"] { top: 30%; bottom: 30%; width: 44px; writing-mode: vertical-rl; }
+  #joinmode .strip[data-edge="T"] { left: 16%; right: 16%; top: calc(80px + env(safe-area-inset-top)); height: 44px; }   /* just below the header */
+  #joinmode .strip[data-edge="B"] { left: 16%; right: 16%; bottom: calc(92px + env(safe-area-inset-bottom)); height: 44px; }   /* just above the bar */
+  #joinmode .strip[data-edge="L"], #joinmode .strip[data-edge="R"] { top: calc(50% - 18vh); bottom: calc(50% - 18vh); width: 44px; writing-mode: vertical-rl; }
   #joinmode .strip[data-edge="L"] { left: 12px; }
   #joinmode .strip[data-edge="R"] { right: 12px; }
   #joinmode .joincard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(280px, calc(100vw - 140px)); box-sizing: border-box; padding: 18px 16px;
@@ -200,7 +200,7 @@
   @media (prefers-reduced-motion: no-preference) { #dropmap:not([hidden]) { animation: sheet-up .28s cubic-bezier(.2, .9, .3, 1); } }
   /* waiting to be let in (1.6), and the host's question (1.7) */
   #s-wait { text-align: center; align-content: center; min-height: 70vh; }
-  #s-wait .waitdot { justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px dashed var(--ink); margin-bottom: 18px; }
+  #s-wait .waitdot { margin: 0 auto 18px; justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px dashed var(--ink); margin-bottom: 18px; }
   @media (prefers-reduced-motion: no-preference) { #s-wait .waitdot { animation: spin 4s linear infinite; } }
   @keyframes spin { to { transform: rotate(360deg); } }
   #waitcancel { margin-top: 28px; font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
@@ -243,7 +243,7 @@
   #leaveunsaved[hidden] { display: none; } #leaveunsaved b, #leaveunsaved small { display: block; } #leaveunsaved small { font-size: 12px; color: var(--text-mid); }
   #leavesave { background: none; border: 0; font: 500 15px var(--ui); color: var(--ink); text-decoration: underline; }
   #s-cleared { text-align: center; align-content: center; min-height: 70vh; gap: 10px; }
-  #s-cleared .waitdot.done { justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px solid var(--ink); font: 700 24px/52px var(--ui); }
+  #s-cleared .waitdot.done { margin: 0 auto 8px; justify-self: center; width: 56px; height: 56px; border-radius: 14px; border: 2.5px solid var(--ink); font: 700 24px/52px var(--ui); }
   #peoplebox:not([hidden]) .sheet, #personbox:not([hidden]) .sheet, #checkbox:not([hidden]) .sheet, #leavebox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
   #peoplebox.out .sheet, #personbox.out .sheet, #checkbox.out .sheet, #leavebox.out .sheet { animation: sheet-down .24s ease-in forwards; }
   @media (prefers-reduced-motion: reduce) { #peoplebox .sheet, #personbox .sheet, #checkbox .sheet, #leavebox .sheet { animation: none !important; } }
@@ -301,6 +301,58 @@
   #kindlist button[aria-checked="true"] { background: var(--line); }
   #kindlist button::before { content: '○'; margin-right: 12px; } #kindlist button[aria-checked="true"]::before { content: '●'; }
   #kindlist button span { margin-left: auto; color: var(--text-mid); }
+  /* arrange screens (4.7, 4.8, 4.11, 4.12) */
+  #mapmove, #maparrange { font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #maparrange[hidden] { display: none; }
+  #arrangebox, #movebox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 6; }
+  #arrangebox .sheet, #movebox .sheet { width: min(100%, 480px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+  #movebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #arrangebox h2, #movebox h2 { margin: 4px 0; font: 700 18px var(--ui); text-align: center; }
+  #arrangecancel { justify-self: start; background: none; border: 0; color: var(--text-mid); font: 500 15px var(--ui); }
+  #arrangelist button { display: flex; justify-content: space-between; width: 100%; padding: 14px 4px; background: none; border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: 500 17px var(--ui); text-align: left; }
+  #arrangelist button::after { content: '›'; color: var(--text-mid); }
+  #movesub { margin: 0; font-size: 14px; color: var(--text-mid); line-height: 1.45; }
+  #pairbox, #rejoinbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 6; }
+  #rejoinbox { align-items: center; }
+  #pairbox .sheet, #rejoinbox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
+  #rejoinbox .sheet { border-radius: 22px; border-bottom: 2px solid var(--ink); width: min(92%, 380px); }
+  #pairbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #pairbox h2, #rejoinbox h2 { margin: 4px 0; font: 700 18px var(--ui); text-align: center; }
+  .pairsub, #rejoinsub { margin: 0; font-size: 14px; color: var(--text-mid); line-height: 1.45; }
+  #pairqr { justify-self: center; width: min(260px, 70vw); height: auto; image-rendering: pixelated; }
+  #pairlink { font: 13px var(--ui); width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--paper); color: var(--text-mid); }
+  #paircopy { font: 500 14px var(--ui); padding: 8px 11px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #pairbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); } #pairbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  #rejoinkeep, #rejoinnew { font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #rejoinnew { background: var(--ink); color: var(--paper); }
+  #joinpair { background: none; border: 0; color: var(--text-mid); font: 13px var(--ui); text-decoration: underline; }
+  #joinmode .strip.joined { background: var(--ink); color: var(--paper); border: 2.5px solid var(--paper); }
+  #mapcv { touch-action: none; }
+  #maphint { margin: 0; font-size: 13px; color: var(--text-mid); text-align: center; }
+  #mapask { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 14px; background: var(--line); font-size: 14px; }
+  #mapask[hidden] { display: none; } #mapasktext { flex: 1; }
+  #mapaskgo { font: 500 15px var(--ui); padding: 9px 16px; border-radius: 999px; border: 0; background: var(--ink); color: var(--paper); }
+  #movecv { width: 100%; height: 150px; border-radius: 12px; background: var(--line); }
+  /* the host (2D.9–2D.12) */
+  #hostbox, #endbox, #unsavedbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 6; }
+  #unsavedbox { align-items: center; }
+  #hostbox .sheet, #endbox .sheet, #unsavedbox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
+  #unsavedbox .sheet { border-radius: 22px; border-bottom: 2px solid var(--ink); width: min(92%, 380px); }
+  #hostbox .handle, #endbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #hostbox h2, #endbox h2, #unsavedbox h2 { margin: 4px 0; font: 700 18px var(--ui); text-align: center; }
+  #hostsub, #endbox p, #unsavedbox p { margin: 0; font-size: 14px; color: var(--text-mid); line-height: 1.45; }
+  .hostrow { padding: 8px 0; border-bottom: 1.5px solid var(--line); } .hostrow b, .hostrow small { display: block; } .hostrow small { color: var(--text-mid); font-size: 13px; }
+  #hostok, #endyes, #endno, #unsavedsave, #unsavedleave, #endednew, #endedhome { font: 500 16px var(--ui); padding: 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #hostok, #endyes, #unsavedsave, #endednew { background: var(--ink); color: var(--paper); }
+  #endno, #unsavedleave, #endedhome { border-color: transparent; }
+  #endbanner { position: fixed; left: 0; right: 0; top: calc(66px + env(safe-area-inset-top)); z-index: 3; padding: 10px 16px; background: var(--ink); color: var(--paper); font-size: 14px; }
+  #endbanner[hidden] { display: none; }
+  #share:disabled, #pickedbtn:disabled { opacity: .45; }
+  #s-ended { text-align: center; align-content: center; min-height: 70vh; gap: 10px; }
+  #s-ended .waitdot.done { margin: 0 auto 8px; width: 56px; height: 56px; border-radius: 14px; border: 2.5px solid var(--ink); font: 700 24px/52px var(--ui); }
   /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
   #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
     border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
@@ -376,6 +428,31 @@
   @keyframes boing { 0% { transform: translateX(-50%) translateY(-18px) scale(.97, 1.04); opacity: 0 } 40% { transform: translateX(-50%) translateY(3px) scale(1.03, .97); opacity: 1 }
     70% { transform: translateX(-50%) translateY(1px) scale(.995, 1.005) } 100% { transform: translateX(-50%) } }
   @media (prefers-reduced-motion: reduce) { #toast.in { animation: none; } }
+  #pickpanel { display: none; }
+  #topacts { display: contents; }
+  /* laptops and tablets in landscape (wireframes L1, L2, T3): the actions in the top bar, decks full width with Picked open on the right */
+  @media (min-width: 1000px) {
+    #bar { display: none; }
+    #topacts { display: flex; gap: 8px; }
+    #top #topacts button { font: 500 14px var(--ui); padding: 9px 16px; border-radius: 12px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); white-space: nowrap; }
+    #top #topacts #share { background: var(--ink); color: var(--paper); }
+    #snack, #dropmap { bottom: calc(16px + env(safe-area-inset-bottom)); }
+    #joinmode .strip[data-edge="B"] { bottom: calc(20px + env(safe-area-inset-bottom)); }
+    #deckbox { top: calc(66px + env(safe-area-inset-top)); align-items: stretch; background: var(--paper); }
+    #deckbox .sheet { width: 100%; max-height: none; height: 100%; border: 0; border-radius: 0; grid-template-columns: 1fr 320px; grid-template-rows: auto auto auto auto 1fr auto;
+      column-gap: 0; padding: 16px 0 16px 24px; }
+    #deckbox .sheet > :not(#pickpanel):not(#pickfoot) { grid-column: 1; }
+    #deckbox .handle { display: none; }
+    #deckbox .deckhead, #deckbox .deckhint, #kindrow, #deckproblems, #decktiles { margin-right: 24px; }
+    #deckbox #pickpanel { display: grid; grid-column: 2; grid-row: 1 / 6; align-content: start; gap: 10px; padding: 0 20px; border-left: 1.5px solid var(--line); }
+    #pickpanel h3 { margin: 4px 0 0; font: 700 18px var(--ui); }
+    #ppline { margin: 0; font-size: 13px; color: var(--text-mid); }
+    #pptiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    #pptiles img, #pptiles span { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); font-size: 11px; overflow: hidden; }
+    #deckbox #pickfoot { grid-column: 2; grid-row: 6; padding: 0 20px; display: grid; gap: 8px; }
+    #deckbox #pickfoot[hidden] { display: none; }
+    #decktiles .mgrid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
+  }
 </style>
 </head>
 <body>
@@ -388,6 +465,7 @@
   <button id="joinbtn" type="button" aria-label="Join a screen">Join</button>
   <button id="people" type="button" aria-label="People in this heap"></button>
   <button id="mapbtn" type="button" aria-label="Map of the screens in this heap" aria-controls="mapbox"><i aria-hidden="true"></i>Map</button>
+  <span id="topacts"></span>
   <button id="menu" type="button" aria-label="Menu" aria-controls="menubox" aria-expanded="false"><span aria-hidden="true">≡</span></button>
 </header>
 <div id="bar"><button type="button" id="share">+ Add photos &amp; files</button><button id="pickedbtn" type="button">Picked · 0</button></div>
@@ -402,6 +480,7 @@
     <b id="jointitle">Which side is the other screen?</b>
     <p id="joinsub">Put the screens side by side. Each person taps the edge that faces the other one.</p>
     <button type="button" id="jointry" hidden>Try again</button>
+    <button type="button" id="joinpair">Your own other device? Show a code</button>
     <button type="button" id="joincancel">Cancel</button>
   </div>
 </div><!-- /joinmode -->
@@ -409,8 +488,11 @@
   <span class="handle" aria-hidden="true"></span>
   <h2 id="maptitle"></h2>
   <canvas id="mapcv" aria-hidden="true"></canvas>
+  <p id="maphint"></p>
+  <div id="mapask" hidden><span id="mapasktext"></span><button type="button" class="pri" id="mapaskgo">Ask</button></div>
   <p id="mapkey"></p>
   <button type="button" id="mapjoin" class="pri">Join a screen</button>
+  <button type="button" id="maparrange" hidden>Use a list instead</button>
   <button type="button" id="mapclose">Close</button>
 </div></div><!-- /mapbox -->
 <div id="dropmap" hidden><small>Or drop on the map</small><canvas id="dropcv"></canvas></div>
@@ -482,7 +564,6 @@
   <label class="item" for="pick"><span><b>Photos and videos</b><small>From your camera roll</small></span></label>
   <label class="item" for="pickfile"><span><b>Files</b><small>Any file up to 200 MB. Programs and scripts can’t be shared</small></span></label>
   <button type="button" class="item" id="sharelink"><span><b>Paste a link</b><small>Shown as plain text</small></span></button>
-  <button type="button" class="item" id="sharenote"><span><b>Write a note</b><small>Short text for everyone</small></span></button>
   <div class="pills"><button type="button" id="shareclose">Close</button></div>
 </div></div><!-- /sharebox -->
 <div id="textbox" hidden><div class="sheet" role="dialog" aria-labelledby="texttitle">
@@ -504,6 +585,57 @@
   <div id="kindlist" role="radiogroup"></div>
   <p class="deckhint">Only kinds in this heap are listed</p>
 </div></div><!-- /kindbox -->
+<div id="arrangebox" hidden><div class="sheet" role="dialog" aria-labelledby="arrangetitle">
+  <button type="button" id="arrangecancel" class="quiet">Cancel</button>
+  <h2 id="arrangetitle"></h2>
+  <div id="arrangelist" role="list"></div>
+  <p class="deckhint" id="arrangenote"></p>
+</div></div><!-- /arrangebox -->
+<div id="movebox" hidden><div class="sheet" role="alertdialog" aria-labelledby="movetitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="movetitle"></h2>
+  <p id="movesub"></p>
+  <canvas id="movecv" aria-hidden="true"></canvas>
+  <div class="pills"><button type="button" id="moveno"></button><button type="button" class="pri" id="moveyes"></button></div>
+  <p class="deckhint" id="movenote"></p>
+</div></div><!-- /movebox -->
+<div id="pairbox" hidden><div class="sheet" role="dialog" aria-label="Add your other device">
+  <span class="handle" aria-hidden="true"></span>
+  <h2>Add your other device</h2>
+  <p class="pairsub">Scan this with your other device’s camera. It joins this heap as you, without asking the host, and lines up next to this screen. Only for your own devices.</p>
+  <canvas id="pairqr" aria-label="QR code for your other device"></canvas>
+  <div class="copyrow"><input id="pairlink" readonly aria-label="Link for your other device"><button type="button" id="paircopy">Copy</button></div>
+  <div class="pills"><button type="button" id="pairclose">Close</button></div>
+</div></div><!-- /pairbox -->
+<div id="rejoinbox" hidden><div class="sheet" role="alertdialog" aria-labelledby="rejointitle">
+  <h2 id="rejointitle"></h2>
+  <p id="rejoinsub"></p>
+  <button type="button" id="rejoinkeep"></button>
+  <button type="button" class="pri" id="rejoinnew">Join a new screen</button>
+</div></div><!-- /rejoinbox -->
+<div id="endbanner" role="status" hidden></div>
+<div id="hostbox" hidden><div class="sheet" role="dialog" aria-label="You’re the host now">
+  <span class="handle" aria-hidden="true"></span>
+  <h2>You’re the host now</h2>
+  <p id="hostsub"></p>
+  <div class="hostrow"><b>Let people in</b><small>New devices ask you first</small></div>
+  <div class="hostrow"><b>Move screens</b><small>You can move anyone’s screen on the map</small></div>
+  <div class="hostrow"><b>End the heap</b><small>For everyone, when you’re done</small></div>
+  <button type="button" class="pri" id="hostok">Got it</button>
+</div></div><!-- /hostbox -->
+<div id="endbox" hidden><div class="sheet" role="alertdialog" aria-labelledby="endtitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="endtitle"></h2>
+  <p>Everyone’s table closes. People get 5 minutes to save photos they haven’t saved yet. Nothing is kept anywhere after that.</p>
+  <button type="button" class="pri" id="endyes">End heap</button>
+  <button type="button" id="endno">Keep it open</button>
+</div></div><!-- /endbox -->
+<div id="unsavedbox" hidden><div class="sheet" role="alertdialog" aria-labelledby="unsavedtitle">
+  <h2 id="unsavedtitle"></h2>
+  <p>They’re only in this tab. Save them before the heap closes.</p>
+  <button type="button" class="pri" id="unsavedsave"></button>
+  <button type="button" id="unsavedleave">Leave without saving</button>
+</div></div><!-- /unsavedbox -->
 <div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
 <div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
   <span class="handle" aria-hidden="true"></span>
@@ -520,6 +652,11 @@
   <div id="kindrow" hidden><button type="button" id="kindbtn"></button><span id="kindnote"></span><button type="button" id="kindall">Show all</button></div>
   <div id="deckproblems" role="status"></div>
   <div id="decktiles" role="list"></div>
+  <aside id="pickpanel" aria-label="Picked">
+    <h3 id="pptitle"></h3>
+    <p id="ppline"></p>
+    <div id="pptiles"></div>
+  </aside>
   <div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"></button><button type="button" id="getpick" class="pri"></button><button type="button" id="removepick" hidden></button></div>
 </div></div><!-- /deckbox -->
 <div id="reviewbox" hidden><div class="sheet" role="dialog" aria-labelledby="reviewtitle">
@@ -539,6 +676,7 @@
   <button type="button" class="item" id="invite"><span><b>Invite</b><small>QR code and link, also for your own other device</small></span></button>
   <label class="item"><span><b>Keep photo details</b><small>Off: place and camera are removed before sharing</small></span><input id="keep" type="checkbox"></label>
   <button type="button" class="item" id="leave"><span><b>Leave and clear</b><small>Remove everything from this device</small></span></button>
+  <button type="button" class="item" id="endheap" hidden><span><b>End the heap</b><small>For everyone, when you’re done</small></span></button>
   <button id="info" type="button" aria-controls="hud" aria-expanded="false" class="item quiet"><b>Connection details</b></button>
   <div class="pills"><button type="button" id="closemenu">Close</button></div>
 </div></div><!-- /menubox -->
@@ -597,11 +735,18 @@
     <button type="button" class="big" id="clearednew">Start a new heap</button>
     <button type="button" id="clearedhome">Home</button>
   </div><!-- /s-cleared -->
+  <div class="step" id="s-ended" hidden>
+    <div class="waitdot done" aria-hidden="true">!</div>
+    <h2>This heap has ended</h2>
+    <p class="sub" id="endedsub">Nothing from it is kept.</p>
+    <button type="button" class="big" id="endednew">Start a new heap</button>
+    <button type="button" id="endedhome">Home</button>
+  </div><!-- /s-ended -->
 </div><!-- /lobby -->
 <div id="invitebox" hidden><div class="sheet" role="dialog" aria-labelledby="invtitle">
   <span class="handle" aria-hidden="true"></span>
   <h2 id="invtitle">Invite</h2>
-  <div class="qrrow"><canvas id="qr" aria-label="QR code for the invite link"></canvas><p>Scan to join this heap, or share the code or link.</p></div>
+  <div class="qrrow"><canvas id="qr" aria-label="QR code for the invite link"></canvas><p id="qrline">Scan to join this heap, or share the code or link.</p></div>
   <div class="copyrow"><div id="invcode" class="tiles" role="img" aria-label="Heap code"></div><button type="button" id="copycode" aria-label="Copy the heap code">Copy</button></div>
   <div class="copyrow"><input id="link" readonly aria-label="Heap link"><button type="button" id="copy" aria-label="Copy the link">Copy</button></div>
   <small class="warn">Anyone who can see this code or link can join.</small>
@@ -614,14 +759,14 @@
 <script src="vendor/qrcode.js"></script>
 <script type="module">
 import { joinRoom } from './net.js';
-import { heapTitle, heapSub, initials, batchLine, landingState } from './words.js';
+import { heapTitle, heapSub, initials, batchLine, landingState, countdown, END_GRACE } from './words.js';
 import { groupDecks, deckSpot } from './decks.js';
 import { mb, pickSummary, pickLine, toFetch } from './picks.js';
 import { velocity, glideAt, landing } from './flick.js';
-import { deviceKind, mapTiles, edgeLabels } from './map.js';
+import { deviceKind, mapTiles, edgeLabels, proposeJoin, sideWords, dropSide } from './map.js';
 import { nameKey, nameTaken, isIn, waitingFor, overLimit, trimAdmits, openFor, rememberOpen, forgetOpen } from './gate.js';
 import { kindOf as itemKind, moments, momentLabel, kindCounts, KINDS } from './moments.js';
-import { solveLayout } from './layout.js';
+import { solveLayout, addJoins } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
 import { saveBatch, createSaveAll, REVOKE_AFTER, SHARE_TIMEOUT } from './saveall.js';
@@ -681,7 +826,7 @@ $('clearednew').onclick = () => $('new').click();
 // The lobby is one step at a time: home, then the heap code (to join), then your name (wireframes 1.1–1.4)
 const pending = { mode: 'start', code: '' };
 function screen(k) {
-  for (const n of ['home', 'code', 'name', 'wait', 'cleared']) $('s-' + n).hidden = n !== k;
+  for (const n of ['home', 'code', 'name', 'wait', 'cleared', 'ended']) $('s-' + n).hidden = n !== k;
   if (k === 'code') { $('code').focus(); showCells(); }
   if (k === 'name') { $('yourname').value = $('yourname').value || name; $('yourname').focus(); }
 }
@@ -707,6 +852,48 @@ $('nf').onsubmit = (e) => {
 };
 // timings for joining: how long a typed code waits for someone to be there (twice), and the window for two taps to pair
 const NOT_FOUND_AFTER = 4000, NOT_FOUND_TRIES = 2, JOIN_WINDOW_S = 2;
+// the host (2D.9–2D.12): who looks after the heap now, and ending it for everyone
+const lastNames = {};   // id -> name, kept after a device leaves so we can say who left
+let hostWas = null, endTick = 0, unsavedAsked = false;
+function hostChanged() {
+  if (!net || !joinedAt) return;
+  for (const [k, p] of Object.entries(net.peers)) lastNames[k] = p.name;
+  const host = net.leader;
+  if (hostWas && host && hostWas !== host && !net.peers[hostWas]) {   // the host left: someone else looks after the heap
+    const gone = lastNames[hostWas] || 'The host', now = host === id ? name : nameOf(host);
+    toast(`${gone} left. ${now} is now the host.`);
+    if (host === id) { $('hostsub').textContent = `${gone} left, so you look after the heap.`; openSheet('hostbox'); }
+  }
+  hostWas = host;
+  $('endheap').hidden = host !== id;
+}
+$('hostok').onclick = () => closeSheet('hostbox');
+$('endheap').onclick = () => closeMenu(() => { $('endtitle').textContent = `End “${$('heapname').textContent}” for everyone?`; openSheet('endbox'); });
+$('endno').onclick = () => closeSheet('endbox');
+$('endyes').onclick = () => { closeSheet('endbox'); admit({ ...net.admits, ended: Math.round(net.now() + END_GRACE) }); };
+const unsavedHere = () => [...files.keys()].filter((k) => prints.get(k) && prints.get(k).owner !== id && !pickSave.handed.has(k));
+function ending() {   // the host ended it: a countdown, nothing new added, a nudge to save, then it closes
+  const left = net.admits.ended - net.now(), by = net.leader === id ? name : nameOf(net.leader);
+  $('endbanner').textContent = `${by} ended the heap. It closes in ${countdown(left)}.`; $('endbanner').hidden = false;
+  $('share').disabled = true;
+  const unsaved = unsavedHere();
+  if (unsaved.length && !unsavedAsked) {
+    unsavedAsked = true;
+    $('unsavedtitle').textContent = `${unsaved.length} photo${unsaved.length === 1 ? '' : 's'} not saved yet`;
+    $('unsavedsave').textContent = `Save ${unsaved.length} photo${unsaved.length === 1 ? '' : 's'}`; $('unsavedbox').hidden = false;
+  }
+  if (left <= 0) { if ((pickSave.saving() || sharingOne.size) && left > -END_WAIT) return; endNow(); }   // a save still going gets up to 30 s more
+}
+const END_WAIT = 30000;
+function endNow() {
+  clearInterval(endTick);
+  try { sessionStorage.removeItem(ROOM_KEY); sessionStorage.setItem(BOUNCE_KEY, JSON.stringify({ k: 'ended', heap: $('heapname').textContent || 'this heap' })); } catch {}
+  location.replace(location.pathname);
+}
+$('unsavedsave').onclick = () => { $('unsavedbox').hidden = true; for (const k of unsavedHere()) picked.add(k); showPicks(); getPicked(); };
+$('unsavedleave').onclick = () => endNow();
+$('endedhome').onclick = () => screen('home');
+$('endednew').onclick = () => $('new').click();
 // who is in, for this device (1.5–1.7, 1.9): checked whenever the room changes
 const OPEN_KEY = 'heap-open', BOUNCE_KEY = 'heap-bounce';
 let joinedAt = 0;
@@ -730,6 +917,10 @@ function gate() {
     if (overLimit(id, net.peers, LIMITS.devices)) return bounce({ k: 'full', code: room });   // only those after the first 20
   }
   if (net.admits.no.includes(id)) return bounce({ k: 'no', host });
+  if (net.admits.ended) {   // ended by the host: a device just arriving is told it has ended; everyone else gets the countdown
+    if (performance.now() - joinedAt < 8000 && net.leader !== id) return bounce({ k: 'ended', heap: heapTitle(host) });
+    if (!endTick) { ending(); endTick = setInterval(ending, 1000); }
+  }
   const waiting = !inHeap(id);
   if (waiting) {
     $('waittitle').textContent = `Waiting for ${host} to let you in`;
@@ -758,6 +949,7 @@ $('yourname').addEventListener('input', () => { $('nameerr').hidden = true; });
     $('nameerr').textContent = `Someone in this heap is already called ${why.other}. Pick a different name.`; $('nameerr').hidden = false;
   } else if (why?.k === 'full' && isRoomCode(why.code)) { $('code').value = why.code; screen('code'); $('fullerr').hidden = false; }
   else if (why?.k === 'no') setTimeout(() => toast(`${why.host} didn’t let you in this time`), 300);
+  else if (why?.k === 'ended') { $('endedsub').textContent = `Nothing from “${why.heap}” is kept.`; screen('ended'); }
   else if (why?.k === 'cleared') { $('clearedsub').textContent = `Nothing from “${why.heap}” is left on this device.`; screen('cleared'); }
 }
 // code not found (1.3): leave, and come back to the code screen with the code and why
@@ -855,12 +1047,13 @@ async function imgFrom(bytes) {
 }
 const pidOf = () => { const b = new Uint8Array(8); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); };
 
-// add to the table (3.1): photos and videos, files, or a link or note as a small text file with its text
+// add to the table (3.1): photos and videos, files, or a link as a small text file with its text
 async function addFiles(list, keep, text = null) {
   let added = 0;
   const spot = deckSpot(prints, id, { w: W, h: H });   // what I share goes on my deck (2A.1)
   const kept = [];   // files sent with their details still in them
   for (const one of list) {
+    if (net?.admits?.ended) { toast('This heap has ended. Nothing new can be added'); break; }   // ended while these were chosen or being prepared
     if (refused(one.name, one.type)) { toast(`${one.name} was refused. Programs and scripts can’t be shared here`); continue; }
     if (one.size > LIMITS.fileBytes) { toast(`${one.name} is too big`); continue; }
     // location and camera details come out of JPEGs before the fingerprint is taken (S6)
@@ -883,18 +1076,21 @@ $('pick').onchange = async (e) => {
 };
 $('pickfile').onchange = async (e) => { const list = [...e.target.files]; e.target.value = ''; closeSheet('sharebox'); await addFiles(list, $('keep').checked); };
 $('share').onclick = () => openSheet('sharebox');
+// on wide screens the actions live in the top bar (L1); on phones and portrait tablets, at the bottom
+const WIDE = matchMedia('(min-width: 1000px)');
+function placeActions() { const into = WIDE.matches ? $('topacts') : $('bar'); into.append($('share'), $('pickedbtn')); }
+WIDE.addEventListener('change', placeActions); placeActions();
 $('shareclose').onclick = () => closeSheet('sharebox');
 $('sharebox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('sharebox'); };
-// a link or a note (3.4): plain text; a link must be a web address
-let textKind = 'note';
-let textSending = false;   // one note per Share, however many taps
+// a link (3.4): plain text, and it must be a web address
+let textKind = 'link';
+let textSending = false;   // one link per Share, however many taps
 const openText = (kind) => closeSheet('sharebox', () => {
-  textKind = kind; textSending = false; $('texttitle').textContent = kind === 'link' ? 'Paste a link' : 'Write a note';
-  $('textfield').value = ''; $('textfield').placeholder = kind === 'link' ? 'https://' : 'Meet at the gate at 8';
+  textKind = kind; textSending = false; $('texttitle').textContent = 'Paste a link';
+  $('textfield').value = ''; $('textfield').placeholder = 'https://';
   openSheet('textbox'); $('textfield').focus();
 });
 $('sharelink').onclick = () => openText('link');
-$('sharenote').onclick = () => openText('note');
 $('textcancel').onclick = () => closeSheet('textbox');
 $('textshare').onclick = () => {
   if (textSending) return;
@@ -905,7 +1101,7 @@ $('textshare').onclick = () => {
 function addText(kind, text) {
   if (kind === 'link' && !isWebLink(text)) return toast('That isn’t a web link. Links start with https://');
   closeSheet('textbox');
-  const file = new File([text], kind === 'link' ? 'link.txt' : 'note.txt', { type: 'text/plain' });
+  const file = new File([text], 'link.txt', { type: 'text/plain' });
   addFiles([file], true, text);
 }
 
@@ -1266,7 +1462,7 @@ function start(room, again = false) {
   };
   if (!again) peers.onReady(catchUp);
   const roomChanged = () => {
-    showWho(); showHeader(); gate();
+    showWho(); showHeader(); gate(); hostChanged();
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
   };
@@ -1275,7 +1471,22 @@ function start(room, again = false) {
     showWho(); showHeader();
     roomChanged();
   });
-  net.on((ev) => { if (ev === 'admits' || ev === 'leader') roomChanged(); if (ev === 'status') netState(); });
+  const admitDevice = (k) => { const a = net.admits, p = net.peers[k]; if (p) admit({ ...a, ids: [...a.ids, k], names: [...a.names, nameKey(p.name)] }); };
+  net.on((ev, d) => {
+    if (ev === 'admits' || ev === 'leader') roomChanged();
+    if (ev === 'status') netState();
+    if (ev === 'pair' && pairToken && d.token === pairToken) {   // my other device: let it in and line it up on my right
+      pairToken = null; const p = net.peers[d.from];
+      if (p) { if (net.leader === id) admitDevice(d.from); else net.vouch(d.from); }   // not the host: ask the host to let it in
+      const all = Object.fromEntries([id, d.from].map((x) => [x, sizeOf(x) || { w: p?.w || 390, h: p?.h || 844 }]));
+      net.askMove(proposeJoin(d.from, id, 'right', all), d.from);
+    }
+    if (ev === 'vouch' && net.leader === id && inHeap(d.from) && net.peers[d.who]) admitDevice(d.who);   // someone in the heap vouches for their own device
+    if (ev === 'moveask' && pairing && d.by === pairing.by && d.j.a === id) { net.answerMove(d, true); return; }   // lining up with my own device: yes
+    if (ev === 'moveask') moveAsked(d);
+    if (ev === 'moveno') toast(`${nameOf(d.from)} kept their screen where it is`);
+    if (ev === 'moved') movedNote(d);
+  });
   // Join results go to the whole room: each one is shown only on the devices it names.
   // For results that answer this device's latest push (d.latest), until it pushes again,
   // "Joined" always wins and "Try again" stays on screen and isn't replaced by "No match".
@@ -1309,6 +1520,7 @@ function start(room, again = false) {
       invite.room = room; $('top').hidden = false; showHeader();
       if (pending.fresh) { pending.fresh = false; $('invite').click(); }
       joinedAt = performance.now(); gate(); netState();
+      if (pairing) { let n = 0; const hi = setInterval(() => { if (++n > 15 || (inHeap(id) && net.joins.some((j) => (j.a === id && j.b === pairing.by) || (j.b === id && j.a === pairing.by)))) return clearInterval(hi); net.pairHello(pairing.token, pairing.by); }, 1000); }
       if (pending.mustExist) {   // heaps exist only while someone is in them: alone after a moment means no such heap
         pending.mustExist = false;
         let tries = 0;
@@ -1323,7 +1535,8 @@ function start(room, again = false) {
       toast('Couldn’t join the room. Try again');
     },
   });
-  window.__t = { toasts: toastLog, edgeLabels: () => edgeLabels(Object.keys(sizes), layout, sizes, id), mapTiles: () => tilesFor($('mapbox').hidden ? $('dropcv') : $('mapcv')),
+  window.__t = { endNow, toasts: toastLog, handed: pickSave.handed, edgeLabels: () => edgeLabels(Object.keys(sizes), layout, sizes, id), mapTiles: () => tilesFor($('mapbox').hidden ? $('dropcv') : $('mapcv')),
+    mapTileBox: (k) => { const t = tilesFor($('mapcv')).find((t) => t.id === k), r = $('mapcv').getBoundingClientRect(); return t && { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2, h: t.h }; },
     mapHitBox: (k) => { const was = $('dropmap').hidden; const t = tilesFor($('dropcv')).find((t) => t.id === k); if (!t) return null; const r = $('dropcv').getBoundingClientRect(); return was && !r.width ? null : { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2 }; },
     holding: () => holdingNear().map(({ from, n }) => ({ from, n })), decks: () => groupDecks(visiblePrints()), net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
 }
@@ -1332,9 +1545,9 @@ function start(room, again = false) {
 // The room's link and its QR code, drawn here by the vendored qrcode-generator: the code never
 // goes to an outside service. Anyone who sees either can join, the same as with a typed code
 const invite = { room: null };
-function drawQr(text) {
+function drawQr(text, c = $('qr')) {
   const qr = window.qrcode(0, 'M'); qr.addData(text); qr.make();
-  const n = qr.getModuleCount(), QUIET = 4, CELL = 8, c = $('qr'), g = c.getContext('2d');
+  const n = qr.getModuleCount(), QUIET = 4, CELL = 8, g = c.getContext('2d');
   c.width = c.height = (n + 2 * QUIET) * CELL;
   g.fillStyle = T.paper; g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = T.ink;   // charcoal on soft white is 12:1, plenty for a scanner
@@ -1367,6 +1580,19 @@ function closeSheet(k, then) {
 }
 function closeInvite() { closeSheet('invitebox'); }
 $('closeinvite').onclick = closeInvite;
+// your own other device (4.9): a link with a one-off token; it joins as you (named "you (2)") and lines up on this screen's right
+let pairToken = null;
+function openPair() {
+  const b = new Uint8Array(12); crypto.getRandomValues(b); pairToken = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  const link = `${inviteLink(location.href, invite.room)}&pair=${pairToken}&by=${id}&as=${encodeURIComponent(name + ' (2)')}`;
+  $('pairlink').value = link; drawQr(link, $('pairqr'));
+  closeJoin(); openSheet('pairbox');
+}
+$('joinpair').onclick = openPair;
+$('pairclose').onclick = () => closeSheet('pairbox');
+$('paircopy').onclick = async () => { try { await navigator.clipboard.writeText($('pairlink').value); toast('Link copied'); } catch { $('pairlink').select(); toast('Couldn’t copy. The link is selected'); } };
+const pairing = (() => { const q = new URLSearchParams(location.search), t = q.get('pair'), by = q.get('by');
+  return t && /^[0-9a-f]{24}$/.test(t) && by && by.length <= 40 ? { token: t, by, as: cleanName(q.get('as') || '') } : null; })();
 // the menu (wireframe 4.1)
 const menuOpen = (open) => $('menu').setAttribute('aria-expanded', String(open));
 $('menu').onclick = () => { menuOpen(true); openSheet('menubox'); };
@@ -1379,8 +1605,8 @@ $('peoplebtn').onclick = $('people').onclick = () => closeMenu(openPeople);
 // the deck sheet (2B.1, 2B.2): a deck's photos newest first, or everyone's. A tap saves one; dragging one out
 // puts it on the table under the finger and keeps it moving, so it can be dropped on another screen (2A.7)
 let deckUrls = [];
-const KIND_WORD = { photos: ['photo', 'photos'], videos: ['video', 'videos'], files: ['file', 'files'], text: ['link or note', 'links and notes'] };
-const KIND_NAME = { all: 'All', photos: 'Photos', videos: 'Videos', files: 'Files', text: 'Links and text' };
+const KIND_WORD = { photos: ['photo', 'photos'], videos: ['video', 'videos'], files: ['file', 'files'], text: ['link', 'links'] };
+const KIND_NAME = { all: 'All', photos: 'Photos', videos: 'Videos', files: 'Files', text: 'Links' };
 let deckOpen = { pids: [], all: false }, deckKind = 'all';
 function openDeck(pids, all = false, kind = 'all') {
   deckOpen = { pids, all }; deckKind = all ? kind : 'all';
@@ -1500,6 +1726,7 @@ function tileOf(p, onTap) {
   b.onclick = onTap;
   return b;
 }
+const ppUrls = [];   // the Picked panel's thumbnails, let go on each redraw
 function showPicks() {
   for (const k of [...picked]) if (!prints.has(k)) picked.delete(k);
   const s = pickSummary(prints, picked, (o) => net?.peers[o]?.name, id);
@@ -1514,6 +1741,14 @@ function showPicks() {
   $('pickall').textContent = tiles.length && tiles.every((t) => picked.has(t.dataset.pid)) ? 'Unpick all' : 'Pick all';
   for (const sec of document.querySelectorAll('#decktiles .moment')) { const ks = [...sec.querySelectorAll('button[data-pid]')].map((t) => t.dataset.pid); sec.querySelector('.mpick').textContent = ks.length && ks.every((k) => picked.has(k)) ? 'Unpick all' : 'Pick all'; }
   $('reviewtitle').textContent = `Picked · ${s.n}`;
+  // the Picked panel beside an open deck on wide screens (L2)
+  $('pptitle').textContent = `Picked · ${s.n}`;
+  $('ppline').textContent = s.n ? pickLine(s) : 'Tap photos to pick them, then get them all at once.';
+  for (const u of ppUrls.splice(0)) URL.revokeObjectURL(u);   // the panel's last thumbnails go before new ones are made
+  $('pptiles').replaceChildren(...[...picked].slice(0, 12).map((k) => prints.get(k)).filter(Boolean).map((p) => {
+    if (!p.thumb) return Object.assign(document.createElement('span'), { textContent: p.text ? p.text.slice(0, 30) : p.name });
+    const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); ppUrls.push(u); return Object.assign(document.createElement('img'), { src: u, alt: p.name });
+  }));
   $('reviewline').textContent = s.n ? pickLine(s) : 'Nothing picked yet. Open a deck and tap photos to pick them.';
   $('getall').textContent = `Get all ${s.n} · ${mb(s.bytes)}`; $('getall').disabled = !s.n;
 }
@@ -1623,15 +1858,19 @@ function undoLanding(b) {
 // the map (2C): tiles for every screen; mine dark, the one under a dragged photo lit, not joined dashed
 const nameOf = (k) => (k === id ? name : net.peers[k]?.name) || 'a device';
 const sizeOf = (k) => (k === id ? { w: W, h: H } : sizes[k] || (net.peers[k] && { w: net.peers[k].w, h: net.peers[k].h }));
-function tilesFor(cv) {
-  const r = cv.getBoundingClientRect(), all = [id, ...others()], sz = Object.fromEntries(all.map((k) => [k, sizeOf(k)]).filter(([, v]) => v));
-  return mapTiles(Object.keys(sz), layout, sz, id, { w: r.width - 16, h: r.height - 16 }).map((t) => ({ ...t, x: t.x + 8, y: t.y + 8, name: nameOf(t.id) }));
+const mapSizes = () => Object.fromEntries([id, ...others()].map((k) => [k, sizeOf(k)]).filter(([, v]) => v));
+// the layout if a move went ahead: what the time keeper would make of it (4.7, 4.11)
+function previewLayout(j) { const sz = mapSizes(); return solveLayout(Object.keys(sz), addJoins(net.joins, [j], sz), sz); }
+function tilesFor(cv, lay = layout) {
+  const r = cv.getBoundingClientRect(), sz = mapSizes();
+  return mapTiles(Object.keys(sz), lay, sz, id, { w: r.width - 16, h: r.height - 16 }).map((t) => ({ ...t, x: t.x + 8, y: t.y + 8, name: nameOf(t.id) }));
 }
-function drawMap(cv, hot = null) {
+function drawMap(cv, hot = null, lay = layout, drag = null) {
   const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
   cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
   const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, r.width, r.height);
-  const tiles = tilesFor(cv), apart = tiles.filter((t) => !t.joined);
+  const tiles = tilesFor(cv, lay), apart = tiles.filter((t) => !t.joined);
+  if (drag) for (const t of tiles) if (t.id === drag.k) { t.x += drag.dx; t.y += drag.dy; }   // the screen being dragged follows the finger
   g.font = `500 10px ${T.ui}`; g.textBaseline = 'top';
   if (apart.length) { g.fillStyle = T.mid; g.fillText('Not joined', apart[0].x, apart[0].y - 13); }
   for (const t of tiles) {
@@ -1648,9 +1887,94 @@ function openMap() {
   const all = [id, ...others()], apart = others().filter((k) => (layout.group[k] || k) !== (layout.group[id] || id));
   $('maptitle').textContent = `${$('heapname').textContent} · ${all.length} screen${all.length === 1 ? '' : 's'}`;
   $('mapkey').textContent = [`You = ${name}’s ${deviceKind({ w: W, h: H })}`, ...apart.map((k) => `${nameOf(k)} isn’t joined yet`)].join(' · ');
+  $('maparrange').hidden = !others().length; $('mapask').hidden = true;
+  $('maphint').textContent = !others().length ? '' : net.leader === id ? 'Drag a screen next to another to move it. Each person is asked first.' : 'Drag your screen next to another to move it.';
   openSheet('mapbox'); requestAnimationFrame(() => drawMap($('mapcv')));
 }
 $('mapbtn').onclick = openMap;
+// arrange screens (4.7): which screen, next to which, which side. Anyone can move their own; the host can move anyone's (they're asked first)
+let arr = {};
+function arrangeStep(title, items, note = '') {
+  $('arrangetitle').textContent = title; $('arrangenote').textContent = note;
+  $('arrangelist').replaceChildren(...items.map(([k, label]) => { const b = Object.assign(document.createElement('button'), { type: 'button', textContent: label }); b.dataset.k = k; b.setAttribute('role', 'listitem'); return b; }));
+}
+function startArrange(own) {
+  arr = { step: own ? 'target' : 'who', moved: own ? id : null };
+  if (own) arrangeStep('Next to which screen?', others().map((k) => [k, deviceName(k)]));
+  else arrangeStep('Which screen moves?', [id, ...others()].map((k) => [k, k === id ? `You · ${deviceName(k)}` : deviceName(k)]), 'You’re the host, so you can move anyone’s screen. Each person is asked before their screen moves.');
+  closeSheet('mapbox', () => { $('arrangebox').hidden = false; });
+}
+$('maparrange').onclick = () => startArrange(net.leader !== id);
+// drag to arrange (4.7): the host can drag any screen, everyone else their own; it snaps to a side of the nearest screen
+let mapDrag = null, mapPlan = null;
+$('mapcv').onpointerdown = (e) => {
+  const r = $('mapcv').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const t = tilesFor($('mapcv')).find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
+  if (!t || (net.leader !== id && t.id !== id) || !others().length) return;
+  $('mapcv').setPointerCapture(e.pointerId); mapDrag = { k: t.id, sx: x, sy: y, t }; mapPlan = null; $('mapask').hidden = true;
+};
+$('mapcv').onpointermove = (e) => {
+  if (!mapDrag) return;
+  const r = $('mapcv').getBoundingClientRect();
+  drawMap($('mapcv'), null, layout, { k: mapDrag.k, dx: e.clientX - r.left - mapDrag.sx, dy: e.clientY - r.top - mapDrag.sy });
+};
+$('mapcv').onpointerup = (e) => {
+  const d = mapDrag; mapDrag = null; if (!d) return;
+  const r = $('mapcv').getBoundingClientRect(), pt = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const near = tilesFor($('mapcv')).filter((t) => t.id !== d.k).sort((a, b) => Math.hypot(pt.x - a.x - a.w / 2, pt.y - a.y - a.h / 2) - Math.hypot(pt.x - b.x - b.w / 2, pt.y - b.y - b.h / 2))[0];
+  if (!near || Math.hypot(pt.x - d.sx, pt.y - d.sy) < 8) return drawMap($('mapcv'));
+  const side = dropSide(pt, near), j = proposeJoin(d.k, near.id, side, mapSizes());
+  mapPlan = { j, to: d.k === id ? near.id : d.k, side };
+  drawMap($('mapcv'), d.k, previewLayout(j));   // how it would look
+  const where = near.id === id ? `your ${kindOf(id)}` : deviceName(near.id);
+  $('mapasktext').textContent = d.k === id ? `Ask ${nameOf(near.id)} to let you join ${sideWords(side)} their ${kindOf(near.id)}` : `Ask ${nameOf(d.k)} to move ${sideWords(side)} ${where}`;
+  $('mapask').hidden = false;
+};
+$('mapaskgo').onclick = () => {
+  const p = mapPlan; mapPlan = null; if (!p) return;
+  net.askMove({ ...p.j }, p.to); moveSide = p.side;
+  closeSheet('mapbox', () => toast(`Waiting for ${nameOf(p.to)} to accept…`));
+};
+$('arrangecancel').onclick = () => { $('arrangebox').hidden = true; };
+$('arrangelist').onclick = (e) => {
+  const k = e.target.closest('button')?.dataset.k; if (!k) return;
+  if (arr.step === 'who') { arr.moved = k; arr.step = 'target'; return arrangeStep('Next to which screen?', [id, ...others()].filter((x) => x !== k).map((x) => [x, x === id ? `You · ${deviceName(x)}` : deviceName(x)])); }
+  if (arr.step === 'target') { arr.target = k; arr.step = 'side'; return arrangeStep(`Where, next to ${deviceName(k)}?`, [['below', 'Below it'], ['above', 'Above it'], ['left', 'On its left'], ['right', 'On its right']]); }
+  const all = Object.fromEntries([id, ...others()].map((x) => [x, sizeOf(x)]));
+  const j = proposeJoin(arr.moved, arr.target, k, all);
+  j.side = undefined; delete j.side;
+  $('arrangebox').hidden = true;
+  // the screen that moves says yes; if it's mine, the screen I'm joining says yes
+  const to = arr.moved === id ? arr.target : arr.moved;
+  net.askMove({ ...j }, to); moveSide = k;
+  toast(`Waiting for ${nameOf(to)} to accept…`);
+};
+let moveSide = '', moveAsk = null, moveTimer = 0;
+const sideOf = (j) => ({ T: 'below', B: 'above', L: 'right', R: 'left' })[j.edgeA];   // where a sits next to b
+function moveAsked(ask) {
+  moveAsk = ask; const j = ask.j, mine = j.a === id;
+  if (mine) {   // the host wants to move my screen (4.11)
+    $('movetitle').textContent = 'The host wants to move your screen';
+    $('movesub').textContent = `The host (${nameOf(ask.by)}) wants to put your screen ${sideWords(sideOf(j))} ${deviceName(j.b)}. Photos dropped there will start arriving on your screen.`;
+    $('moveno').textContent = 'Keep it here'; $('moveyes').textContent = 'Move it';
+    $('movenote').textContent = 'Nothing changes unless you tap Move it. If you ignore this, it cancels after 30 s.';
+  } else {      // someone wants to join next to me (4.8)
+    $('movetitle').textContent = `${deviceName(j.a)} wants to join ${sideWords(sideOf(j))} you`;
+    $('movesub').textContent = `Their screen will join yours along your ${({ T: 'top', B: 'bottom', L: 'left', R: 'right' })[j.edgeB]} edge.`;
+    $('moveno').textContent = 'No'; $('moveyes').textContent = 'Accept'; $('movenote').textContent = '';
+  }
+  $('movebox').hidden = false;
+  requestAnimationFrame(() => drawMap($('movecv'), j.a, previewLayout(j)));   // the new arrangement, the moving screen lit
+  clearTimeout(moveTimer); moveTimer = setTimeout(() => { if (moveAsk === ask) { $('movebox').hidden = true; net.answerMove(ask, false); moveAsk = null; } }, 30000);
+}
+$('moveyes').onclick = () => { const a = moveAsk; moveAsk = null; clearTimeout(moveTimer); $('movebox').hidden = true; if (a) net.answerMove(a, true); };
+$('moveno').onclick = () => { const a = moveAsk; moveAsk = null; clearTimeout(moveTimer); $('movebox').hidden = true; if (a) net.answerMove(a, false); };
+// moved (4.12): the screen that moved can undo it straight after
+function movedNote(d) {
+  const j = d.j; if (j.a !== id && j.b !== id) return;
+  if (j.a === id) snackSay(`Moved ${sideWords(sideOf(j))} ${deviceName(j.b)}`, () => { net.unmove(); toast('Moved back'); }, 10000);   // back to the joins it had
+  else toast(`${deviceName(j.a)} joined ${sideWords(sideOf(j))} you`);
+}
 $('mapjoin').onclick = () => closeSheet('mapbox', openJoin);
 $('mapclose').onclick = () => closeSheet('mapbox');
 $('mapbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('mapbox'); };
@@ -1678,20 +2002,40 @@ const joinCard = (title, sub, { count = false, retry = false } = {}) => {
 };
 function openJoin() {
   clearInterval(joinTick);
-  for (const st of document.querySelectorAll('#joinmode .strip')) st.classList.remove('on');
+  const sides = {};   // edge -> every screen joined along it
+  for (const l of edgeLabels(Object.keys(sizes), layout, sizes, id)) sides[l.side] = [...(sides[l.side] || []), l.id];
+  for (const strip of document.querySelectorAll('#joinmode .strip')) {   // a side that's joined says who it's joined to
+    const ks = sides[strip.dataset.edge] || [], k = ks[0];
+    strip.classList.remove('on'); strip.classList.toggle('joined', !!k); strip.dataset.who = k || ''; strip.dataset.all = ks.join(',');
+    strip.textContent = k ? `Joined · ${nameOf(k)}` : strip.dataset.edge === 'T' || strip.dataset.edge === 'B' ? 'Tap here' : 'Tap';
+  }
   joinCard('Which side is the other screen?', 'Put the screens side by side. Each person taps the edge that faces the other one.');
   $('joinmode').hidden = false;
 }
 const closeJoin = () => { clearInterval(joinTick); $('joinmode').hidden = true; };
+let rejoin = null;
 for (const st of document.querySelectorAll('#joinmode .strip')) st.onclick = (e) => {
-  const edge = st.dataset.edge, along = edge === 'L' || edge === 'R' ? e.clientY : e.clientX;
+  const along = st.dataset.edge === 'L' || st.dataset.edge === 'R' ? e.clientY : e.clientX;
+  if (st.dataset.who) {   // already joined on this side: say what joining someone else here would end
+    rejoin = { st, along, k: st.dataset.who, ks: (st.dataset.all || st.dataset.who).split(',').filter(Boolean) };
+    $('rejointitle').textContent = `${deviceName(rejoin.k)} is joined on this side`;
+    $('rejoinsub').textContent = rejoin.ks.length > 1 ? `Join another screen here? You’ll lose the joins with ${rejoin.ks.map((k) => nameOf(k)).join(' and ')}.` : `Join another screen here? You’ll lose the join with ${nameOf(rejoin.k)}.`;
+    $('rejoinkeep').textContent = `Keep ${nameOf(rejoin.k).split(/\s+/)[0]}`; $('rejoinbox').hidden = false;
+    return;
+  }
+  pushEdge(st, along);
+};
+$('rejoinkeep').onclick = () => { rejoin = null; $('rejoinbox').hidden = true; };
+$('rejoinnew').onclick = () => { const r = rejoin; rejoin = null; $('rejoinbox').hidden = true; if (!r) return; for (const k of r.ks) net.unjoin(k); r.st.classList.remove('joined'); r.st.dataset.who = ''; r.st.dataset.all = ''; pushEdge(r.st, r.along); };
+function pushEdge(st, along) {
+  const edge = st.dataset.edge;
   for (const o of document.querySelectorAll('#joinmode .strip')) o.classList.toggle('on', o === st);
   net.push(edge, along);
   let left = JOIN_WINDOW_S;
   joinCard(String(left), 'Now tap the facing edge on the other screen. Both taps must land within 2 seconds', { count: true });
   clearInterval(joinTick);
   joinTick = setInterval(() => { left--; if (left > 0) $('jointitle').textContent = String(left); else { clearInterval(joinTick); joinCard('Waiting for a match…', 'Checking with the other screen'); } }, 1000);
-};
+}
 $('joincancel').onclick = closeJoin;
 $('jointry').onclick = openJoin;
 // what came of the latest tap
@@ -1918,6 +2262,7 @@ function openLink(code) {
   code = code.trim().toUpperCase();
   if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
   $('code').value = code; $('lobby').hidden = false;
+  if (pairing?.as && !name) $('yourname').value = pairing.as;   // your other device: named after you
   askName('join', code);
 }
 if (opening.join) opening.from === 'link' ? openLink(opening.join) : tryStart(opening.join);

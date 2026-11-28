@@ -90,5 +90,5 @@ export function createSaveAll({ batch, canShare, share, download, toast, label =
       }
     } finally { if (busy === mine) { busy = null; inBatch.clear(); } }   // a late share doesn't free a newer tap's batch
   }
-  return { handed, tap, holds: (pid) => inBatch.has(pid) || pending.has(pid) };   // holds: that photo is being handed over (or stuck in a share)
+  return { handed, tap, holds: (pid) => inBatch.has(pid) || pending.has(pid), saving: () => !!busy };   // holds: that photo is being handed over (or stuck in a share); saving: a sheet or downloads still going
 }

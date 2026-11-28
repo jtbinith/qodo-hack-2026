@@ -188,7 +188,7 @@ test('the map (2C.7): a Map chip in the header opens every screen in the room, w
   const top = (html.match(/<header id="top"[^>]*>([\s\S]*?)<\/header>/) || [, ''])[1];
   assert.match(top, /<button id="mapbtn" type="button" aria-label="Map of the screens in this heap" aria-controls="mapbox"[^>]*>/);
   const box = (html.match(/<div id="mapbox"[^>]*>([\s\S]*?)<\/div><!-- \/mapbox -->/) || [, ''])[1];
-  assert.match(box, /<h2 id="maptitle"><\/h2>\s*<canvas id="mapcv"[^>]*><\/canvas>\s*<p id="mapkey"><\/p>/);
+  assert.match(box, /<h2 id="maptitle"><\/h2>\s*<canvas id="mapcv"[^>]*><\/canvas>[\s\S]*?<p id="mapkey"><\/p>/);
   assert.match(box, /<button type="button" id="mapjoin" class="pri">Join a screen<\/button>/);
   assert.match(html, /function drawMap\(/);
   assert.match(css, /#mapbox:not\(\[hidden\]\) \.sheet \{[^}]*animation: sheet-up/);
@@ -230,4 +230,10 @@ test('arriving photos show a progress bar on their card, and the line offers Sto
   assert.match(frame, /coming\.n \? coming\.got \/ coming\.n : 0/, 'the bar fills with the pieces that have arrived (Qodo on #162: not pieces over bytes)');
   assert.match(html, /function stopLanding\(/);
   assert.match(html, /\$\('snackact'\)\.textContent = st\.done \? 'Undo' : 'Stop'/);   // Stop while any are still on the way
+});
+
+test('join strips sit on the table, clear of the header and the bottom bar', () => {
+  assert.match(css, /#joinmode \.strip\[data-edge="T"\] \{[^}]*top: calc\(80px \+ env\(safe-area-inset-top\)\)/, 'below the header');
+  assert.match(css, /#joinmode \.strip\[data-edge="B"\] \{[^}]*bottom: calc\(92px \+ env\(safe-area-inset-bottom\)\)/, 'above the bar');
+  assert.match(css, /#joinmode \.strip\[data-edge="L"\], #joinmode \.strip\[data-edge="R"\] \{[^}]*top: calc\(50% - 18vh\)/, 'sides in the middle of the table');
 });
