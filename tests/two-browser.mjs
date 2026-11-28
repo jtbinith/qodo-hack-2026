@@ -968,6 +968,20 @@ try {
   await G.click('#snackact');
   const backAgain = await until(S, (pids) => pids.every((p) => window.__t.prints.has(p)), gd.pids, 10000).then(() => true, () => false);
   check(rmSays === 'Remove 2' && rmGone && /^Removed 2 photos\./.test(rmLine) && backAgain, `"${rmSays}" takes G's photos off S's table (${rmGone}), G says "${rmLine}", and Undo puts them back (${backAgain})`);
+  // the joined side shows in join mode; tapping it asks before it's joined to someone else
+  await joinModeOpen(S); await joinModeOpen(G);
+  await S.click('#joinmode .strip[data-edge="R"]'); await G.click('#joinmode .strip[data-edge="L"]');
+  await until(S, () => window.__t.net.joins.length === 1 && document.getElementById('joinmode').hidden, null, 15000);
+  await joinModeOpen(S);
+  const rjSideShown = await S.evaluate(() => { const st = document.querySelector('#joinmode .strip[data-edge="R"]'); return [st.classList.contains('joined'), st.textContent]; });
+  await S.click('#joinmode .strip[data-edge="R"]');
+  const rjWarned = await until(S, () => !document.getElementById('rejoinbox').hidden, null, 3000).then(() => S.evaluate(() => document.getElementById('rejoinsub').textContent), () => '');
+  await S.click('#rejoinkeep');
+  const rjKept = await S.evaluate(() => window.__t.net.joins.length === 1 && document.getElementById('rejoinbox').hidden);
+  await S.click('#joincancel'); await S.evaluate(() => window.__t.net.unjoin(Object.keys(window.__t.net.peers).find((k) => k !== window.__t.id)));
+  await until(S, () => window.__t.net.joins.length === 0, null, 10000);
+  check(rjSideShown[0] && rjSideShown[1] === 'Joined · Guest' && /You’ll lose the join with Guest/.test(rjWarned) && rjKept,
+    `join mode shows the joined side ("${rjSideShown[1]}"); tapping it warns ("${rjWarned}") and Keep keeps the join (${rjKept})`);
   await joinModeOpen(S);
   await S.click('#joinmode .strip[data-edge="T"]');
   const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
@@ -985,22 +999,26 @@ try {
   await NF.context().close();
   // 4.7, 4.11, 4.12: the host puts G's screen below its own; G is mvAsked, says Move it, and can undo
   await sheetsDown(S); await sheetsDown(G);
-  await S.click('#mapbtn'); await until(S, () => !document.getElementById('mapbox').hidden, null, 5000);
-  await S.click('#maparrange'); await until(S, () => !document.getElementById('arrangebox').hidden, null, 5000);
-  await S.click(`#arrangelist button[data-k="${gId}"]`); await S.click(`#arrangelist button[data-k="${sId}"]`); await S.click('#arrangelist button[data-k="below"]');
-  const mvAsked = await until(G, () => !document.getElementById('movebox').hidden, null, 10000).then(() => G.evaluate(() => [document.getElementById('movetitle').textContent, document.getElementById('moveyes').textContent]), () => []);
+  await S.click('#mapbtn'); await until(S, () => !document.getElementById('mapbox').hidden && !document.querySelector('#mapbox .sheet').getAnimations().length, null, 5000);
+  const [gBox, sBox] = await S.evaluate(([g, me]) => [window.__t.mapTileBox(g), window.__t.mapTileBox(me)], [gId, sId]);
+  await S.mouse.move(gBox.x, gBox.y); await S.mouse.down();
+  for (let k = 1; k <= 8; k++) await S.mouse.move(gBox.x + (sBox.x - gBox.x) * k / 8, gBox.y + (sBox.y + sBox.h / 2 + 30 - gBox.y) * k / 8);
+  await S.mouse.up();
+  const askLine = await until(S, () => !document.getElementById('mapask').hidden, null, 5000).then(() => S.evaluate(() => document.getElementById('mapasktext').textContent), () => '');
+  await S.click('#mapaskgo');
+  const mvAsked = await until(G, () => !document.getElementById('movebox').hidden, null, 10000).then(() => G.evaluate(() => [document.getElementById('movetitle').textContent, document.getElementById('moveyes').textContent, document.getElementById('movecv').width > 0]), () => []);
   await G.click('#moveyes');
   const mvMoved = await until(S, ([g, me]) => window.__t.net.joins.some((j) => [j.a, j.b].includes(g) && [j.a, j.b].includes(me)), [gId, sId], 10000).then(() => true, () => false);
   const mvMovedSaid = await until(G, () => /^Moved below /.test(document.getElementById('snacktext').textContent) && !document.getElementById('snack').hidden, null, 5000).then(() => G.evaluate(() => document.getElementById('snacktext').textContent), () => '');
   await G.click('#snackact');
   const mvUnmoved = await until(S, () => window.__t.net.joins.length === 0, null, 10000).then(() => true, () => false);
-  check(mvAsked[0] === 'The host wants to move your screen' && mvAsked[1] === 'Move it' && mvMoved && mvMovedSaid === 'Moved below Host’s phone' && mvUnmoved,
+  check(askLine === 'Ask Guest to move below your phone' && mvAsked[0] === 'The host wants to move your screen' && mvAsked[1] === 'Move it' && mvAsked[2] && mvMoved && mvMovedSaid === 'Moved below Host’s phone' && mvUnmoved,
     `G is mvAsked ("${mvAsked[0]}", "${mvAsked[1]}"), the move joins them (${mvMoved}), G says "${mvMovedSaid}" and Undo takes it back (${mvUnmoved})`);
   // 4.9: S invites its own other device: it's let in by itself and lines up on S's right
-  await sheetsDown(S); await S.click('#menu'); await S.click('#invite'); await until(S, () => !document.getElementById('invitebox').hidden, null, 5000);
-  await S.click('#pairbtn');
-  const pairLink = await until(S, () => /&pair=/.test(document.getElementById('link').value), null, 5000).then(() => S.evaluate(() => [document.getElementById('link').value, document.getElementById('invtitle').textContent]), () => ['', '']);
-  await S.click('#closeinvite'); await sheetsDown(S);
+  await sheetsDown(S); await S.click('#joinbtn'); await until(S, () => !document.getElementById('joinmode').hidden, null, 5000);
+  await S.click('#joinpair');
+  const pairLink = await until(S, () => /&pair=/.test(document.getElementById('pairlink').value), null, 5000).then(() => S.evaluate(() => [document.getElementById('pairlink').value, document.querySelector('#pairbox h2').textContent]), () => ['', '']);
+  await S.click('#pairclose'); await sheetsDown(S);
   const P2 = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
   await P2.goto(pairLink[0]);
   const pairName = await until(P2, () => document.getElementById('s-name')?.hidden === false && document.getElementById('yourname').value, null, 10000).then(() => P2.evaluate(() => document.getElementById('yourname').value), () => '');
@@ -1009,7 +1027,7 @@ try {
   const askedHost = await S.evaluate(() => !document.getElementById('askbox').hidden);
   const pId = await P2.evaluate(() => window.__t?.id);
   const lined = await until(S, ([p, me]) => window.__t.net.joins.some((j) => j.a === p && j.b === me && j.edgeA === 'L'), [pId, sId], 15000).then(() => true, () => false);
-  check(pairLink[1] === 'Join my other device' && pairName === 'Host (2)' && pIn && !askedHost && lined,
+  check(pairLink[1] === 'Add your other device' && pairName === 'Host (2)' && pIn && !askedHost && lined,
     `"${pairLink[1]}" gives a link; the other device is named "${pairName}", let in without asking (${pIn}, host asked: ${askedHost}) and lined up on S's right (${lined})`);
   await P2.context().close();
   await until(S, () => window.__t.net.joins.length === 0, null, 15000);
