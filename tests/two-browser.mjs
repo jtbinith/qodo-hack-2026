@@ -861,7 +861,7 @@ try {
   await SP.evaluate(() => document.getElementById('closeinvite').scrollIntoView());
   await SP.click('#closeinvite');
   const closed = await until(SP, () => document.getElementById('invitebox').hidden, null, 3000).then(() => true, () => false);
-  await SP.click('#invite'); await until(SP, () => !document.getElementById('invitebox').hidden, null, 3000);
+  await SP.click('#menu'); await SP.click('#invite'); await until(SP, () => !document.getElementById('invitebox').hidden, null, 3000);   // Invite lives in the menu now
   await SP.evaluate(() => document.getElementById('copycode').scrollIntoView()); await SP.click('#copycode');   // says Code copied (or couldn't)
   await new Promise((r) => setTimeout(r, 3500));
   const toastGone = await SP.evaluate(() => getComputedStyle(document.getElementById('toast')).opacity === '0');
