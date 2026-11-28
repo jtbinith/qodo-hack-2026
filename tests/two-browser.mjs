@@ -395,6 +395,16 @@ try {
   const gotAway = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= NB + 1 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length === NB + 1); } }, 100); });
   check(!!away && /still arriving/.test(arrivingSaid) && fetched && gotAway, `Get on a photo that isn't here says "${arrivingSaid}", fetches it (${fetched}) and the next Get saves it (${gotAway})`);
   await B.evaluate(() => { document.getElementById('deckbox').hidden = true; });
+  // 2B.4, 2B.5: All photos, Show → Videos: only the video, and a strip says how many are hidden
+  await B.click('#allphotos'); await until(B, () => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length, null, 5000);
+  const kKinds = await B.evaluate(() => { document.getElementById('kindbtn').click(); return [...document.querySelectorAll('#kindlist button')].map((b) => b.textContent); });
+  await B.click('#kindlist button[data-kind="videos"]');
+  const kShown = await B.evaluate(() => ({ tiles: [...document.querySelectorAll('#decktiles button[data-pid]')].map((b) => window.__t.prints.get(b.dataset.pid).type), note: document.getElementById('kindnote').textContent, moments: document.querySelectorAll('#decktiles .moment').length }));
+  await B.click('#kindall');
+  const kAll = await B.evaluate(() => document.querySelectorAll('#decktiles button[data-pid]').length);
+  await B.evaluate(() => { document.getElementById('deckbox').hidden = true; });
+  check(kKinds.some((k) => k.startsWith('Videos')) && kShown.tiles.length >= 1 && kShown.tiles.every((t) => t.startsWith('video/')) && /^Showing \d+ videos? of \d+ items$/.test(kShown.note) && kShown.moments >= 1 && kAll > kShown.tiles.length,
+    `Show lists ${JSON.stringify(kKinds)}; Videos leaves ${JSON.stringify(kShown.tiles)} ("${kShown.note}", ${kShown.moments} moment(s)); Show all brings back ${kAll}`);
   // a send that fails for another reason (here the file can't be read) doesn't blame the device
   const why = await A.evaluate(async (ghost) => {
     const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'photo-1.jpg'), real = t.files.get(p.pid);
