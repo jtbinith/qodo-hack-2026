@@ -1,6 +1,6 @@
 // The group-device-check skill's runner (.claude/skills/group-device-check/SKILL.md).
 // Opens a build of the app in N headless Chromium windows on 127.0.0.1, joins them with the real
-// orbs (each window drags its own orb to the shared edge, both let go together), runs a scenario's
+// facing edges (each window opens Join a screen and taps the edge that faces the other, together), runs a scenario's
 // steps and compares what each window shows with the ticket's expected text.
 //
 //   node scripts/group-check.mjs --app <checkout of the build> --scenario <file.json> --out <empty dir> [--absent <i>]
@@ -91,23 +91,21 @@ const cover = (p) => p.evaluate((code) => {
 }, room).catch(() => {});
 async function shot(d, tag) { await cover(d.page); await d.page.screenshot({ path: join(OUT, `${tag}-device${d.i}-${d.size}.png`) }); }
 async function shots(tag, first) { if (first) await shot(first, tag); for (const d of dev) if (d !== first) await shot(d, tag); }
-// 1. everyone in the room, then join neighbours with the orbs: device i's right edge to device i+1's left
+// 1. everyone in the room, then join neighbours by tapping the facing edges: device i's right edge to device i+1's left
 const inRoom = await Promise.all(dev.map((d) => until(d.page, (n) => window.__t && Object.keys(window.__t.net.peers).length === n, dev.length, 20000)));
-async function orbJoin(a, b) {
-  const from = (d) => [d.w / 2, d.h - 120];
-  const [ax, ay] = from(a), [bx, by] = from(b), ST = 10;
-  await a.page.mouse.move(ax, ay); await b.page.mouse.move(bx, by);
-  await Promise.all([a.page.mouse.down(), b.page.mouse.down()]);
-  // straight across to the side edge: a drag that goes more up than sideways is a push to the top edge
-  for (let k = 1; k <= ST; k++) await Promise.all([a.page.mouse.move(ax + (a.w - 6 - ax) * k / ST, ay), b.page.mouse.move(bx + (6 - bx) * k / ST, by)]);
-  await Promise.all([a.page.mouse.up(), b.page.mouse.up()]);
+// as people do (wireframe 4.2): both open Join a screen from the menu and tap the edges that face each other
+async function stripJoin(a, b) {
+  for (const d of [a, b]) if (await d.page.evaluate(() => document.getElementById('joinmode').hidden)) { await d.page.click('#menu'); await d.page.click('#joinhow'); }
+  for (const d of [a, b]) await until(d.page, () => !document.getElementById('joinmode').hidden && document.getElementById('menubox').hidden, null, 5000);
+  for (const d of [a, b]) if (await d.page.evaluate(() => !document.getElementById('jointry').hidden)) await d.page.click('#jointry');
+  await Promise.all([a.page.click('#joinmode .strip[data-edge="R"]'), b.page.click('#joinmode .strip[data-edge="L"]')]);
 }
 // "No match. Tap again together" is what a person sees when two pushes don't line up: like a
 // person, try that pair again, at most 3 times, and record every attempt
 facts.joinAttempts = [];
 if (inRoom.every(Boolean)) for (let k = 0; k + 1 < dev.length; k++) {
   for (let attempt = 1; attempt <= 3; attempt++) {
-    await orbJoin(dev[k], dev[k + 1]);
+    await stripJoin(dev[k], dev[k + 1]);
     const ok = await until(dev[k + 1].page, (n) => window.__t.net.joins.length >= n, k + 1, 8000);
     facts.joinAttempts.push({ pair: [k, k + 1], attempt, joined: ok, said: [await toastOf(dev[k].page), await toastOf(dev[k + 1].page)] });
     if (ok) break;
@@ -135,12 +133,19 @@ async function drawPick(d, count, from) {
 }
 let picked = 1;
 async function drag(from, to, name) {
-  const at = await from.page.evaluate(([name, toId]) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name); if (!p) return null; const [wx, wy] = t.world(p), me = t.layout.pos[t.id], dst = t.layout.pos[toId]; t.prints.delete(p.pid); t.prints.set(p.pid, p); return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2, tx: dst[0] - me[0], ty: dst[1] - me[1] }; }, [name, await to.page.evaluate(() => window.__t.id)]);
+  // where the photo's deck is on this screen; a photo in a deck of several is dragged out of the open deck (2A.7)
+  const at = await from.page.evaluate(([name, toId]) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name); if (!p) return null; const d = t.decks().find((d) => d.pids.includes(p.pid)); for (const k of d.pids) { const q = t.prints.get(k); t.prints.delete(k); t.prints.set(k, q); } const [wx, wy] = t.world(d.top), me = t.layout.pos[t.id], dst = t.layout.pos[toId]; return { pid: p.pid, n: d.pids.length, x: wx - me[0] + d.top.w / 2, y: wy - me[1] + d.top.h / 2, tx: dst[0] - me[0], ty: dst[1] - me[1] }; }, [name, await to.page.evaluate(() => window.__t.id)]);
   if (!at) return `no print called ${name} on device ${from.i}`;
   if (at.x < 0 || at.y < 0 || at.x > from.w || at.y > from.h) return `${name} isn't on device ${from.i}'s screen (it's at ${Math.round(at.x)}, ${Math.round(at.y)}), so it can't be dragged from there`;
+  if (at.n > 1) {
+    await from.page.mouse.click(at.x, at.y);
+    if (!await until(from.page, (pid) => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length && !!document.querySelector(`#decktiles [data-pid="${pid}"]`), at.pid, 5000)) return `${name}'s deck didn't open on device ${from.i}`;
+    Object.assign(at, await from.page.evaluate((pid) => { const el = document.querySelector(`#decktiles [data-pid="${pid}"]`); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, at.pid));
+  }
   const toX = at.tx + Math.min(to.w / 2, 200), toY = at.ty + Math.min(to.h / 2, 260);
   await from.page.mouse.move(at.x, at.y); await from.page.mouse.down();
   for (let k = 1; k <= 12; k++) await from.page.mouse.move(at.x + (toX - at.x) * k / 12, at.y + (toY - at.y) * k / 12);
+  await new Promise((r) => setTimeout(r, 150)); await from.page.mouse.move(toX + 1, toY);   // settle before letting go: a place, not a flick
   await from.page.mouse.up();
   return null;
 }

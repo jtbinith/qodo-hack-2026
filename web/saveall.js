@@ -8,25 +8,26 @@ export const SHARE_TIMEOUT = 60000;  // ms a share sheet holds Save all: navigat
 // What Save all can hand over now: every verified file in `files` that isn't this device's own
 // and hasn't been handed over yet. "Still arriving" counts only full photos on their way here:
 // thumbnails (`thumb:` transfers) and prints never fetched aren't in it.
-export function saveBatch({ prints, files, incoming, me, handed }) {
+export function saveBatch({ prints, files, incoming, me, handed, only = null }) {   // only: just these pids (what's picked)
   const ready = [];
   for (const [pid, file] of files) {
     const p = prints.get(pid);
-    if (p && p.owner !== me && !handed.has(pid)) ready.push({ pid, file });
+    if (p && p.owner !== me && !handed.has(pid) && (!only || only.has(pid))) ready.push({ pid, file });
   }
   let arriving = 0;
-  for (const fid of incoming.keys()) if (!fid.startsWith('thumb:') && !files.has(fid)) arriving++;
+  for (const fid of incoming.keys()) if (!fid.startsWith('thumb:') && !files.has(fid) && (!only || only.has(fid))) arriving++;
   return { ready, arriving };
 }
 
 // batch(handed) gives saveBatch's answer. canShare(files) and share(files) wrap the share sheet,
 // download(file) starts one download. `handed` holds the pid of every photo shared or downloaded,
 // so nothing is handed over twice. A photo counts as handed over only once that has happened.
-export function createSaveAll({ batch, canShare, share, download, toast, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+export function createSaveAll({ batch, canShare, share, download, toast, label = 'Save all', wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const handed = new Set();
   let downloadNext = false;   // the share sheet failed: the next tap downloads instead
   let busy = null;            // the tap whose share sheet or download batch is still running
   const pending = new Set();  // pids in a share sheet that hasn't settled, even after SHARE_TIMEOUT
+  const inBatch = new Set();  // pids in the batch being handed over right now
   let release = false;        // the person was told a share didn't finish: the next tap downloads its photos too.
                               // This is its own download mode, gone if the share settles before that tap
   let shares = 0;             // share sheets opened so far, each numbered
@@ -45,7 +46,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
     if (!ready.length) {
       if (pending.size) {   // only the timed-out share's photos are left: ask first
         release = true;
-        return toast('The share sheet didn’t finish. Tap Save all again to download them');
+        return toast(`The share sheet didn’t finish. Tap ${label} again to download them`);
       }
       return toast(arriving ? `Nothing to save yet${more(arriving)}` : 'Nothing new to save');
     }
@@ -55,7 +56,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
     let sharing = false;
     if (!downloading) { try { sharing = !!canShare(list); } catch { sharing = false; } }
     const mine = {};
-    busy = mine;
+    busy = mine; inBatch.clear(); for (const r of ready) inBatch.add(r.pid);
     try {
       if (sharing) {
         // called now, inside the tap; a share that throws at once becomes a failure like any other
@@ -73,7 +74,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
           for (const r of ready) pending.delete(r.pid);   // settled: cancelled or failed, the photos stay available
           if (e?.name === 'AbortError') return 'cancelled';   // cancelled: nothing happens, the photos stay available
           downloadNext = true;
-          toast('Couldn’t open the share sheet. Tap Save all again to download');
+          toast(`Couldn’t open the share sheet. Tap ${label} again to download`);
           return 'failed';
         });
         // a share that never settles ends the tap and frees Save all after SHARE_TIMEOUT. Its photos stay
@@ -87,7 +88,7 @@ export function createSaveAll({ batch, canShare, share, download, toast, wait = 
         if (handed.has(ready[i].pid)) continue;   // tapped and saved during the gap: read again after the await
         try { download(ready[i].file); handed.add(ready[i].pid); } catch (e) { console.warn('download failed', ready[i].file?.name, e); }
       }
-    } finally { if (busy === mine) busy = null; }   // a late share doesn't free a newer tap's batch
+    } finally { if (busy === mine) { busy = null; inBatch.clear(); } }   // a late share doesn't free a newer tap's batch
   }
-  return { handed, tap };
+  return { handed, tap, holds: (pid) => inBatch.has(pid) || pending.has(pid) };   // holds: that photo is being handed over (or stuck in a share)
 }

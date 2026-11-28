@@ -73,15 +73,14 @@ test('the table is drawn in the tokens, not the old dark wood', () => {
   assert.doesNotMatch(frame, /monospace/, 'no monospace');
 });
 
-test('the live table has Leave and Invite at the top and the photo actions at the bottom', () => {
-  assert.match(html, /<div id="top">\s*<span><button id="leave"[^>]*>Leave<\/button>\s*<button id="info"[^>]*>i<\/button><\/span>\s*<button id="invite"[^>]*>Invite<\/button>\s*<\/div>/);
-  assert.match(html, /<div id="bar">[\s\S]*id="keep"[\s\S]*id="saveall"[\s\S]*id="pick"[\s\S]*?<\/div>/);
-  assert.doesNotMatch((html.match(/<div id="bar">[\s\S]*?<\/div>/) || [''])[0], /id="(leave|invite)"/, 'Leave and Invite are not in the bottom bar');
+test('the live table has the header at the top and the photo actions at the bottom', () => {
+  assert.match(html, /<header id="top"[\s\S]*id="menu"[\s\S]*<\/header>/);
+  assert.match(html, /<div id="bar">[\s\S]*id="pick"[\s\S]*id="pickedbtn"[\s\S]*?<\/div>/);
 });
 
-test('the status box is hidden behind a small i button', () => {
+test('the status box is hidden behind Connection details in the menu', () => {
   assert.match(html, /<div id="hud" hidden><\/div>/, 'hidden at first');
-  assert.match(html, /<button id="info" type="button" aria-label="Status" aria-controls="hud" aria-expanded="false"[^>]*>i<\/button>/, 'an i button');
+  assert.match(html, /<button id="info" type="button" aria-controls="hud" aria-expanded="false"[^>]*>[\s\S]*?Connection details[\s\S]*?<\/button>/, 'a menu item');
   assert.match(html, /\$\('info'\)\.onclick = \(\) => \{[^}]*\$\('hud'\)\.hidden = ![^}]*aria-expanded/, 'it toggles the box');
 });
 

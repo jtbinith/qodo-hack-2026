@@ -63,6 +63,8 @@ try {
   // on both devices the join names, each with its own side
   const who = async (page) => page.evaluate(() => ({ id: window.__t.id, name: window.__t.net.name, leader: window.__t.net.leader }));
   const [a, b] = [await who(A), await who(B)];
+  // Keep photo details is a checkbox in the menu: open it, set the box, close it
+  const setKeep = async (page, on) => { await page.click('#menu'); await page.setChecked('#keep', on); await page.click('#closemenu'); await page.waitForFunction(() => document.getElementById('menubox').hidden); };
   const toastOf = (page) => page.evaluate(() => document.getElementById('toast').textContent);
   await until(B, () => document.getElementById('toast').textContent.startsWith('Joined with'), null, 10000);
   const joinSaid = [await toastOf(A), await toastOf(B)];
@@ -168,9 +170,9 @@ try {
   await until(A, () => document.getElementById('toast').textContent.includes('on the table'));
   const said = await A.evaluate(() => document.getElementById('toast').textContent);
   check(/Details not removed from .*clip\.mp4/.test(said) && said.includes('IMG_0002.HEIC') && !said.includes('IMG_0001'), `video and HEIC warned: "${said}"`);
-  await A.check('#keep');
+  await setKeep(A, true);
   await A.setInputFiles('#pick', [kept]);
-  await A.uncheck('#keep');
+  await setKeep(A, false);
   files.push(kept);
 
   // ticking "Keep details" while a batch is still being prepared changes nothing for that batch:
@@ -184,14 +186,14 @@ try {
     document.getElementById('keep').checked = true;   // ticked for the next pick, while this one is still running
   }, [[...iphoneJpeg()], batch]);
   await until(A, (names) => names.every((n) => [...window.__t.prints.values()].some((p) => p.name === n)), batch);
-  await A.uncheck('#keep');
+  await setKeep(A, false);
   const held = await A.evaluate((names) => Promise.all([...window.__t.prints.values()].filter((p) => names.includes(p.name))
     .map(async (p) => [p.name, [...new Uint8Array(await window.__t.files.get(p.pid).arrayBuffer())]])), batch);
   for (const [name, bytes] of held) check(await exifr.gps(Buffer.from(bytes)) === undefined, `${name} cleaned though "Keep details" was ticked mid-batch`);
 
   // the mirror: ticked when picked, unticked mid-batch. The batch keeps its details, as chosen at pick time
   const kbatch = ['IMG_0006.JPG', 'IMG_0007.JPG'];
-  await A.check('#keep');
+  await setKeep(A, true);
   await A.evaluate(([bytes, names]) => {
     const pick = document.getElementById('pick'), dt = new DataTransfer();
     for (const n of names) dt.items.add(new File([new Uint8Array(bytes)], n, { type: 'image/jpeg' }));
@@ -211,17 +213,28 @@ try {
   // drag photo-0 and the video onto B's screen with the mouse: press on the print, move past
   // A's right edge (B's screen is joined there) and let go
   const drags = [];
-  async function drag(page, name, toX) {   // toX: where to let go, in this page's screen x (beyond its right edge = the joined screen)
+  async function drag(page, name, toX) {
     const at = await page.evaluate((name) => {
-      const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name), [wx, wy] = t.world(p), me = t.layout.pos[t.id];
-      t.prints.delete(p.pid); t.prints.set(p.pid, p);   // on top, so the press picks this print even where prints overlap
-      return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 };
+      const t = window.__t, p = [...t.prints.values()].find((p) => p.name === name), d = t.decks().find((d) => d.pids.includes(p.pid)); for (const k of d.pids) { const q = t.prints.get(k); t.prints.delete(k); t.prints.set(k, q); }   // on top, so the press picks this deck
+      const [wx, wy] = t.world(d.top), me = t.layout.pos[t.id];
+      return { pid: p.pid, n: d.pids.length, x: wx - me[0] + d.top.w / 2, y: wy - me[1] + d.top.h / 2 };
     }, name);
     drags.push({ name, at });   // for the dump if the transfer below times out (#100)
+    if (at.n > 1) {   // in a deck: tap it open, then drag the photo out of it (2A.7)
+      await page.mouse.click(at.x, at.y);
+      await until(page, (pid) => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length && !!document.querySelector(`#decktiles [data-pid="${pid}"]`), at.pid, 5000);
+      Object.assign(at, await page.evaluate((pid) => { const el = document.querySelector(`#decktiles [data-pid="${pid}"]`); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, at.pid));
+    }
     await page.mouse.move(at.x, at.y); await page.mouse.down();
     for (let k = 1; k <= 12; k++) await page.mouse.move(at.x + ((toX - at.x) * k) / 12, at.y);
+    await new Promise((r) => setTimeout(r, 150)); await page.mouse.move(toX + 1, at.y);   // settle before letting go, so it's a place, not a flick (2A.3)
     await page.mouse.up();
   }
+  // what A shared sits as one deck, on both screens (2A.1)
+  const deckOf = (page, owner) => page.evaluate((o) => window.__t.decks().filter((d) => d.owner === o).map((d) => d.pids.length), owner);
+  const aId = await A.evaluate(() => window.__t.id);
+  const [deckA, deckB] = [await deckOf(A, aId), await deckOf(B, aId)];
+  check(deckA.join() === '10' && deckB.join() === '10', `A's 10 photos are one deck on A (${deckA}) and on B (${deckB})`);
   await drag(A, 'photo-0.jpg', 900 + 150);   // the middle of B's screen
   await drag(A, 'clip.mp4', 900 + 150);
   await drag(A, 'IMG_0001.JPG', 900 + 150);
@@ -255,6 +268,65 @@ try {
   const path = await A.evaluate(() => { const t = window.__t; return t.peers.path(Object.keys(t.net.peers).find((k) => k !== t.id)); });
   check(RELAY ? path === 'relay (encrypted)' : path === 'direct', `went ${path}`);
 
+  // 2A.3, 2A.4: a photo flicked toward B and let go on A's screen glides across and lands on B. B is told
+  // who it came from, with Undo; A is told where it went. Undo puts it k4Back on A's screen
+  const k4Names = { a: await A.evaluate(() => localStorage.getItem('heap-name')), b: await B.evaluate(() => localStorage.getItem('heap-name')) };
+  const k4BId = await B.evaluate(() => window.__t.id);
+  const k4FlickPid = await A.evaluate((b) => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1), p = t.prints.get(d.pids[0]);
+    p.anchor = t.id; p.x = 560; p.y = 260; t.prints.delete(p.pid); t.prints.set(p.pid, p); t.peers.send(b, { t: 'move', pid: p.pid, anchor: p.anchor, x: p.x, y: p.y, final: true }); return p.pid; }, k4BId);
+  await A.mouse.move(635, 335); await A.mouse.down();
+  for (const x of [650, 670, 695, 720]) await A.mouse.move(x, 335);
+  await A.mouse.up();
+  const k4Flew = await until(B, (pid) => window.__t.files.has(pid) && window.__t.prints.get(pid).anchor === window.__t.id, k4FlickPid, 60000).then(() => true, () => false);
+  const k4Snack = await B.evaluate(() => ({ shown: !document.getElementById('snack').hidden, text: document.getElementById('snacktext').textContent }));
+  const k4SentSaid = await until(A, () => document.getElementById('toast').textContent.startsWith('Sent to'), null, 15000).then(() => toastOf(A), () => toastOf(A));   // once B has it
+  check(k4Flew && k4Snack.shown && k4Snack.text === `1 photo from ${k4Names.a}` && k4SentSaid === `Sent to ${k4Names.b} ✓`,
+    `a flick let go on A glides across to B (${k4Flew}); B says "${k4Snack.text}", A says "${k4SentSaid}"`);
+  await B.click('#snackact');
+  const k4Undone = await until(A, ([pid, a]) => window.__t.prints.get(pid).anchor === a, [k4FlickPid, aId], 10000).then(() => true, () => false);
+  check(k4Undone, `Undo on B puts the photo back on A's screen (${k4Undone})`);
+  // 2A.8: let go where no screen is joined: the photo comes back and Send to… lists B; choosing B sends it
+  const k4Lost = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); return d.pids[0]; });
+  await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); p.anchor = t.id; p.x = 150; p.y = 300; t.prints.delete(pid); t.prints.set(pid, p); }, k4Lost);
+  await A.mouse.move(225, 370); await A.mouse.down();   // flicked left and let go on A: it glides off the edge, where nothing is joined
+  for (const x of [200, 170, 130, 95, 70]) await A.mouse.move(x, 370);
+  await A.mouse.up();
+  const k4SendUp = await until(A, () => !document.getElementById('sendbox').hidden, null, 5000).then(() => true, () => false);
+  const k4Back = await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid); return t.screenAt(...t.world(p).map((v, i) => v + (i ? p.h : p.w) / 2)) === t.id; }, k4Lost);
+  const k4Rows = await A.evaluate(() => [...document.querySelectorAll('#sendlist button')].map((b) => b.textContent));
+  await A.click(`#sendlist button[data-to="${k4BId}"]`);
+  const k4Given = await until(B, (pid) => window.__t.files.has(pid), k4Lost, 60000).then(() => true, () => false);
+  check(k4SendUp && k4Back && k4Rows.some((r) => r.startsWith(k4Names.b)) && k4Given, `let go off every screen: it comes back (${k4Back}), Send to… opens (${k4SendUp}) listing ${JSON.stringify(k4Rows)}, and choosing B sends it (${k4Given})`);
+  // 2A.5: while A holds a photo near the seam, B sees who is holding it
+  await until(A, () => document.getElementById('sendbox').hidden, null, 5000);   // Send to… has finished closing
+  const k4HoldPid = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); const p = t.prints.get(d.pids[0]); p.anchor = t.id; p.x = 600; p.y = 260; t.prints.delete(p.pid); t.prints.set(p.pid, p); return p.pid; });
+  await A.mouse.move(675, 335); await A.mouse.down();
+  for (let k = 1; k <= 6; k++) await A.mouse.move(675 + k * 25, 335);
+  const k4Holding = await until(B, (a) => window.__t.holding().some((h) => h.from === a && h.n === 1), aId, 5000).then(() => true, () => false);
+  await A.mouse.move(645, 335); await new Promise((r) => setTimeout(r, 150)); await A.mouse.move(640, 335); await A.mouse.up();   // back on A, let go gently
+  const k4LetGo = await until(B, () => !window.__t.holding().length, null, 5000).then(() => true, () => false);
+  check(k4Holding && k4LetGo, `B sees A holding a photo near the seam (${k4Holding}), and stops once A lets go (${k4LetGo})`);
+  // #161 review: two photos flicked one after another both land on B; a vertical swipe in the deck sheet doesn't pull a photo out;
+  // Send to with a photo A doesn't have says so
+  const two = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 2); return d ? d.pids.filter((k) => !['IMG_0004.JPG', 'IMG_0005.JPG'].includes(t.prints.get(k).name)).slice(0, 2) : []; });   // not the photos the tap checks use
+  for (const [n, pid] of two.entries()) {
+    await A.evaluate(([pid, y]) => { const t = window.__t, p = t.prints.get(pid); p.anchor = t.id; p.x = 560; p.y = y; t.prints.delete(pid); t.prints.set(pid, p); }, [pid, 80 + n * 220]);
+    const y0 = 80 + n * 220 + 75;
+    await A.mouse.move(635, y0); await A.mouse.down(); for (const x of [650, 670, 695, 720]) await A.mouse.move(x, y0); await A.mouse.up();
+  }
+  const bothLanded = await until(B, (ps) => ps.every((pid) => window.__t.files.has(pid)), two, 60000).then(() => true, () => false);
+  const dk = await A.evaluate(() => { const t = window.__t, d = t.decks().find((d) => d.owner === t.id && d.pids.length > 1); if (!d) return null; const [wx, wy] = t.world(d.top), me = t.layout.pos[t.id]; return { x: wx - me[0] + 75, y: wy - me[1] + 75 }; });
+  let swipeKept = false;
+  if (dk) {
+    await A.mouse.click(dk.x, dk.y); await until(A, () => !document.getElementById('deckbox').hidden && !document.querySelector('#deckbox .sheet').getAnimations().length, null, 5000);
+    const tl = await A.evaluate(() => { const r = document.querySelector('#decktiles button').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    await A.mouse.move(tl.x, tl.y); await A.mouse.down(); for (let k = 1; k <= 6; k++) await A.mouse.move(tl.x + 2, tl.y - k * 15); await A.mouse.up();
+    swipeKept = await A.evaluate(() => !document.getElementById('deckbox').hidden);
+    await A.evaluate(() => { document.getElementById('deckbox').hidden = true; });
+  }
+  check(two.length === 2 && bothLanded && swipeKept, `two flicks in a row both land on B (${bothLanded}); a vertical swipe in the deck sheet keeps it open (${swipeKept})`);
+  void k4HoldPid;
+
   // a device that never sends its key asks A for a photo. A gives up after 10 s and says so,
   // while A and B keep transferring (S1.3)
   const GHOST = 'zzzzsilent';
@@ -268,26 +340,54 @@ try {
   await A.evaluate((ghost) => { const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'photo-1.jpg');
     t.onMessage(ghost, { t: 'want', pid: p.pid }); }, GHOST);
   await drag(A, 'photo-1.jpg', 900 + 150);
-  await until(B, () => window.__t.files.size === 5, null, 60000);
+  const p1 = await A.evaluate(() => [...window.__t.prints.values()].find((p) => p.name === 'photo-1.jpg').pid);
+  await until(B, (pid) => window.__t.files.has(pid), p1, 60000);   // the photo it sent (others may have arrived by other ways)
   const gaveUpEarly = await A.evaluate(() => document.getElementById('toast').textContent.includes('Couldn’t send'));
   check(!gaveUpEarly, `photo-1.jpg reached B after ${((Date.now() - asked) / 1000).toFixed(1)} s, while A still waited on the silent device`);
   const toldSender = await A.waitForFunction(() => document.getElementById('toast').textContent.includes('Couldn’t send'), null, { timeout: 20000 }).then(() => true, () => false);
   const waited = (Date.now() - asked) / 1000;
   check(toldSender && waited >= 10 && waited < 20, `send to a silent device gave up and told the sender (after ${waited.toFixed(1)} s)`);
-  // Save all on a laptop (F13): B has no share sheet, so one tap downloads all 5 received files,
-  // byte-identical, and a second tap downloads nothing again
+  // Picking (2B.3–2B.6) on a laptop: B has no share sheet. B picks the 5 photos it holds in All photos;
+  // Get downloads all 5, byte-identical, and a second Get downloads nothing again
   await B.evaluate(() => Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true }));
   const downloads = [];
   B.on('download', (d) => downloads.push(d));
-  await B.click('#saveall');
+  const sheetUp = (page, box) => until(page, (box) => !document.getElementById(box).hidden && !document.querySelector(`#${box} .sheet`).getAnimations().length, box, 5000);
+  const tapTile = (page, box, pid) => page.evaluate(([box, pid]) => { const el = document.querySelector(`#${box} [data-pid="${pid}"]`); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, [box, pid])
+    .then((r) => page.mouse.click(r.x, r.y));
+  const heldByB = await B.evaluate(() => [...window.__t.files.keys()].filter((k) => window.__t.prints.get(k)?.owner !== window.__t.id));
+  await B.click('#allphotos'); await sheetUp(B, 'deckbox');
+  for (const pid of heldByB) await tapTile(B, 'deckbox', pid);
+  const pickedSays = await B.evaluate(() => [document.getElementById('getpick').textContent, document.getElementById('pickedbtn').textContent]);
+  await B.click('#deckback');
+  await B.click('#pickedbtn'); await sheetUp(B, 'reviewbox');
+  const reviewSays = await B.evaluate(() => [document.getElementById('reviewtitle').textContent, document.getElementById('reviewline').textContent]);
+  const NB = heldByB.length;   // what B holds by now: the dragged photos, and any flicked or given to it
+  check(NB >= 5 && new RegExp(`^Get ${NB} · [\\d.]+ MB$`).test(pickedSays[0]) && pickedSays[1] === `Picked · ${NB}` && reviewSays[0] === `Picked · ${NB}` && new RegExp(`^[\\d.<\\s]+MB · from .+ \\(${NB}\\) · stays only on this device$`).test(reviewSays[1]),
+    `picking 5 says "${pickedSays.join('", "')}", and the review says "${reviewSays.join('", "')}"`);
+  await B.click('#getall');
   await until(B, () => document.getElementById('toast').textContent.startsWith('Downloading'), null, 5000);
   const saveSaid = await toastOf(B);
-  const allCame = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= 5 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length); } }, 100); });
+  const allCame = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= NB || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length); } }, 100); });
   const saved = await Promise.all(downloads.map(async (d) => [d.suggestedFilename(), sha(readFileSync(await d.path()))]));
-  check(allCame === 5 && saveSaid === 'Downloading 5' && saved.every(([n, h]) => expected[n] === h), `Save all downloaded ${saved.map(([n]) => n).join(', ')} byte-identical ("${saveSaid}")`);
-  await B.click('#saveall');
+  const heldByA = Object.fromEntries(await A.evaluate(() => Promise.all([...window.__t.files.values()].map(async (f) => [f.name, [...new Uint8Array(await f.arrayBuffer())]]))).then((l) => l.map(([n, b]) => [n, sha(Buffer.from(b))])));
+  for (const [n] of saved) if (!expected[n] || n.endsWith('.JPG')) expected[n] = heldByA[n] ?? expected[n];   // what A shared (location removed), not the original
+  check(allCame === NB && saveSaid === `Downloading ${NB}` && saved.every(([n, h]) => expected[n] === h), `Get downloaded ${saved.map(([n]) => n).join(', ')} byte-identical ("${saveSaid}")`);
+  await B.click('#getall');
   await new Promise((r) => setTimeout(r, 1500));
-  check(downloads.length === 5 && await toastOf(B) === 'Nothing new to save', `a second Save all downloads nothing again ("${await toastOf(B)}")`);
+  check(downloads.length === NB && await toastOf(B) === 'Nothing new to save', `a second Get downloads nothing again ("${await toastOf(B)}")`);
+  // a picked photo that isn't here yet: Get asks for it, says it's arriving, and the next Get saves it
+  const away = await B.evaluate(() => [...window.__t.prints.values()].find((p) => p.owner !== window.__t.id && !window.__t.files.has(p.pid) && p.type.startsWith('image/') && !['IMG_0004.JPG', 'IMG_0005.JPG'].includes(p.name))?.pid);   // not the photos the tap checks below use
+  await B.evaluate(() => document.getElementById('reviewbox').hidden = true);
+  await B.click('#allphotos'); await sheetUp(B, 'deckbox');
+  await tapTile(B, 'deckbox', away);
+  await B.click('#getpick');
+  const arrivingSaid = await toastOf(B);
+  const fetched = await until(B, (pid) => window.__t.files.has(pid), away, 60000).then(() => true, () => false);
+  await B.click('#getpick');
+  const gotAway = await new Promise((ok) => { const t0 = Date.now(), h = setInterval(() => { if (downloads.length >= NB + 1 || Date.now() - t0 > 10000) { clearInterval(h); ok(downloads.length === NB + 1); } }, 100); });
+  check(!!away && /still arriving/.test(arrivingSaid) && fetched && gotAway, `Get on a photo that isn't here says "${arrivingSaid}", fetches it (${fetched}) and the next Get saves it (${gotAway})`);
+  await B.evaluate(() => { document.getElementById('deckbox').hidden = true; });
   // a send that fails for another reason (here the file can't be read) doesn't blame the device
   const why = await A.evaluate(async (ghost) => {
     const t = window.__t, p = [...t.prints.values()].find((p) => p.name === 'photo-1.jpg'), real = t.files.get(p.pid);
@@ -396,12 +496,12 @@ try {
     t.peers.send(b, { t: 'move', pid: p.pid, anchor: b, x, y, final: true });
     return p.pid;
   }, [name, ids.b, x, y]);
-  const tapPid = await place('IMG_0004.JPG', 120, 300);
+  const tapPid = await place('IMG_0004.JPG', 220, 120);   // top right of B: clear of photos that landed in the middle
   const edgePid = await place('IMG_0005.JPG', -100, 60);   // 150 wide: its middle is 25 px onto A's screen
   await A.evaluate((pid) => { const t = window.__t, real = t.peers.sendFile;
     t.peers.sendFile = (to, fid, ...a) => fid === pid ? new Promise((r) => setTimeout(r, 2000)).then(() => real(to, fid, ...a)) : real(to, fid, ...a); }, tapPid);
   await until(B, ([a, b]) => { const t = window.__t, pa = t.prints.get(a), pb = t.prints.get(b);
-    return pa?.anchor === t.id && pa.x === 120 && pb?.anchor === t.id && pb.x === -100; }, [tapPid, edgePid]);
+    return pa?.anchor === t.id && pa.x === 220 && pb?.anchor === t.id && pb.x === -100; }, [tapPid, edgePid]);
   await B.evaluate(() => { const t = window.__t, real = t.peers.send; t.wants = [];
     t.peers.send = (to, m, ...a) => { if (m?.t === 'want') t.wants.push(m.pid); return real(to, m, ...a); }; });
   const centre = (pid) => B.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid);
@@ -442,6 +542,16 @@ try {
   await A.mouse.click(own.x, own.y);
   const ownSaid = await A.evaluate(() => document.getElementById('toast').textContent);
   check(ownSaid === 'Already yours', `tapping your own print says "${ownSaid}"`);
+
+  // dragging a whole deck across the seam sends every photo in it (2A.6)
+  const rest = await A.evaluate((o) => window.__t.decks().find((d) => d.owner === o && d.pids.length > 1)?.pids || [], ids.a);
+  const deckAt = await A.evaluate((pid) => { const t = window.__t, p = t.prints.get(pid), [wx, wy] = t.world(p), me = t.layout.pos[t.id]; return { x: wx - me[0] + p.w / 2, y: wy - me[1] + p.h / 2 }; }, rest[rest.length - 1]);
+  await A.mouse.move(deckAt.x, deckAt.y); await A.mouse.down();
+  for (let k = 1; k <= 12; k++) await A.mouse.move(deckAt.x + ((900 + 150 - deckAt.x) * k) / 12, deckAt.y);
+  await new Promise((r) => setTimeout(r, 150)); await A.mouse.move(900 + 151, deckAt.y);
+  await A.mouse.up();
+  const deckCame = await until(B, (pids) => pids.every((p) => window.__t.files.has(p)), rest, 60000).then(() => true, () => false);
+  check(rest.length > 1 && deckCame, `dragging A's deck of ${rest.length} onto B sends them all (${deckCame})`);
 
   // a late guest still gets photos B holds after A (the owner) leaves
   await A.context().close();
@@ -507,10 +617,10 @@ try {
   I1.on('request', (r) => { const h = new URL(r.url()).hostname; if (h !== '127.0.0.1' && !h.endsWith('.supabase.co')) off127.push(r.url()); });
   await until(I1, () => window.__t && window.__t.net.status === 'live');
   const where = (page) => page.evaluate(() => { const on = (id) => document.getElementById(id)?.hidden === false;
-    return { url: location.href, room: sessionStorage.getItem('room'), lobby: on('lobby'), invite: on('invite'), net: window.__t?.net?.room || null }; });
+    return { url: location.href, room: sessionStorage.getItem('room'), lobby: on('lobby'), invite: on('top'), net: window.__t?.net?.room || null }; });
   const i1 = await until(I1, (c) => !location.href.includes(c) && sessionStorage.getItem('room') === c, inv, 10000).then(() => where(I1), () => where(I1));
   check(!i1.url.includes(inv) && i1.room === inv && !i1.lobby && i1.invite, `once joined, the address bar has no room code (${i1.url.replace(inv, '<code>')}), the tab keeps it (${i1.room === inv}), the lobby is gone (${!i1.lobby}) and Invite shows (${i1.invite})`);
-  await I1.click('#invite', { timeout: 3000 }).catch(() => {});
+  await I1.click('#menu', { timeout: 3000 }).catch(() => {}); await I1.click('#invite', { timeout: 3000 }).catch(() => {});
   const box = await I1.evaluate(() => { const c = document.getElementById('qr'), g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data;
     let dark = 0, light = 0; for (let k = 0; k < d.length; k += 4) if (d[k + 3] === 255) { if (d[k] < 64) dark++; else if (d[k] > 192) light++; }
     if (!light) dark = 0;   // a QR code is dark modules on a light ground: an undrawn canvas has neither
@@ -583,7 +693,7 @@ try {
   const F = await device(390, 700, { at: inv, init: `(${failFirst})()` });
   const lobbyBack = await until(F, () => document.getElementById('lobby')?.hidden === false && window.__fails === 0, null, 10000).then(() => true, () => false);
   await new Promise((r) => setTimeout(r, 2500));   // past the failed attempt's late "subscribed"
-  const f1 = await F.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, url: location.href, room: sessionStorage.getItem('room'), invite: document.getElementById('invite')?.hidden === false }));
+  const f1 = await F.evaluate(() => ({ lobby: document.getElementById('lobby')?.hidden === false, code: document.getElementById('code')?.value, url: location.href, room: sessionStorage.getItem('room'), invite: document.getElementById('top')?.hidden === false }));
   check(lobbyBack && f1.lobby && f1.code === inv && f1.url.includes(inv) && f1.room === null && !f1.invite,
     `a join that fails before live shows the lobby again with the code (${f1.code === inv}), keeps the address bar (${f1.url.includes(inv)}), stores nothing (${f1.room === null}) and a late answer from it changes nothing (lobby ${f1.lobby})`);
   await F.click('#f button', { timeout: 3000 }).catch(() => {});   // the code screen, then the name screen (#156)
@@ -689,9 +799,9 @@ try {
   // Leave (#156): once in a heap there's a way out; it forgets this tab's heap and shows the two cards again
   const L = await device(390, 700, { at: code() });
   await until(L, () => window.__t && window.__t.net.status === 'live', null, 20000);
-  const leaveShown = await until(L, () => document.getElementById('leave')?.hidden === false, null, 10000).then(() => true, () => false);
+  const leaveShown = await until(L, () => document.getElementById('top')?.hidden === false, null, 10000).then(() => true, () => false);
   L.once('dialog', (d) => d.accept());
-  await L.click('#leave', { timeout: 3000 }).catch(() => {});
+  await L.click('#menu', { timeout: 3000 }).catch(() => {}); await L.click('#leave', { timeout: 3000 }).catch(() => {});
   const leftHome = await until(L, () => document.getElementById("lobby")?.hidden === false, null, 10000).then(() => true, () => false);
   const l1 = await L.evaluate(() => ({ room: sessionStorage.getItem('room'), url: location.href, cards: document.getElementById('choose')?.hidden === false }));
   check(leaveShown && leftHome && l1.room === null && !l1.url.includes('room=') && l1.cards,
@@ -732,8 +842,37 @@ try {
   await G.goto(`${BASE}?room=${s1.tiles}&auto`);
   const guestShown = await until(S, () => [...document.querySelectorAll('#inroom li')].some((li) => li.textContent === 'Guest'), null, 20000).then(() => true, () => false);
   const withGuest = await inHeap();
+  const head = await S.evaluate(() => ({ name: document.getElementById('heapname').textContent, sub: document.getElementById('heapsub').textContent, faces: [...document.querySelectorAll('#people i')].map((x) => x.textContent) }));
   check(hostAlone.length === 2 && hostAlone[0] === 'Host (you)' && /Just you so far/.test(hostAlone[1]) && guestShown && withGuest.length === 2 && withGuest[0] === 'Host (you)',
     `the invite sheet lists who's in the heap: first ${JSON.stringify(hostAlone)}, then the guest appears (${guestShown}): ${JSON.stringify(withGuest)}`);
+  check(head.name === 'Host’s heap' && head.sub === '2 here · 0 shared' && head.faces.join() === 'H,G', `the header names the heap ("${head.name}"), says "${head.sub}" and shows ${head.faces.join(', ')}`);
+  // 4.2–4.5: Join a screen from the menu, tap the facing edges on both: they join. Tapping alone: no match
+  const joinMode = async (page) => { if (await page.evaluate(() => !document.getElementById('invitebox').hidden)) { await page.click('#closeinvite'); await until(page, () => document.getElementById('invitebox').hidden, null, 3000); } }
+  const joinModeOpen = (page) => page.click('#menu').then(() => page.click('#joinhow')).then(() => until(page, () => !document.getElementById('joinmode').hidden && document.getElementById('menubox').hidden, null, 5000));
+  await joinMode(S); await joinMode(G); await joinModeOpen(S); await joinModeOpen(G);
+  const jm = await S.evaluate(() => ({ strips: document.querySelectorAll('#joinmode .strip').length, title: document.getElementById('jointitle').textContent }));
+  await S.click('#joinmode .strip[data-edge="R"]');
+  const counting = await S.evaluate(() => document.getElementById('jointitle').textContent);
+  await G.click('#joinmode .strip[data-edge="L"]');
+  const stripJoined = await until(S, () => window.__t.net.joins.length === 1 && document.getElementById('joinmode').hidden, null, 15000).then(() => true, () => false);
+  const joinSnack = await S.evaluate(() => document.getElementById('snack').hidden ? '' : document.getElementById('snacktext').textContent);
+  check(jm.strips === 4 && jm.title === 'Which side is the other screen?' && /^2$|^1$/.test(counting) && stripJoined && joinSnack === 'Joined with Guest, on your right',
+    `join mode shows ${jm.strips} strips ("${jm.title}"), counts down ("${counting}"), the facing taps join (${stripJoined}) and S says "${joinSnack}"`);
+  await joinModeOpen(S);
+  await S.click('#joinmode .strip[data-edge="T"]');
+  const noMatch = await until(S, () => document.getElementById('jointitle').textContent === 'No match' && !document.getElementById('jointry').hidden, null, 15000).then(() => true, () => false);
+  await S.click('#joincancel');
+  const cancelled = await until(S, () => document.getElementById('joinmode').hidden, null, 3000).then(() => true, () => false);
+  check(noMatch && cancelled, `a tap with no other screen says "No match" with Try again (${noMatch}), and Cancel closes join mode (${cancelled})`);
+  // 1.3: typing a code for a heap nobody is in goes back to the code screen and says so
+  const NF = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await NF.addInitScript(() => { try { localStorage.setItem('heap-name', 'Typo'); } catch {} });
+  await NF.goto(BASE);
+  await NF.click('#joinwith'); await NF.fill('#code', 'ZZZZZ22222'); await NF.click('#f button'); await NF.click('#go');
+  const nf = await until(NF, () => document.getElementById('lobby')?.hidden === false && document.getElementById('s-code')?.hidden === false && document.getElementById('codeerr')?.hidden === false, null, 20000).then(() => true, () => false);
+  const nf1 = await NF.evaluate(() => ({ code: document.getElementById('code').value, room: sessionStorage.getItem('room'), url: location.href }));
+  check(nf && nf1.code === 'ZZZZZ22222' && nf1.room === null && !nf1.url.includes('ZZZZZ'), `a typed code for an empty heap comes back to the code screen with the error (${nf}), keeps the code (${nf1.code}) and stores nothing (${nf1.room})`);
+  await NF.context().close();
   await G.context().close();
   // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
   const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();
@@ -745,7 +884,7 @@ try {
   await SP.evaluate(() => document.getElementById('closeinvite').scrollIntoView());
   await SP.click('#closeinvite');
   const closed = await until(SP, () => document.getElementById('invitebox').hidden, null, 3000).then(() => true, () => false);
-  await SP.click('#invite'); await until(SP, () => !document.getElementById('invitebox').hidden, null, 3000);
+  await SP.click('#menu'); await SP.click('#invite'); await until(SP, () => !document.getElementById('invitebox').hidden, null, 3000);   // Invite lives in the menu now
   await SP.evaluate(() => document.getElementById('copycode').scrollIntoView()); await SP.click('#copycode');   // says Code copied (or couldn't)
   await new Promise((r) => setTimeout(r, 3500));
   const toastGone = await SP.evaluate(() => getComputedStyle(document.getElementById('toast')).opacity === '0');

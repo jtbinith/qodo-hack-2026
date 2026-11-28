@@ -15,19 +15,29 @@
   html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); overflow: hidden;
     font-family: var(--ui); touch-action: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
   #c { position: fixed; inset: 0; width: 100vw; height: 100vh; }
-  #hud { position: fixed; left: 12px; top: calc(62px + env(safe-area-inset-top)); font: 500 11px/1.45 var(--ui);
+  #hud { position: fixed; left: 12px; top: calc(78px + env(safe-area-inset-top)); font: 500 11px/1.45 var(--ui);
     background: var(--paper); color: var(--text-mid); border: 1.5px solid var(--line); padding: 6px 9px; border-radius: 10px; white-space: pre; pointer-events: none; }
   button, label, input { font-family: var(--ui); }
   /* live table: Leave and Invite at the top, the photo actions at the bottom (Figma "04 · Live table") */
-  #top { position: fixed; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top)); display: flex; justify-content: space-between; pointer-events: none; z-index: 3; }
-  #top span { display: flex; gap: 8px; }
-  #top #info { width: 40px; padding: 9px 0; font-weight: 700; font-style: italic; border-radius: 50%; }
-  #top button { pointer-events: auto; font-size: 15px; font-weight: 500; padding: 9px 14px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
-  #top #invite { background: var(--ink); color: var(--paper); }
-  #bar { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: nowrap; }
-  #bar label, #bar button { font-size: 15px; font-weight: 500; padding: 10px 14px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); white-space: nowrap; }
-  #bar label:last-child { background: var(--ink); color: var(--paper); }
-  #bar label:has(#keep) { border-color: transparent; background: none; padding: 10px 4px; font-size: 14px; margin-right: auto; }
+  /* the live table (wireframe 2A.1): a header with the heap's name and who's here, + Share at the bottom */
+  #top { position: fixed; left: 0; right: 0; top: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 10px;
+    background: var(--paper); border-bottom: 1.5px solid var(--line); z-index: 3; }
+  #top .title { flex: 1; min-width: 0; display: grid; }
+  #top .title b, #top .title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #top .title b { font: 700 18px/1.2 var(--ui); }
+  #top .title small { font-size: 13px; color: var(--text-mid); }
+  #top button { background: none; border: 0; color: var(--ink); padding: 0; }
+  #people { display: flex; padding: 4px; }
+  #people i { font: normal 700 11px/30px var(--ui); width: 30px; height: 30px; border-radius: 50%; text-align: center; background: var(--ink); color: var(--paper);
+    border: 2px solid var(--paper); margin-left: -10px; }
+  #people i:first-child { margin-left: 0; }
+  #people i.more { background: var(--paper); color: var(--ink); border-color: var(--ink); }
+  #menu { width: 44px; height: 44px; font: 400 28px/1 var(--ui); }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 10px;
+    background: var(--paper); border-top: 1.5px solid var(--line); z-index: 3; }
+  #bar label, #bar button { font-size: 16px; font-weight: 500; padding: 13px 18px; border-radius: 14px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink);
+    white-space: nowrap; text-align: center; }
+  #bar #share { flex: 1; background: var(--ink); color: var(--paper); }
   #bar input[type=file] { display: none; }
   #bar input[type=checkbox] { width: 18px; height: 18px; vertical-align: -3px; margin: 0 6px 0 0; accent-color: var(--ink); }
   [hidden] { display: none !important; }
@@ -89,6 +99,121 @@
   #invitebox.out { animation: scrim-out .24s ease-in forwards; }
   #invitebox.out .sheet { animation: sheet-down .24s ease-in forwards; }
   @media (prefers-reduced-motion: reduce) { #invitebox, #invitebox .sheet, #invitebox.out, #invitebox.out .sheet { animation: none; } }
+  #allphotos { position: fixed; left: 16px; top: calc(78px + env(safe-area-inset-top)); z-index: 2; font: 500 14px var(--ui); padding: 7px 14px; border-radius: 999px;
+    border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); }
+  /* the deck sheet (2B.1, 2B.2): one person's photos, or everyone's, newest first */
+  #deckbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
+  #deckbox .sheet { width: min(100%, 560px); box-sizing: border-box; max-height: 86vh; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto 1fr; gap: 8px; }
+  #deckbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #deckbox .deckhead { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+  #deckback { justify-self: start; background: none; border: 0; color: var(--text-mid); font: 500 15px var(--ui); padding: 6px 0; }
+  #decktitle { margin: 0; font: 700 17px var(--ui); }
+  .deckhint { margin: 0; font-size: 13px; color: var(--text-mid); text-align: center; }
+  #decktiles { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; padding-bottom: 4px; }
+  #decktiles button { position: relative; aspect-ratio: 1; padding: 0; border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; background: var(--ink); color: var(--paper);
+    font: 12px var(--ui); touch-action: pan-y; }
+  #decktiles img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  #decktiles .who { position: absolute; left: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--paper); color: var(--ink); border: 1.5px solid var(--ink);
+    font: 700 10px/21px var(--ui); text-align: center; }
+  #decktiles .save { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px; background: var(--ink); color: var(--paper); font-size: 12px; text-align: left; }
+  #deckbox .sheet { grid-template-rows: auto auto auto 1fr auto; }
+  #pickall { justify-self: end; background: none; border: 0; color: var(--ink); font: 500 15px var(--ui); padding: 6px 0; }
+  #decktiles button.on, #reviewtiles button.on { outline: 3px solid var(--ink); outline-offset: -3px; }
+  #decktiles button.on::after { content: '✓'; position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper);
+    border: 2px solid var(--paper); font: 700 13px/20px var(--ui); text-align: center; }
+  #pickfoot button { padding: 12px 10px; }
+  /* review what's picked before getting it (2B.6) */
+  #reviewbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
+  #reviewbox .sheet { width: min(100%, 560px); box-sizing: border-box; max-height: 86vh; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto 1fr auto auto auto; gap: 10px; }
+  #reviewbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #reviewtitle { margin: 0; font: 700 18px var(--ui); text-align: center; }
+  #reviewline { margin: 0; font-size: 13px; color: var(--text-mid); }
+  #reviewtiles { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+  #reviewtiles button { position: relative; aspect-ratio: 1; padding: 0; border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; background: var(--ink); color: var(--paper); font: 12px var(--ui); }
+  #reviewtiles img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #getall, #closereview { font-size: 16px; font-weight: 500; padding: 14px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+  #getall { background: var(--ink); color: var(--paper); }
+  #getall:disabled { opacity: .45; }
+  #closereview { border-color: transparent; }
+  #reviewbox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #reviewbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #reviewbox.out { animation: scrim-out .24s ease-in forwards; }
+  #reviewbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #reviewbox, #reviewbox .sheet, #reviewbox.out, #reviewbox.out .sheet { animation: none; } }
+  #deckbox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #deckbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #deckbox.out { animation: scrim-out .24s ease-in forwards; }
+  #deckbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #deckbox, #deckbox .sheet, #deckbox.out, #deckbox.out .sheet { animation: none; } }
+  #lobby .err { margin: 0 0 14px; font-size: 14px; line-height: 1.4; color: var(--text-mid); }
+  #lobby .err b { display: block; color: var(--ink); margin-bottom: 4px; }
+  #lobby .err b::before { content: '⚠ '; }
+  /* the empty table (2D.1) */
+  #empty { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); width: min(300px, 80vw); display: grid; justify-items: center; gap: 8px; text-align: center; pointer-events: none; z-index: 1; }
+  #empty i { width: 120px; height: 120px; border: 2.5px dashed var(--line); border-radius: 14px; margin-bottom: 6px; }
+  #empty b { font: 700 20px var(--ui); }
+  #empty span, #empty small { font-size: 14px; color: var(--text-mid); line-height: 1.4; }
+  /* join screens (4.2–4.6): tap the edge that faces the other screen. The strips sit in from the very edge,
+     away from the phone's own swipes */
+  #joinmode { position: fixed; inset: 0; z-index: 4; background: var(--scrim); }
+  #joinmode .strip { position: absolute; border: 2.5px dashed var(--paper); background: rgba(0, 0, 0, 0); color: var(--paper); font: 700 12px var(--ui); letter-spacing: .08em; text-transform: uppercase;
+    border-radius: 999px; }
+  #joinmode .strip.on { background: var(--paper); color: var(--ink); border-style: solid; }
+  #joinmode .strip[data-edge="T"] { left: 16%; right: 16%; top: calc(18px + env(safe-area-inset-top)); height: 44px; }
+  #joinmode .strip[data-edge="B"] { left: 16%; right: 16%; bottom: calc(18px + env(safe-area-inset-bottom)); height: 44px; }
+  #joinmode .strip[data-edge="L"], #joinmode .strip[data-edge="R"] { top: 30%; bottom: 30%; width: 44px; writing-mode: vertical-rl; }
+  #joinmode .strip[data-edge="L"] { left: 12px; }
+  #joinmode .strip[data-edge="R"] { right: 12px; }
+  #joinmode .joincard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(280px, calc(100vw - 140px)); box-sizing: border-box; padding: 18px 16px;
+    border-radius: 18px; background: var(--paper); color: var(--ink); text-align: center; display: grid; gap: 8px; }
+  #jointitle { font: 700 17px/1.25 var(--ui); }
+  #jointitle.count { font: 400 56px/1 var(--display); }
+  #joinsub { margin: 0; font-size: 13px; color: var(--text-mid); }
+  #jointry, #joincancel { font: 500 15px var(--ui); padding: 10px; border-radius: 999px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  #joincancel { background: none; color: var(--ink); border-color: transparent; }
+  /* landed (2A.4): who it came from, with Undo, just above the bottom bar */
+  #snack { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
+    border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 15px; max-width: 460px; margin: 0 auto; }
+  #snack[hidden] { display: none; }
+  #snacktext { flex: 1; }
+  #snackact { font: 500 15px var(--ui); padding: 8px 14px; border-radius: 10px; border: 0; background: var(--paper); color: var(--ink); }
+  @media (prefers-reduced-motion: no-preference) { #snack:not([hidden]) { animation: sheet-up .3s cubic-bezier(.2, .9, .3, 1); } }
+  /* no screen there (2A.8): send it to someone instead */
+  #sendbox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
+  #sendbox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 4px; }
+  #sendbox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #sendtitle { margin: 6px 0 8px; font: 700 17px var(--ui); text-align: center; }
+  #sendlist button { display: flex; justify-content: space-between; width: 100%; padding: 14px 2px; background: none; border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: 500 17px var(--ui); text-align: left; }
+  #sendlist button::after { content: '›'; color: var(--text-mid); }
+  #sendjoin { background: none; border: 0; color: var(--text-mid); font: 14px var(--ui); padding: 12px 2px; text-align: left; }
+  #sendbox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #sendbox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #sendbox.out { animation: scrim-out .24s ease-in forwards; }
+  #sendbox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #sendbox, #sendbox .sheet, #sendbox.out, #sendbox.out .sheet { animation: none; } }
+  #menubox { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); z-index: 4; }
+  #menubox .sheet { width: min(100%, 460px); box-sizing: border-box; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 12px 22px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 4px; }
+  #menubox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
+  #menubox h2 { margin: 6px 0 8px; font: 700 18px var(--ui); text-align: center; }
+  #menubox .item { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; width: 100%; padding: 12px 2px; background: none;
+    border: 0; border-bottom: 1.5px solid var(--line); color: var(--ink); font: inherit; }
+  #menubox .item b, #menubox .item small { display: block; }
+  #menubox .item b { font-size: 17px; font-weight: 500; }
+  #menubox .item small { font-size: 13px; color: var(--text-mid); margin-top: 2px; }
+  #menubox button.item::after { content: '›'; font-size: 22px; color: var(--text-mid); }
+  #menubox .item.quiet { border: 0; }
+  #menubox .item.quiet b { font-size: 14px; color: var(--text-mid); }
+  #menubox #keep { width: 24px; height: 24px; accent-color: var(--ink); flex: none; }
+  #menubox .pills { margin-top: 10px; }
+  #menubox:not([hidden]) { animation: scrim-in .28s ease-out; }
+  #menubox:not([hidden]) .sheet { animation: sheet-up .36s cubic-bezier(.2, .9, .3, 1); }
+  #menubox.out { animation: scrim-out .24s ease-in forwards; }
+  #menubox.out .sheet { animation: sheet-down .24s ease-in forwards; }
+  @media (prefers-reduced-motion: reduce) { #menubox, #menubox .sheet, #menubox.out, #menubox.out .sheet { animation: none; } }
   #invitebox .handle { justify-self: center; width: 48px; height: 5px; border-radius: 3px; background: var(--text-mid); }
   #invitebox h2 { margin: 2px 0 0; font: 400 34px/1 var(--display); text-transform: uppercase; }
   .tiles { display: flex; gap: 4px; align-items: center; }
@@ -112,7 +237,7 @@
   .pills button { flex: 1; font-size: 16px; font-weight: 500; padding: 13px 16px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
   .pills .pri { background: var(--ink); color: var(--paper); }
   /* toasts: a charcoal pill that lands with a small squash and settles (component lab, "Boing, subtle") */
-  #toast { position: fixed; left: 50%; top: calc(62px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+  #toast { position: fixed; left: 50%; top: calc(124px + env(safe-area-inset-top)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
     background: var(--ink); color: var(--paper); padding: 13px 18px; border-radius: 18px; font-size: 15px; font-weight: 500; line-height: 1.35; text-align: center;
     opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 6; }
   #toast.in { animation: boing .6s cubic-bezier(.2, .8, .3, 1) backwards; }   /* backwards: once landed, the timer's opacity decides */
@@ -125,11 +250,63 @@
 <canvas id="c"></canvas>
 <div id="hud" hidden></div>
 <div id="toast" role="status" aria-live="polite"></div>
-<div id="top">
-  <span><button id="leave" type="button" hidden>Leave</button> <button id="info" type="button" aria-label="Status" aria-controls="hud" aria-expanded="false" hidden>i</button></span>
-  <button id="invite" type="button" hidden>Invite</button>
-</div>
-<div id="bar"><label><input id="keep" type="checkbox">Keep details</label><button id="saveall" type="button">Save all</button><label>+ Photos<input id="pick" type="file" accept="image/*,video/*" multiple></label></div>
+<header id="top" hidden>
+  <div class="title"><b id="heapname"></b>
+    <small id="heapsub"></small></div>
+  <button id="people" type="button" aria-label="People in this heap"></button>
+  <button id="menu" type="button" aria-label="Menu" aria-controls="menubox" aria-expanded="false"><span aria-hidden="true">≡</span></button>
+</header>
+<div id="bar"><label id="share">+ Share<input id="pick" type="file" accept="image/*,video/*" multiple></label><button id="pickedbtn" type="button">Picked · 0</button></div>
+<button type="button" id="allphotos" hidden></button>
+<div id="empty" aria-hidden="true" hidden><i></i><b>The table is empty</b><span>Tap + Share to put your photos down. Others take only what they want.</span><small id="emptytip"></small></div>
+<div id="joinmode" hidden>
+  <button type="button" class="strip" data-edge="T" aria-label="Tap here: the other screen is above">Tap here</button>
+  <button type="button" class="strip" data-edge="B" aria-label="Tap here: the other screen is below">Tap here</button>
+  <button type="button" class="strip" data-edge="L" aria-label="Tap here: the other screen is on the left">Tap</button>
+  <button type="button" class="strip" data-edge="R" aria-label="Tap here: the other screen is on the right">Tap</button>
+  <div class="joincard" role="status" aria-live="polite">
+    <b id="jointitle">Which side is the other screen?</b>
+    <p id="joinsub">Put the screens side by side. Each person taps the edge that faces the other one.</p>
+    <button type="button" id="jointry" hidden>Try again</button>
+    <button type="button" id="joincancel">Cancel</button>
+  </div>
+</div><!-- /joinmode -->
+<div id="snack" role="status" hidden><span id="snacktext"></span><button type="button" id="snackact">Undo</button></div>
+<div id="sendbox" hidden><div class="sheet" role="dialog" aria-labelledby="sendtitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="sendtitle">Nothing joined on that side. Send to…</h2>
+  <div id="sendlist" role="list"></div>
+  <button type="button" class="quiet" id="sendjoin">Or join a screen on that side</button>
+</div></div><!-- /sendbox -->
+<div id="deckbox" hidden><div class="sheet" role="dialog" aria-labelledby="decktitle">
+  <span class="handle" aria-hidden="true"></span>
+  <div class="deckhead"><button type="button" id="deckback">‹ Table</button>
+  <h2 id="decktitle"></h2>
+  <button type="button" id="pickall">Pick all</button></div>
+  <p class="deckhint">Tap photos to pick them. Drag one out to put it on the table or send it.</p>
+  <div id="decktiles" role="list"></div>
+  <div class="pills" id="pickfoot" hidden><button type="button" id="reviewpick"></button><button type="button" id="getpick" class="pri"></button></div>
+</div></div><!-- /deckbox -->
+<div id="reviewbox" hidden><div class="sheet" role="dialog" aria-labelledby="reviewtitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="reviewtitle"></h2>
+  <p id="reviewline"></p>
+  <div id="reviewtiles" role="list"></div>
+  <p class="deckhint">Tap a photo to unpick it</p>
+  <button type="button" id="getall" class="pri"></button>
+  <button type="button" id="closereview">Close</button>
+</div></div><!-- /reviewbox -->
+<div id="menubox" hidden><div class="sheet" role="dialog" aria-labelledby="menutitle">
+  <span class="handle" aria-hidden="true"></span>
+  <h2 id="menutitle">This heap</h2>
+  <button type="button" class="item" id="joinhow"><span><b>Join a screen</b><small>Tap the edges that face each other</small></span></button>
+  <button type="button" class="item" id="peoplebtn"><span><b>People</b><small>Who is in this heap</small></span></button>
+  <button type="button" class="item" id="invite"><span><b>Invite</b><small>QR code and link, also for your own other device</small></span></button>
+  <label class="item"><span><b>Keep photo details</b><small>Off: place and camera are removed before sharing</small></span><input id="keep" type="checkbox"></label>
+  <button type="button" class="item" id="leave"><span><b>Leave and clear</b><small>Remove everything from this device</small></span></button>
+  <button id="info" type="button" aria-controls="hud" aria-expanded="false" class="item quiet"><b>Connection details</b></button>
+  <div class="pills"><button type="button" id="closemenu">Close</button></div>
+</div></div><!-- /menubox -->
 <div id="lobby">
   <div class="blob" aria-hidden="true"></div>
   <div class="home" id="s-home">
@@ -145,6 +322,8 @@
     <button type="button" class="back" data-to="home">‹ Back</button>
     <h2>Heap code</h2>
     <p class="sub">10 letters, on the host's screen under Invite.</p>
+    <p id="codeerr" class="err" role="alert" hidden><b>No open heap with that code. It may have ended or the code has a typo.</b>
+      Check with the host, or ask them for the QR code.</p>
     <form id="f">
       <div class="codebox">
         <div class="cells" aria-hidden="true">
@@ -185,12 +364,16 @@
 <script src="vendor/qrcode.js"></script>
 <script type="module">
 import { joinRoom } from './net.js';
+import { heapTitle, heapSub, initials } from './words.js';
+import { groupDecks, deckSpot } from './decks.js';
+import { mb, pickSummary, pickLine, toFetch } from './picks.js';
+import { velocity, glideAt, landing } from './flick.js';
 import { solveLayout } from './layout.js';
 import { createPeers, SendTimeout } from './peers.js';
 import { prepareFile } from './strip.js';
 import { saveBatch, createSaveAll, REVOKE_AFTER } from './saveall.js';
 import { pickRoom, inviteLink, cleanUrl, watchJoin, ROOM_KEY } from './invite.js';
-import { LIMITS, validPrint, validMove, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex, cleanName } from './check.js';
+import { LIMITS, validPrint, validMove, validMoves, validChunk, validPidMsg, validNeed, inRoom, askBytes, askLimiter, thumbFits, isRoomCode, CODE_ALPHABET, sha256Hex, cleanName } from './check.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
@@ -218,7 +401,7 @@ function newCode() {
 // Start a heap makes a code and starts at once; Join with a code shows the code form (heap home, issue 158)
 import('./heap-a.js').then(({ reacher, A_GLYPH }) => reacher($('heap-a'), A_GLYPH, { colour: getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() }));
 // the status box (heap code, devices, connections) stays hidden until the i button opens it
-$('info').onclick = () => { $('hud').hidden = !$('hud').hidden; $('info').setAttribute('aria-expanded', String(!$('hud').hidden)); };
+$('info').onclick = () => { closeMenu(); $('hud').hidden = !$('hud').hidden; $('info').setAttribute('aria-expanded', String(!$('hud').hidden)); };
 // Leave: forget this tab's heap and start again on the home screen (a fresh load drops every connection)
 $('leave').onclick = () => {
   if (!confirm('Leave this heap? Photos you haven\'t saved stay with the others, not on this screen.')) return;
@@ -248,8 +431,23 @@ $('nf').onsubmit = (e) => {
   name = typed; $('yourname').value = typed;
   try { localStorage.setItem(NAME_KEY, typed); } catch {}
   pending.fresh = pending.mode === 'start';   // a new heap: show its invite as soon as it's live
+  pending.mustExist = pending.mode === 'join' && pending.typed;   // a typed code must be a heap someone is in (1.3)
+  pending.typed = false;
   start(pending.code);
 };
+// timings for joining: how long a typed code waits for someone to be there (twice), and the window for two taps to pair
+const NOT_FOUND_AFTER = 4000, NOT_FOUND_TRIES = 2, JOIN_WINDOW_S = 2;
+// code not found (1.3): leave, and come back to the code screen with the code and why
+const NOT_FOUND_KEY = 'heap-notfound';
+function notFound(code) {
+  try { sessionStorage.removeItem(ROOM_KEY); sessionStorage.setItem(NOT_FOUND_KEY, code); } catch {}
+  location.replace(location.pathname);
+}
+{
+  let nf = null; try { nf = sessionStorage.getItem(NOT_FOUND_KEY); sessionStorage.removeItem(NOT_FOUND_KEY); } catch {}
+  if (nf && isRoomCode(nf)) { $('code').value = nf; screen('code'); $('codeerr').hidden = false; $('f').querySelector('button').textContent = 'Try again'; }
+}
+$('code').addEventListener('input', () => { $('codeerr').hidden = true; $('f').querySelector('button').textContent = 'Join'; });
 // the 10 boxes show what's in the one real field; only code letters are kept
 function showCells() {
   const f = $('code'), v = [...f.value.toUpperCase()].filter((c) => CODE_ALPHABET.includes(c)).slice(0, 10).join('');
@@ -302,7 +500,7 @@ function rehome() {
   let host = null;
   for (const k of Object.keys(sizes)) if ((layout.group[k] || k) === gid && (host === null || k < host)) host = k;
   for (const p of prints.values()) {
-    if (sizes[p.anchor] || !host || (drag && drag.p === p)) continue;
+    if (sizes[p.anchor] || !host || held(p)) continue;
     p.anchor = host;
     p.x = Math.max(0, Math.min(sizes[host].w - p.w, p.x));
     p.y = Math.max(0, Math.min(sizes[host].h - p.h, p.y));
@@ -337,6 +535,7 @@ $('pick').onchange = async (e) => {
   e.target.value = '';
   const keep = $('keep').checked;   // the choice made for this pick, even if the box changes while it runs
   let added = 0;
+  const spot = deckSpot(prints, id, { w: W, h: H });   // what I share goes on my deck (2A.1)
   const kept = [];   // files sent with their details still in them
   for (const picked of list) {
     if (picked.size > LIMITS.fileBytes) { toast(`${picked.name} is too big`); continue; }
@@ -346,8 +545,8 @@ $('pick').onchange = async (e) => {
     const pid = pidOf(), thumb = await thumbOf(file), sha = await sha256Hex(file); // receivers check the file against this
     const w = 150, h = thumb ? 150 : 110;
     const p = { pid, owner: id, name: file.name.slice(0, 200) || 'file', type: file.type.slice(0, 100), size: file.size, sha,
-      anchor: id, x: 40 + Math.random() * Math.max(10, W - 230), y: 70 + Math.random() * Math.max(10, H - 300),
-      w, h, rot: (Math.random() - 0.5) * 0.3, img: await imgFrom(thumb), thumb, holders: [id] };
+      anchor: id, x: spot.x, y: spot.y,
+      w, h, rot: (Math.random() - 0.5) * 0.12, img: await imgFrom(thumb), thumb, holders: [id] };
     prints.set(pid, p); files.set(pid, file); added++;
     broadcast((peer) => announce(peer, p));
   }
@@ -367,6 +566,24 @@ function announce(peer, p) {
 }
 
 // ---------- messages between devices ----------
+// holding (2A.5): photos someone is moving right now, so a screen they're nearing can show it coming
+const moving = new Map();   // pid -> { from, t }
+function holdNote(from, pids, final) { for (const pid of pids) final ? moving.delete(pid) : moving.set(pid, { from, t: performance.now() }); }
+// who is holding photos near my screen's edges, and where to show each
+function holdingNear() {
+  const [mx, my] = meWorld(), out = new Map(), now = performance.now();
+  for (const [pid, h] of moving) {
+    const p = prints.get(pid);
+    if (!p || now - h.t > 1500 || !visible(p)) { if (!p || now - h.t > 1500) moving.delete(pid); continue; }
+    const [px, py] = world(p);
+    const gx = Math.max(mx - (px + p.w), px - (mx + W), 0), gy = Math.max(my - (py + p.h), py - (my + H), 0);
+    const over = px < mx + W && px + p.w > mx && py < my + H && py + p.h > my;
+    if (over || Math.max(gx, gy) > 160) continue;   // on my screen already, or far away
+    const o = out.get(h.from) || { from: h.from, n: 0, x: Math.min(Math.max(px - mx, 10), W - p.w - 10), y: Math.min(Math.max(py - my, 90), H - p.h - 100), w: p.w, h: p.h };
+    o.n++; out.set(h.from, o);
+  }
+  return [...out.values()];
+}
 // Transfers we've asked for (or been told to expect): fid -> { from, size, parts, got, n, cs, last, asks }.
 // Pieces for anything else are dropped, so a stranger can't make us store data.
 function expect(fid, from, size) {
@@ -382,7 +599,12 @@ function onMessage(from, m, bytes) {
     if (thumbSize) expect('thumb:' + m.pid, from, thumbSize);
   } else if (m.t === 'move') {
     if (!validMove(m)) return;
-    const p = prints.get(m.pid); if (p && drag?.p !== p) { p.anchor = m.anchor; p.x = m.x; p.y = m.y; }
+    holdNote(from, [m.pid], m.final);
+    const p = prints.get(m.pid); if (p && !held(p)) { p.anchor = m.anchor; p.x = m.x; p.y = m.y; }
+  } else if (m.t === 'moves') {          // a whole deck moved
+    if (!validMoves(m)) return;
+    holdNote(from, m.pids, m.final);
+    for (const pid of m.pids) { const p = prints.get(pid); if (p && !held(p)) { p.anchor = m.anchor; p.x = m.x; p.y = m.y; } }
   } else if (m.t === 'want') {           // someone wants the full photo
     const file = validPidMsg(m) && files.get(m.pid);
     // counted only for devices in the room (S7), then given back for what never left (S1.5)
@@ -390,6 +612,7 @@ function onMessage(from, m, bytes) {
     if (tok) peers.sendFile(from, m.pid, file).then((s) => refund(tok, s), (e) => { refund(tok, e?.sent); gaveUp(from, m.pid, e); });
   } else if (m.t === 'have') {           // someone now holds the bytes
     const p = validPidMsg(m) && prints.get(m.pid);
+    if (p) confirmSent(from, m.pid);   // something I sent has arrived
     if (p && !p.holders.includes(from) && p.holders.length < 50) p.holders.push(from);
   } else if (m.t === 'need') {           // receiver is missing pieces (null = all): resend them
     if (!validNeed(m)) return;
@@ -478,43 +701,90 @@ function dropped(p) {
   }
 }
 
-// ---------- input: orb (join screens), prints (drag / tap to save) ----------
-const ORB = 26;
-const home = () => [W / 2, H - 120];
-let drag = null, orbDrag = null, ghosts = [];
+// ---------- input: decks and photos (drag, flick, tap to open or save) ----------
+let drag = null, flies = [];   // several photos can glide at once
+const held = (p) => !!(drag?.ps.includes(p) || flies.some((f) => f.ps.includes(p)));   // moved by this device right now: others' moves wait
 const PILL_BELOW = 40;   // the name pill under a photo is part of it: a tap there saves it too
+// the deck under a point on my screen, top-most first
 function hit(sx, sy) {
   const [mx, my] = meWorld(), x = sx + mx, y = sy + my;
-  return [...prints.values()].reverse().find((p) => { if (!visible(p)) return false; const [px, py] = world(p); return x >= px && x <= px + p.w && y >= py && y <= py + p.h + PILL_BELOW; });
+  return groupDecks(prints).reverse().find((d) => { const p = d.top; if (!visible(p)) return false; const [px, py] = world(p); return x >= px && x <= px + p.w && y >= py && y <= py + p.h + PILL_BELOW; });
+}
+const toTop = (ps) => ps.forEach((p) => { prints.delete(p.pid); prints.set(p.pid, p); });
+// a drag holds a deck (or one photo pulled out of one): every photo in it moves together
+function startDrag(ps, cx, cy, moved = false, pointer = null) {
+  toTop(ps);
+  const p = ps[ps.length - 1], [ox, oy] = world(p);
+  drag = { ps, p, pointer, sx: cx, sy: cy, ox, oy, moved, samples: [{ x: cx, y: cy, t: performance.now() }] };
 }
 cv.addEventListener('pointerdown', (e) => {
-  const [hx, hy] = home();
+  if (drag) return;   // one drag at a time: another finger doesn't take it over
   cv.setPointerCapture(e.pointerId);
-  if (Math.hypot(e.clientX - hx, e.clientY - hy) < ORB * 2) { orbDrag = { x: e.clientX, y: e.clientY }; return; }
-  const p = hit(e.clientX, e.clientY);
-  if (!p) return;
-  prints.delete(p.pid); prints.set(p.pid, p); // bring to top
-  const [ox, oy] = world(p);
-  drag = { p, sx: e.clientX, sy: e.clientY, ox, oy, moved: false };
+  const d = hit(e.clientX, e.clientY);
+  if (!d) return;
+  flies = flies.filter((f) => !f.ps.some((q) => d.pids.includes(q.pid)));   // grabbing a gliding photo stops its glide
+  startDrag(d.pids.map((k) => prints.get(k)), e.clientX, e.clientY, false, e.pointerId);
 });
 let lastSend = 0;
-cv.addEventListener('pointermove', (e) => {
-  if (orbDrag) { orbDrag.x = e.clientX; orbDrag.y = e.clientY; return; }
-  if (!drag) return;
+const sendMove = (final, { ps, p } = drag) => {
+  const at = { anchor: p.anchor, x: p.x, y: p.y, ...(final ? { final: true } : {}) };
+  if (ps.length === 1) broadcast((k) => peers.send(k, { t: 'move', pid: p.pid, ...at }));
+  else broadcast((k) => peers.send(k, { t: 'moves', pids: ps.map((q) => q.pid), ...at }));
+};
+// moves and the let-go are heard on the window, so a photo pulled out of the deck sheet keeps following the finger
+addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.pointer) return;
   const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
   if (Math.hypot(dx, dy) > 8) drag.moved = true;
+  drag.samples.push({ x: e.clientX, y: e.clientY, t: performance.now() }); if (drag.samples.length > 12) drag.samples.shift();
   setWorld(drag.p, drag.ox + dx, drag.oy + dy);
-  if (performance.now() - lastSend > 40) { lastSend = performance.now(); const p = drag.p; broadcast((k) => peers.send(k, { t: 'move', pid: p.pid, anchor: p.anchor, x: p.x, y: p.y })); }
+  for (const q of drag.ps) if (q !== drag.p) { q.anchor = drag.p.anchor; q.x = drag.p.x; q.y = drag.p.y; }
+  if (performance.now() - lastSend > 40) { lastSend = performance.now(); sendMove(false); }
 });
-cv.addEventListener('pointerup', (e) => {
-  if (orbDrag) { pushOrb(orbDrag.x, orbDrag.y); orbDrag = null; return; }
-  if (!drag) return;
-  const p = drag.p, moved = drag.moved; drag = null;
-  if (!moved) return save(p);   // a tap
-  broadcast((k) => peers.send(k, { t: 'move', pid: p.pid, anchor: p.anchor, x: p.x, y: p.y, final: true }));
-  broadcast((k) => peers.send(k, { t: 'dropcheck', pid: p.pid }));
-  dropped(p);
+// the browser took the pointer away (a call, a system gesture): the photo is put down where it is
+addEventListener('pointercancel', (e) => {
+  if (!drag || e.pointerId !== drag.pointer) return;
+  const { ps, p, ox, oy, moved } = drag; drag = null;
+  if (!moved) return;
+  const [x, y] = world(p); land(ps, p, { x: ox, y: oy }, [{ x, y }]);
 });
+addEventListener('pointerup', (e) => {
+  if (!drag || e.pointerId !== drag.pointer) return;
+  const { ps, p, moved, ox, oy, samples } = drag;
+  if (!moved) { drag = null; return ps.length === 1 ? save(p) : openDeck(ps.map((q) => q.pid)); }   // a tap: save it, or open the deck
+  samples.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+  const { vx, vy } = velocity(samples);
+  drag = null;
+  const [x, y] = world(p);
+  // let go while moving: it glides on (2A.3). Let go still: it lands where it is
+  if (Math.hypot(vx, vy) > 0.3) flies.push({ ps, p, from: { x: ox, y: oy }, x, y, vx, vy, t0: performance.now(), path: [{ x, y }] });
+  else land(ps, p, { x: ox, y: oy }, [{ x, y }]);
+});
+const centreOn = (p) => (pt) => screenAt(pt.x + p.w / 2, pt.y + p.h / 2);
+const moveAll = (ps, p, x, y) => { setWorld(p, x, y); for (const q of ps) if (q !== p) { q.anchor = p.anchor; q.x = p.x; q.y = p.y; } };
+// where a let-go or a glide ends: on a screen it crossed, or, with no screen there, back where it started with Send to… (2A.8)
+function land(ps, p, from, path) {
+  const end = landing(path, centreOn(p));
+  if (!end.on) { moveAll(ps, p, from.x, from.y); sendMove(true, { ps, p }); return openSendTo(ps); }
+  moveAll(ps, p, end.at.x, end.at.y);
+  sendMove(true, { ps, p });
+  const drop = pidOf();   // this drop, so the receiver's Undo covers just it
+  for (const q of ps) broadcast((k) => peers.send(k, { t: 'dropcheck', pid: q.pid, drop }));
+  ps.forEach((q) => dropped(q));
+  if (end.on !== id) waitSent(end.on, ps);
+}
+// a glide, one frame at a time; others see it cross the seam as it goes
+function glide() {
+  if (!flies.length) return;
+  const send = performance.now() - lastSend > 40;
+  if (send) lastSend = performance.now();
+  for (const f of [...flies]) {
+    const g = glideAt(f, performance.now() - f.t0);
+    moveAll(f.ps, f.p, g.x, g.y); f.path.push({ x: g.x, y: g.y });
+    if (send) sendMove(false, f);
+    if (g.done) { flies = flies.filter((x) => x !== f); land(f.ps, f.p, f.from, f.path); }
+  }
+}
 // Saving must happen inside the tap, with the file already in hand (iOS rule).
 function save(p) {
   const file = files.get(p.pid);
@@ -526,32 +796,35 @@ function save(p) {
   }
   if (p.owner === id) return toast('Already yours');
   // handed over once it was shared or its download started, so Save all doesn't save it again (F13)
-  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => saveAll.handed.add(p.pid), () => {});
-  else { downloadFile(file); saveAll.handed.add(p.pid); }
+  if (pickSave.holds(p.pid)) return toast('Still saving this one. If the share sheet is stuck, tap Get again');
+  if (navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).then(() => pickSave.handed.add(p.pid), (e) => { if (e?.name !== 'AbortError') toast('Couldn’t open the share sheet. Tap it again'); });
+  else { downloadFile(file); pickSave.handed.add(p.pid); }
 }
 function downloadFile(file) {
   const a = document.createElement('a'), url = URL.createObjectURL(file);
   a.href = url; a.download = file.name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER);
 }
-// Save all (F13): every received photo in one tap. The share sheet once with all of them, or downloads
-const saveAll = createSaveAll({
-  batch: (handed) => saveBatch({ prints, files, incoming, me: id, handed }),
+// Get (2B.6, built on Save all, F13): every picked photo in one tap. The share sheet once with all of them, or downloads
+const picked = new Set();   // pids picked on this device, never sent anywhere
+const pickSave = createSaveAll({
+  batch: (handed) => saveBatch({ prints, files, incoming, me: id, handed, only: picked }),
   canShare: (list) => !!navigator.share && !!navigator.canShare?.({ files: list }),
   share: (list) => navigator.share({ files: list }),
   download: downloadFile,
   toast,
+  label: 'Get',
 });
-$('saveall').onclick = () => saveAll.tap();
-function pushOrb(x, y) {
-  const [hx, hy] = home(), dx = x - hx, dy = y - hy;
-  if (Math.hypot(dx, dy) < Math.min(W, H) * 0.15) return;
-  let edge, along;
-  if (Math.abs(dx) / W > Math.abs(dy) / H) { edge = dx > 0 ? 'R' : 'L'; along = Math.max(0, Math.min(H, hy + dy * (((dx > 0 ? W : 0) - hx) / dx))); }
-  else { edge = dy > 0 ? 'B' : 'T'; along = Math.max(0, Math.min(W, hx + dx * (((dy > 0 ? H : 0) - hy) / dy))); }
-  const g = edge === 'R' ? [W, along] : edge === 'L' ? [0, along] : edge === 'B' ? [along, H] : [along, 0];
-  ghosts.push({ x: g[0], y: g[1], t: performance.now() });
-  net.push(edge, along);
+// Get: ask for every picked photo that isn't here yet, then save what is here, inside this tap (iOS rule)
+function getPicked() {
+  let full = false;
+  for (const p of toFetch(prints, picked, files, incoming, id)) {
+    const src = (p.holders || []).find((k) => k !== id && net.peers[k]) || p.owner;
+    if (!expect(p.pid, src, p.size)) { full = true; break; }
+    p.lastSource = src; peers.send(src, { t: 'want', pid: p.pid });
+  }
+  pickSave.tap();
+  if (full) toast('Too many photos arriving. Tap Get again in a moment');
 }
 
 // ---------- start ----------
@@ -560,7 +833,12 @@ function start(room) {
   const attempt = net = joinRoom({ room: 'photo-' + room, id, name, size: { w: W, h: H }, onSignal: (from, d, away) => peers.onSignal(from, d, away), onReturn: (from) => peers.returned(from), linked: (from) => peers.linked(from) });
   peers = createPeers({ myId: id, table: room, signal: (to, d) => net.signal(to, d), forceRelay: params.has('relay'), present: (p) => inRoom(net.peers, p) });
   peers.on((from, m, bytes) => {
-    if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) dropped(p); return; }
+    if (m.t === 'dropcheck') { const p = validPidMsg(m) && prints.get(m.pid); if (p) { dropped(p); if (onMyScreen(p) && from !== id) noteLanding(from, p, m.drop); } return; }
+    if (m.t === 'give') {   // sent to me with Send to…: only from someone who has it
+      const p = validPidMsg(m) && prints.get(m.pid);
+      if (p && (p.owner === from || (p.holders || []).includes(from))) given(from, p, m.drop);   // already here: it still lands on my screen
+      return;
+    }
     onMessage(from, m, bytes);
   });
   const known = new Set();
@@ -577,7 +855,7 @@ function start(room) {
   peers.onReady(catchUp);
   net.on((ev) => {
     if (ev !== 'peers') return;
-    showWho();
+    showWho(); showHeader();
     for (const k of others()) if (!known.has(k)) { known.add(k); peers.connect(k); } // swap keys, try a direct link
     catchUp();
   });
@@ -595,10 +873,12 @@ function start(room) {
       const mine = d.a === id, other = net.peers[mine ? d.b : d.a]?.name || 'a device';
       if (d.latest) { said = 'joined'; unstick(); }
       toast(`Joined with ${other}, ${SIDE[mine ? d.edgeA : d.edgeB]}`);
+      if (d.latest) joinResult('joined', `Joined with ${other}, ${SIDE[mine ? d.edgeA : d.edgeB]}`);
     } else if (ev === 'retry' && d.latest && said !== 'joined') {
       said = 'retry';
       toast('Couldn’t tell who to join. Try again', true);
-    } else if (ev === 'nomatch' && d.latest && !said) toast('No match. Tap again together');
+      joinResult('retry');
+    } else if (ev === 'nomatch' && d.latest && !said) { toast('No match. Tap again together'); joinResult('nomatch'); }
   });
   // Joined means the channel reports live (S16). Only then does the code leave the address bar
   // (the current history entry is replaced, so Back has no page with it) and go into this tab's
@@ -609,8 +889,14 @@ function start(room) {
       if (net !== attempt) return;
       history.replaceState(null, '', cleanUrl(location.href));
       stored.set(room);
-      invite.room = room; $('invite').hidden = false; $('leave').hidden = false; $('info').hidden = false;
+      invite.room = room; $('top').hidden = false; showHeader();
       if (pending.fresh) { pending.fresh = false; $('invite').click(); }
+      if (pending.mustExist) {   // heaps exist only while someone is in them: alone after a moment means no such heap
+        pending.mustExist = false;
+        let tries = 0;
+        const check = () => { if (net !== attempt || others().length) return; if (++tries < NOT_FOUND_TRIES) return setTimeout(check, NOT_FOUND_AFTER); if (!others().length) notFound(room); };
+        setTimeout(check, NOT_FOUND_AFTER);   // a slow link gets a second look before we say there's no such heap
+      }
     },
     failed: () => {
       if (net !== attempt) return;
@@ -619,7 +905,7 @@ function start(room) {
       toast('Couldn’t join the room. Try again');
     },
   });
-  window.__t = { net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
+  window.__t = { holding: () => holdingNear().map(({ from, n }) => ({ from, n })), decks: () => groupDecks(prints), net, peers, prints, files, incoming, expect, onMessage, id, screenAt, dropped, newCode, world, setWorld, get layout() { return layout; } };
 }
 
 // ---------- invite (S16) ----------
@@ -636,6 +922,7 @@ function drawQr(text) {
 }
 $('invite').onclick = () => {
   if (!invite.room) return;
+  if (!$('menubox').hidden) closeMenu();
   const link = inviteLink(location.href, invite.room);
   $('link').value = link; drawQr(link);
   const code = invite.room.slice(-10);
@@ -643,16 +930,244 @@ $('invite').onclick = () => {
   const dash = Object.assign(document.createElement('i'), { textContent: '–' }); dash.setAttribute('aria-hidden', 'true');
   $('invcode').replaceChildren(...tiles.slice(0, 5), dash, ...tiles.slice(5));
   $('invcode').setAttribute('aria-label', `Heap code ${code.split('').join(' ')}`);
-  showWho(); $('invitebox').classList.remove('out'); $('invitebox').hidden = false;
+  showWho(); openSheet('invitebox');
 };
-function closeInvite() {
-  const b = $('invitebox');
-  if (b.hidden || b.classList.contains('out')) return;
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { b.hidden = true; return; }
+// bottom sheets slide up when opened and back down when closed (still for reduced motion)
+function openSheet(k) { const b = $(k); b.classList.remove('out'); b.hidden = false; }
+function closeSheet(k, then) {
+  const b = $(k);
+  if (b.hidden) return then?.();   // already closed: carry straight on
+  if (b.classList.contains('out')) return;
+  const done = () => { b.classList.remove('out'); b.hidden = true; then?.(); };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
   b.classList.add('out');
-  b.querySelector('.sheet').addEventListener('animationend', () => { b.classList.remove('out'); b.hidden = true; }, { once: true });
+  b.querySelector('.sheet').addEventListener('animationend', done, { once: true });
 }
+function closeInvite() { closeSheet('invitebox'); }
 $('closeinvite').onclick = closeInvite;
+// the menu (wireframe 4.1)
+const menuOpen = (open) => $('menu').setAttribute('aria-expanded', String(open));
+$('menu').onclick = () => { menuOpen(true); openSheet('menubox'); };
+const closeMenu = (then) => { menuOpen(false); closeSheet('menubox', then); };
+$('closemenu').onclick = () => closeMenu();
+$('menubox').onclick = (e) => { if (e.target === e.currentTarget) closeMenu(); };
+$('joinhow').onclick = () => closeMenu(openJoin);
+$('peoplebtn').onclick = $('people').onclick = () => closeMenu(() => $('invite').click());
+// the deck sheet (2B.1, 2B.2): a deck's photos newest first, or everyone's. A tap saves one; dragging one out
+// puts it on the table under the finger and keeps it moving, so it can be dropped on another screen (2A.7)
+let deckUrls = [];
+function openDeck(pids, all = false) {
+  const list = pids.map((k) => prints.get(k)).filter(Boolean).reverse();   // newest first
+  if (!list.length) return;
+  const owner = list[0].owner, who = owner === id ? 'You' : net.peers[owner]?.name || 'Someone';
+  $('decktitle').textContent = all ? `All photos · ${list.length}` : `${who} · ${list.length} photo${list.length === 1 ? '' : 's'}`;
+  deckUrls.forEach((u) => URL.revokeObjectURL(u)); deckUrls = [];
+  $('decktiles').replaceChildren(...list.map((p) => {
+    const b = Object.assign(document.createElement('button'), { type: 'button' });
+    b.setAttribute('role', 'listitem'); b.dataset.pid = p.pid;
+    b.setAttribute('aria-label', `${p.name}, from ${p.owner === id ? 'you' : net.peers[p.owner]?.name || 'someone'}`);
+    if (p.thumb) { const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); deckUrls.push(u); b.append(Object.assign(document.createElement('img'), { src: u, alt: '' })); }
+    else b.append(p.type.startsWith('video') ? '▶ video' : p.name);
+    if (all) b.append(Object.assign(document.createElement('span'), { className: 'who', textContent: initials(p.owner === id ? name : net.peers[p.owner]?.name) }));
+    if (files.has(p.pid) && p.owner !== id) b.append(Object.assign(document.createElement('span'), { className: 'save', textContent: 'Here' }));
+    b.onpointerdown = (e) => {
+      const sx = e.clientX, sy = e.clientY;
+      b.setPointerCapture(e.pointerId);
+      const letGo = () => { b.onpointermove = b.onpointerup = b.onpointercancel = null; b.releasePointerCapture?.(e.pointerId); };   // a scroll, or the browser took over
+      b.onpointercancel = letGo;
+      b.onpointermove = (m) => {
+        if (Math.hypot(m.clientX - sx, m.clientY - sy) < 10) return;
+        if (Math.abs(m.clientY - sy) > Math.abs(m.clientX - sx)) return letGo();   // up or down: that's scrolling the sheet
+        b.onpointermove = b.onpointerup = b.onpointercancel = null;
+        b.releasePointerCapture?.(m.pointerId);
+        $('deckbox').classList.remove('out'); $('deckbox').hidden = true;   // gone at once: the photo is now under the finger
+        const [mx, my] = meWorld();
+        setWorld(p, mx + m.clientX - p.w / 2, my + m.clientY - p.h / 2);
+        startDrag([p], m.clientX, m.clientY, true, m.pointerId);
+      };
+      b.onpointerup = () => { b.onpointermove = b.onpointerup = null; togglePick(p.pid); };
+    };
+    return b;
+  }));
+  $('decktiles').scrollTop = 0;
+  showPicks();
+  openSheet('deckbox');
+}
+$('deckback').onclick = () => closeSheet('deckbox');
+// picking (2B.3–2B.6): a tap picks or unpicks; every sheet and the bar say how many and how big
+function togglePick(pid) { if (!picked.delete(pid)) picked.add(pid); showPicks(); }
+function tileOf(p, onTap) {
+  const b = Object.assign(document.createElement('button'), { type: 'button' });
+  b.setAttribute('role', 'listitem'); b.dataset.pid = p.pid; b.setAttribute('aria-label', p.name);
+  if (p.thumb) { const u = URL.createObjectURL(new Blob([p.thumb], { type: 'image/jpeg' })); deckUrls.push(u); b.append(Object.assign(document.createElement('img'), { src: u, alt: '' })); }
+  else b.append(p.type.startsWith('video') ? '▶ video' : p.name);
+  b.onclick = onTap;
+  return b;
+}
+function showPicks() {
+  for (const k of [...picked]) if (!prints.has(k)) picked.delete(k);
+  const s = pickSummary(prints, picked, (o) => net?.peers[o]?.name, id);
+  $('pickedbtn').textContent = `Picked · ${s.n}`;
+  $('pickfoot').hidden = !s.n;
+  $('reviewpick').textContent = `Review ${s.n}`;
+  $('getpick').textContent = `Get ${s.n} · ${mb(s.bytes)}`;
+  const tiles = [...document.querySelectorAll('#decktiles button')];
+  for (const t of tiles) { const on = picked.has(t.dataset.pid); t.classList.toggle('on', on); t.setAttribute('aria-pressed', String(on)); }
+  $('pickall').textContent = tiles.length && tiles.every((t) => picked.has(t.dataset.pid)) ? 'Unpick all' : 'Pick all';
+  $('reviewtitle').textContent = `Picked · ${s.n}`;
+  $('reviewline').textContent = s.n ? pickLine(s) : 'Nothing picked yet. Open a deck and tap photos to pick them.';
+  $('getall').textContent = `Get all ${s.n} · ${mb(s.bytes)}`; $('getall').disabled = !s.n;
+}
+$('pickall').onclick = () => {
+  const pids = [...document.querySelectorAll('#decktiles button')].map((t) => t.dataset.pid), all = pids.every((k) => picked.has(k));
+  for (const k of pids) all ? picked.delete(k) : picked.add(k);
+  showPicks();
+};
+function openReview() {
+  $('reviewtiles').replaceChildren(...[...picked].map((k) => prints.get(k)).filter(Boolean).map((p) => {
+    const b = tileOf(p, () => { picked.delete(p.pid); b.remove(); showPicks(); });
+    b.classList.add('on'); return b;
+  }));
+  showPicks(); openSheet('reviewbox');
+}
+$('pickedbtn').onclick = () => openReview();
+$('reviewpick').onclick = () => closeSheet('deckbox', openReview);
+$('getpick').onclick = $('getall').onclick = () => getPicked();
+$('closereview').onclick = () => closeSheet('reviewbox');
+$('reviewbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('reviewbox'); };
+$('deckbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('deckbox'); };
+$('allphotos').onclick = () => openDeck([...prints.keys()], true);
+// landed (2A.4): photos that came onto this screen from someone, counted together for a moment, with Undo.
+// Undo puts them back on the sender's screen (on their deck if they're the owner)
+let landed = null, snackTimer = 0;
+function noteLanding(from, p, drop) {
+  // one drop (a deck lands as many photos at once) counts together; a later drop, even a moment after, starts again
+  drop = typeof drop === 'string' ? drop.slice(0, 32) : '';
+  if (!landed || landed.from !== from || landed.drop !== drop || performance.now() - landed.t > 1000) landed = { from, drop, pids: [] };
+  landed.t = performance.now();
+  if (!landed.pids.includes(p.pid)) landed.pids.push(p.pid);
+  const n = landed.pids.length, who = net.peers[from]?.name || 'someone';
+  $('snacktext').textContent = `${n} photo${n === 1 ? '' : 's'} from ${who}`;
+  $('snackact').hidden = false; $('snack').hidden = false;
+  clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; landed = null; }, 6000);
+}
+$('snackact').onclick = () => {
+  const l = landed; $('snack').hidden = true; landed = null;
+  if (!l || !sizes[l.from]) return;
+  const spot = deckSpot(prints, l.from, sizes[l.from]);
+  for (const pid of l.pids) {
+    const p = prints.get(pid); if (!p) continue;
+    p.anchor = l.from; p.x = spot.x; p.y = spot.y;
+    broadcast((k) => peers.send(k, { t: 'move', pid, anchor: p.anchor, x: p.x, y: p.y, final: true }));
+  }
+};
+// join screens (4.2–4.6): tap the edge that faces the other screen; both taps within 2 seconds pair up
+let joinTick = 0;
+const joinCard = (title, sub, { count = false, retry = false } = {}) => {
+  $('jointitle').textContent = title; $('jointitle').classList.toggle('count', count);
+  $('joinsub').textContent = sub; $('jointry').hidden = !retry;
+};
+function openJoin() {
+  clearInterval(joinTick);
+  for (const st of document.querySelectorAll('#joinmode .strip')) st.classList.remove('on');
+  joinCard('Which side is the other screen?', 'Put the screens side by side. Each person taps the edge that faces the other one.');
+  $('joinmode').hidden = false;
+}
+const closeJoin = () => { clearInterval(joinTick); $('joinmode').hidden = true; };
+for (const st of document.querySelectorAll('#joinmode .strip')) st.onclick = (e) => {
+  const edge = st.dataset.edge, along = edge === 'L' || edge === 'R' ? e.clientY : e.clientX;
+  for (const o of document.querySelectorAll('#joinmode .strip')) o.classList.toggle('on', o === st);
+  net.push(edge, along);
+  let left = JOIN_WINDOW_S;
+  joinCard(String(left), 'Now tap the facing edge on the other screen. Both taps must land within 2 seconds', { count: true });
+  clearInterval(joinTick);
+  joinTick = setInterval(() => { left--; if (left > 0) $('jointitle').textContent = String(left); else { clearInterval(joinTick); joinCard('Waiting for a match…', 'Checking with the other screen'); } }, 1000);
+};
+$('joincancel').onclick = closeJoin;
+$('jointry').onclick = openJoin;
+// what came of the latest tap
+function joinResult(kind, text) {
+  if ($('joinmode').hidden) return;
+  clearInterval(joinTick);
+  if (kind === 'joined') { closeJoin(); return snackSay(text); }
+  if (kind === 'nomatch') return joinCard('No match', 'The other screen didn’t tap in time, or tapped the wrong edge.', { retry: true });
+  joinCard('More than two screens tapped at once', 'Join one pair at a time. You can add the next screen after.', { retry: true });
+}
+// a line just above the bar, without an action
+function snackSay(text) {
+  landed = null; $('snacktext').textContent = text; $('snackact').hidden = true; $('snack').hidden = false;
+  clearTimeout(snackTimer); snackTimer = setTimeout(() => { $('snack').hidden = true; $('snackact').hidden = false; }, 6000);
+}
+// Send to… (2A.8): let go where no screen is joined: choose who gets it instead
+let sending = [];
+function openSendTo(ps) {
+  sending = ps;
+  const row = (label, to) => { const b = Object.assign(document.createElement('button'), { type: 'button', textContent: label }); b.setAttribute('role', 'listitem'); b.dataset.to = to; return b; };
+  const people = others().map((k) => row(`${net.peers[k]?.name || 'a device'}`, k));
+  $('sendlist').replaceChildren(...people, ...(people.length > 1 ? [row('Everyone', '*')] : []));
+  if (!people.length) $('sendlist').replaceChildren(Object.assign(document.createElement('p'), { className: 'deckhint', textContent: 'Nobody else is in this heap yet. Invite someone from the menu.' }));
+  openSheet('sendbox');
+}
+$('sendlist').onclick = async (e) => {
+  const to = e.target.closest('button')?.dataset.to; if (!to) return;
+  const list = to === '*' ? others() : [to];
+  // only photos this device has can be sent; someone else's that hasn't come here yet can't
+  const sendable = sending.filter((p) => p.owner === id || files.has(p.pid)), notHere = sending.length - sendable.length;
+  if (!sendable.length) return toast(`You don’t have ${sending.length === 1 ? 'this photo' : 'these photos'} yet. Get ${sending.length === 1 ? 'it' : 'them'} first, then send`);
+  const drop = pidOf();
+  const results = await Promise.all(list.flatMap((k) => sendable.map((p) => peers.send(k, { t: 'give', pid: p.pid, drop }).then((ok) => [k, ok], () => [k, false]))));
+  const failed = [...new Set(results.filter(([, ok]) => !ok).map(([k]) => k))];
+  if (failed.length) return toast(`Couldn’t send to ${failed.map((k) => net.peers[k]?.name || 'a device').join(', ')}. Try again`);   // Send to stays open to try again
+  for (const k of list) waitSent(k, sendable, notHere);
+  sending = []; closeSheet('sendbox');
+};
+// Sent ✓ only once the receiver says it has them (it sends 'have'); until then, Sending…
+const sendsOut = [];   // { to, left: Set of pids, n, notHere, t }
+function waitSent(to, ps, notHere = 0) {
+  const left = new Set(ps.filter((p) => !(p.holders || []).includes(to)).map((p) => p.pid)), who = net.peers[to]?.name || 'a device';
+  const extra = notHere ? `. ${notHere} not sent: you don’t have ${notHere === 1 ? 'it' : 'them'} yet` : '';
+  if (!left.size) return toast(`Sent to ${who} ✓${extra}`);
+  sendsOut.push({ to, left, n: ps.length, notHere, t: performance.now() });
+  toast(`Sending to ${who}…${extra}`);
+}
+function confirmSent(from, pid) {
+  for (const s of [...sendsOut]) {
+    if (s.to !== from || !s.left.delete(pid) || s.left.size) continue;
+    sendsOut.splice(sendsOut.indexOf(s), 1);
+    toast(`Sent to ${net.peers[from]?.name || 'a device'} ✓`);
+  }
+}
+$('sendjoin').onclick = () => closeSheet('sendbox', openJoin);
+$('sendbox').onclick = (e) => { if (e.target === e.currentTarget) closeSheet('sendbox'); };
+// given to me (3.3, 3.11): it comes onto my screen and arrives by itself
+function given(from, p, drop) {
+  const spot = { x: Math.max(0, W / 2 - p.w / 2 + (Math.random() - 0.5) * 60), y: Math.max(90, H / 2 - p.h / 2 + (Math.random() - 0.5) * 60) };
+  p.anchor = id; p.x = spot.x; p.y = spot.y;
+  broadcast((k) => peers.send(k, { t: 'move', pid: p.pid, anchor: id, x: p.x, y: p.y, final: true }));
+  if (files.has(p.pid)) peers.send(from, { t: 'have', pid: p.pid });   // already here: tell the sender it arrived
+  else dropped(p);
+  noteLanding(from, p, drop);
+}
+// the header: the heap's name (after its time keeper), who's here and how much is shared, and their initials
+let headWas = '';
+function showHeader() {
+  if (!net) return;
+  const keeper = net.leader === id ? name : net.peers[net.leader]?.name;
+  const was = [keeper, prints.size, name, JSON.stringify(layout.group), ...others().map((k) => net.peers[k]?.name)].join('\u0000');
+  if (was === headWas) return;
+  headWas = was;
+  $('heapname').textContent = heapTitle(keeper);
+  $('heapsub').textContent = heapSub(1 + others().length, prints.size);
+  showPicks();
+  $('empty').hidden = !!prints.size;
+  const nextTo = others().find((k) => (layout.group[k] || k) === (layout.group[id] || id));
+  $('emptytip').textContent = nextTo ? `Flick a photo toward ${net.peers[nextTo]?.name || 'the other screen'} to pass it across.` : '';
+  $('allphotos').hidden = !prints.size; $('allphotos').textContent = `All photos · ${prints.size}`;
+  const all = [name, ...others().map((k) => net.peers[k]?.name || '?')];
+  const face = (t, cls) => Object.assign(document.createElement('i'), { textContent: t, className: cls || '' });
+  $('peoplebtn').querySelector('b').textContent = `People (${all.length})`;
+  $('people').replaceChildren(...all.slice(0, 3).map((n) => face(initials(n))), ...(all.length > 3 ? [face('+' + (all.length - 3), 'more')] : []));
+}
 // who's in this heap: this device first, then the others by name, or a line saying nobody else is here yet
 function showWho() {
   const li = (text, cls) => Object.assign(document.createElement('li'), { textContent: text, className: cls || '' });
@@ -683,7 +1198,7 @@ $('f').onsubmit = (e) => {
   e.preventDefault();
   const code = $('code').value.trim().toUpperCase();
   if (!isRoomCode(code)) return toast('Use New room to make a 10-letter code');
-  askName('join', code);
+  askName('join', code); pending.typed = true;
 };
 if (opening.join) tryStart(opening.join);
 
@@ -713,6 +1228,7 @@ function frame() {
   if (!sizes[id]) sizes[id] = { w: W, h: H };
   layout = solveLayout(Object.keys(sizes), net.joins, sizes);
   rehome();
+  glide();
   const [mx, my] = meWorld(), gid = layout.group[id] || id;
   ctx.save(); ctx.translate(-mx, -my);
   // faint lines that run straight across joined screens
@@ -721,7 +1237,8 @@ function frame() {
   ctx.strokeStyle = T.mid; ctx.setLineDash([6, 6]);
   for (const k of Object.keys(sizes)) if (k !== id && layout.group[k] === gid) ctx.strokeRect(layout.pos[k][0] + 1, layout.pos[k][1] + 1, sizes[k].w - 2, sizes[k].h - 2);
   ctx.setLineDash([]);
-  for (const p of prints.values()) {
+  for (const deck of groupDecks(prints)) {
+    const p = deck.top;
     if (!visible(p)) continue;
     const [px, py] = world(p);
     ctx.save();
@@ -731,6 +1248,12 @@ function frame() {
     const lifted = drag && drag.p === p && drag.moved;
     ctx.scale(lifted ? 1.05 : 1, lifted ? 1.05 : 1);
     ctx.fillStyle = T.paper; ctx.strokeStyle = T.ink; ctx.lineWidth = 2;
+    // a deck: up to two more cards peek out underneath
+    for (let i = Math.min(2, deck.pids.length - 1); i > 0; i--) {
+      ctx.save(); ctx.rotate(i * 0.07); ctx.translate(i * 5, i * 4);
+      ctx.beginPath(); rr(ctx, -p.w / 2 - 8, -p.h / 2 - 8, p.w + 16, p.h + 16, 6); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
     ctx.beginPath(); rr(ctx, -p.w / 2 - 8, -p.h / 2 - 8, p.w + 16, p.h + 16, 6); ctx.fill(); ctx.stroke();
     if (p.img) {
       // the photo fills the card (cropped to fit), inside a thin outline
@@ -738,25 +1261,25 @@ function frame() {
       ctx.drawImage(p.img, (p.img.width - sw) / 2, (p.img.height - sh) / 2, sw, sh, -iw / 2, -ih / 2, iw, ih);
       ctx.lineWidth = 1.5; ctx.strokeRect(-iw / 2, -ih / 2, iw, ih);
     } else { ctx.fillStyle = T.ink; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.fillStyle = T.paper; ctx.font = `14px ${T.ui}`; ctx.textAlign = 'center'; ctx.fillText(p.type.startsWith('video') ? '▶ video' : p.name, 0, 4); }
-    const mine = p.owner === id, have = files.has(p.pid);
-    const label = mine ? (net.peers[p.owner]?.name || name) + ' (mine)' : have ? '✓ yours, tap to save' : (net.peers[p.owner]?.name || '?');
+    const mine = p.owner === id, have = files.has(p.pid), who = mine ? 'You' : net.peers[p.owner]?.name || '?';
+    const label = deck.pids.length > 1 ? `${who} ${deck.pids.length}` : mine ? 'You' : have ? '✓ yours, tap to save' : (net.peers[p.owner]?.name || '?');
     pill(label, 0, p.h / 2 + 26, have && !mine);
     ctx.restore();
   }
   ctx.restore();
-  // orb
-  const now = performance.now();
-  // the orb: a charcoal dot with a soft halo (alpha on the ink token)
-  const glow = (x, y, r, a = 1) => { ctx.globalAlpha = 0.14 * a; ctx.fillStyle = T.ink; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-    ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(x, y, r * 0.42, 0, 7); ctx.fill(); ctx.globalAlpha = 1; };
-  ghosts = ghosts.filter((g) => now - g.t < 2500 && (glow(g.x, g.y, ORB * 2, 1 - (now - g.t) / 2500), true));
-  const [ox, oy] = orbDrag ? [orbDrag.x, orbDrag.y] : home();
-  glow(ox, oy, ORB * 2);
+  // someone is holding photos near my edge (2A.5): a dashed outline and who it is
+  for (const g of holdingNear()) {
+    ctx.save(); ctx.strokeStyle = T.ink; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+    ctx.strokeRect(g.x, g.y, g.w, g.h); ctx.setLineDash([]);
+    pill(`${net.peers[g.from]?.name || 'Someone'} is holding ${g.n} photo${g.n === 1 ? '' : 's'}`, g.x + g.w / 2, g.y + g.h + 22, true);
+    ctx.restore();
+  }
+  showHeader();
   const n = Object.keys(net.peers).length;
   $('hud').textContent = `table ${net.room.slice(6)} · ${name}${net.leader === id ? ' (time keeper)' : ''} · ${net.status}\n` +
     `devices ${n} · joins ${net.joins.length} · prints ${prints.size} · held here ${files.size}\n` +
     others().map((k) => `${net.peers[k].name}: ${peers.path(k)} (direct ${peers.state(k)})`).join('\n') +
-    `\ndrag the orb to an edge to join screens`;
+    `\njoin screens from the menu: Join a screen`;
 }
 frame();
 </script>

@@ -37,6 +37,9 @@ export function validPrint(m) {
 }
 
 export const validMove = (m) => !!m && isPid(m.pid) && isDevId(m.anchor) && isNum(m.x) && isNum(m.y);
+// a whole deck moving: one message with its photos (wireframe 2A.6)
+export const validMoves = (m) => !!m && Array.isArray(m.pids) && m.pids.length > 0 && m.pids.length <= LIMITS.prints && m.pids.every(isPid) &&
+  isDevId(m.anchor) && isNum(m.x) && isNum(m.y);
 
 // Number of pieces a file of `size` bytes splits into at piece size `cs`.
 export const pieceCount = (size, cs) => Math.ceil(size / cs) || 1;
