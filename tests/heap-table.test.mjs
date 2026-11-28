@@ -144,3 +144,15 @@ test('joining screens (4.3–4.6): a 2-second countdown, then joined, no match o
   assert.match(html, /joinResult\('joined'/);
   assert.match(html, /<button type="button" id="jointry" hidden>Try again<\/button>/);
 });
+
+test('code not found (1.3): a typed code with nobody in that heap goes back to the code screen and says why', () => {
+  assert.match(html, /<p id="codeerr" class="err" role="alert" hidden><b>No open heap with that code\. It may have ended or the code has a typo\.<\/b>\s*Check with the host, or ask them for the QR code\.<\/p>/);
+  assert.match(html, /pending\.mustExist = pending\.mode === 'join' && pending\.typed/, 'only a typed code is checked: an invite link still opens its heap');
+  assert.match(html, /function notFound\(/);
+  assert.match(html, /if \(!others\(\)\.length\) notFound\(/, 'nobody else there');
+});
+
+test('empty table (2D.1): says so and how to start', () => {
+  assert.match(html, /<div id="empty" aria-hidden="true" hidden><i><\/i><b>The table is empty<\/b><span>Tap \+ Share to put your photos down\. Others take only what they want\.<\/span><small id="emptytip"><\/small><\/div>/);
+  assert.match(html, /\$\('empty'\)\.hidden = !!prints\.size/);
+});

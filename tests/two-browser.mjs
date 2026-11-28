@@ -841,6 +841,15 @@ try {
   await S.click('#joincancel');
   const cancelled = await until(S, () => document.getElementById('joinmode').hidden, null, 3000).then(() => true, () => false);
   check(noMatch && cancelled, `a tap with no other screen says "No match" with Try again (${noMatch}), and Cancel closes join mode (${cancelled})`);
+  // 1.3: typing a code for a heap nobody is in goes back to the code screen and says so
+  const NF = await (await browser.newContext({ viewport: { width: 390, height: 700 } })).newPage();
+  await NF.addInitScript(() => { try { localStorage.setItem('heap-name', 'Typo'); } catch {} });
+  await NF.goto(BASE);
+  await NF.click('#joinwith'); await NF.fill('#code', 'ZZZZZ22222'); await NF.click('#f button'); await NF.click('#go');
+  const nf = await until(NF, () => document.getElementById('lobby')?.hidden === false && document.getElementById('s-code')?.hidden === false && document.getElementById('codeerr')?.hidden === false, null, 20000).then(() => true, () => false);
+  const nf1 = await NF.evaluate(() => ({ code: document.getElementById('code').value, room: sessionStorage.getItem('room'), url: location.href }));
+  check(nf && nf1.code === 'ZZZZZ22222' && nf1.room === null && !nf1.url.includes('ZZZZZ'), `a typed code for an empty heap comes back to the code screen with the error (${nf}), keeps the code (${nf1.code}) and stores nothing (${nf1.room})`);
+  await NF.context().close();
   await G.context().close();
   // #160 review: on a short phone the whole invite sheet can be reached; a toast goes after its time; the glyph is sharp after Back
   const SP = await (await browser.newContext({ viewport: { width: 375, height: 560 } })).newPage();
